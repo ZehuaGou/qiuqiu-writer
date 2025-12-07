@@ -1,696 +1,2656 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Plus, X, GripVertical, Type, Image, ChevronDown, ChevronRight, 
-  Edit2, Trash2, Copy, Settings, LayoutTemplate, Save
+  Plus, X, ChevronLeft, ChevronRight, ChevronDown, Trash2, 
+  Settings, Tag, Users, Building2, Map, FileText,
+  Image, List, LayoutGrid, Heart, Zap, Sparkles,
+  LayoutTemplate, Check, GitBranch, Clock, Table2,
+  CheckSquare, Type, AlignLeft, Save, TrendingUp
 } from 'lucide-react';
+import CharacterRelations from './CharacterRelations';
+import type { CharacterRelationsData } from './CharacterRelations';
 import './WorkInfoManager.css';
 
-// 信息项类型
-type InfoItemType = 'text' | 'textarea' | 'image' | 'tags' | 'list';
-
-// 单个信息项
-interface InfoItem {
-  id: string;
-  label: string;
-  type: InfoItemType;
-  value: string | string[];
-  placeholder?: string;
-  options?: string[]; // 用于 tags 类型的预设选项
-  maxCount?: number; // 用于 tags 类型的最大选择数
-}
-
-// 信息分类/模块
-interface InfoSection {
+// 势力数据类型
+interface FactionData {
   id: string;
   name: string;
-  icon?: string;
-  expanded: boolean;
-  items: InfoItem[];
+  summary?: string;
+  details?: string;
+  levels: string[];
+  parentId?: string;
+  children?: FactionData[];
+}
+
+// ============ 组件类型定义 ============
+
+// 基础组件类型
+type ComponentType = 
+  | 'text'           // 单行文本
+  | 'textarea'       // 多行文本
+  | 'image'          // 图片上传
+  | 'select'         // 单选下拉
+  | 'multiselect'    // 多选标签
+  | 'list'           // 简单列表
+  | 'keyvalue'       // 键值对列表
+  | 'table'          // 表格
+  | 'tabs'           // 分页标签（内嵌多个子组件）
+  | 'relation-graph' // 关系图组件
+  | 'timeline'       // 时间线组件
+  | 'card-list'      // 卡片列表
+  | 'character-card' // 角色卡片（预设字段）
+  | 'rank-system'    // 等级体系
+  | 'faction';       // 势力组件
+
+// 组件配置接口
+interface ComponentConfig {
+  id: string;
+  type: ComponentType;
+  label: string;
+  // 组件特定配置
+  config: {
+    placeholder?: string;
+    options?: { label: string; value: string; color?: string }[];  // select/multiselect
+    maxCount?: number;           // multiselect 最大选择数
+    columns?: { key: string; label: string; width?: string }[];    // table 列配置
+    tabs?: { id: string; label: string; components: ComponentConfig[] }[]; // tabs 子组件
+    cardFields?: { key: string; label: string; type: 'text' | 'textarea' | 'image' }[]; // card-list
+    nodeTypes?: { type: string; label: string; color: string }[];  // relation-graph 节点类型
+    relationTypes?: { type: string; label: string; color: string }[]; // relation-graph 关系类型
+  };
+  // AI Prompt 配置
+  generatePrompt?: string;   // 用于生成内容的提示词
+  validatePrompt?: string;   // 用于检验内容的提示词
+  // 组件数据
+  value: any;
+}
+
+// 模块定义
+interface ModuleConfig {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  components: ComponentConfig[];
 }
 
 // 模板定义
-interface WorkInfoTemplate {
+interface TemplateConfig {
   id: string;
   name: string;
-  description?: string;
-  sections: InfoSection[];
+  description: string;
+  modules: ModuleConfig[];
 }
 
-// 预设模板
-const defaultTemplates: WorkInfoTemplate[] = [
+// ============ 缓存管理 ============
+
+const CACHE_KEY = 'wawawriter_workinfo_cache';
+
+interface CacheData {
+  templateId: string;
+  modules: ModuleConfig[];
+  lastModified: number;
+}
+
+// 从 localStorage 读取缓存
+const loadFromCache = (): CacheData | null => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.warn('Failed to load cache:', e);
+  }
+  return null;
+};
+
+// 保存到 localStorage 缓存
+const saveToCache = (data: CacheData) => {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Failed to save cache:', e);
+  }
+};
+
+// ============ 组件注册表 ============
+
+interface ComponentDefinition {
+  type: ComponentType;
+  name: string;
+  icon: React.ReactNode;
+  category: 'basic' | 'advanced' | 'interactive';
+  description: string;
+  defaultConfig: Partial<ComponentConfig['config']>;
+  configFields?: {
+    key: string;
+    label: string;
+    type: 'text' | 'textarea' | 'options' | 'columns' | 'nodeTypes';
+    required?: boolean;
+  }[];
+}
+
+const componentRegistry: ComponentDefinition[] = [
+  // 基础组件
   {
-    id: 'novel-basic',
-    name: '小说基础模板',
-    description: '适用于一般小说创作的基础信息模板',
-    sections: [
-      {
-        id: 'basic',
-        name: '基本信息',
-        expanded: true,
-        items: [
-          { id: 'title', label: '作品名称', type: 'text', value: '', placeholder: '输入作品名称' },
-          { id: 'author', label: '作者', type: 'text', value: '', placeholder: '输入作者名' },
-          { id: 'genre', label: '题材类型', type: 'tags', value: [], options: ['言情', '悬疑', '科幻', '武侠', '玄幻', '都市', '历史', '军事'], maxCount: 2 },
-          { id: 'summary', label: '作品简介', type: 'textarea', value: '', placeholder: '输入作品简介...' },
-        ]
-      },
-      {
-        id: 'worldview',
-        name: '世界观设定',
-        expanded: true,
-        items: [
-          { id: 'background', label: '背景设定', type: 'textarea', value: '', placeholder: '描述故事发生的背景...' },
-          { id: 'worldmap', label: '世界地图', type: 'image', value: '' },
-          { id: 'rules', label: '世界规则', type: 'list', value: [] },
-        ]
-      },
-      {
-        id: 'style',
-        name: '风格定位',
-        expanded: false,
-        items: [
-          { id: 'tone', label: '叙事风格', type: 'tags', value: [], options: ['轻松', '沉重', '幽默', '严肃', '温馨', '黑暗'], maxCount: 2 },
-          { id: 'target', label: '目标读者', type: 'text', value: '', placeholder: '描述目标读者群体' },
-          { id: 'reference', label: '参考作品', type: 'list', value: [] },
-        ]
-      }
-    ]
+    type: 'text',
+    name: '单行文本',
+    icon: <Type size={16} />,
+    category: 'basic',
+    description: '简短的文本输入，适合名称、标题',
+    defaultConfig: { placeholder: '请输入...' },
   },
   {
-    id: 'novel-detailed',
-    name: '小说详细模板',
-    description: '包含更多详细设定的完整模板',
-    sections: [
+    type: 'textarea',
+    name: '多行文本',
+    icon: <AlignLeft size={16} />,
+    category: 'basic',
+    description: '长段落输入，适合描述、背景',
+    defaultConfig: { placeholder: '请输入详细内容...' },
+  },
+  {
+    type: 'image',
+    name: '图片',
+    icon: <Image size={16} />,
+    category: 'basic',
+    description: '上传图片，适合封面、地图',
+    defaultConfig: {},
+  },
+  {
+    type: 'select',
+    name: '单选',
+    icon: <CheckSquare size={16} />,
+    category: 'basic',
+    description: '从选项中选择一个',
+    defaultConfig: { options: [] },
+    configFields: [
+      { key: 'options', label: '选项列表', type: 'options', required: true },
+    ],
+  },
+  {
+    type: 'multiselect',
+    name: '多选标签',
+    icon: <Tag size={16} />,
+    category: 'basic',
+    description: '从标签中选择多个',
+    defaultConfig: { options: [], maxCount: 5 },
+    configFields: [
+      { key: 'options', label: '标签选项', type: 'options', required: true },
+      { key: 'maxCount', label: '最大选择数', type: 'text' },
+    ],
+  },
+  // 高级组件
+  {
+    type: 'list',
+    name: '列表',
+    icon: <List size={16} />,
+    category: 'advanced',
+    description: '有序的项目列表',
+    defaultConfig: {},
+  },
+  {
+    type: 'keyvalue',
+    name: '键值对',
+    icon: <FileText size={16} />,
+    category: 'advanced',
+    description: '标题+描述的列表',
+    defaultConfig: {},
+  },
+  {
+    type: 'table',
+    name: '表格',
+    icon: <Table2 size={16} />,
+    category: 'advanced',
+    description: '多列数据表格',
+    defaultConfig: { columns: [] },
+    configFields: [
+      { key: 'columns', label: '列配置', type: 'columns', required: true },
+    ],
+  },
+  {
+    type: 'card-list',
+    name: '卡片列表',
+    icon: <LayoutGrid size={16} />,
+    category: 'advanced',
+    description: '卡片式的项目列表',
+    defaultConfig: { cardFields: [] },
+    configFields: [
+      { key: 'cardFields', label: '卡片字段', type: 'columns' },
+    ],
+  },
+  {
+    type: 'character-card',
+    name: '角色卡片',
+    icon: <Users size={16} />,
+    category: 'advanced',
+    description: '预设的角色信息卡片（与角色列表样式一致）',
+    defaultConfig: {}, // 使用专用渲染，无需cardFields配置
+    configFields: [], // 预设字段，无需配置
+  },
+  {
+    type: 'rank-system',
+    name: '等级体系',
+    icon: <TrendingUp size={16} />,
+    category: 'advanced',
+    description: '设定世界观的等级/境界体系',
+    defaultConfig: {},
+    configFields: [],
+  },
+  {
+    type: 'faction',
+    name: '势力',
+    icon: <Building2 size={16} />,
+    category: 'advanced',
+    description: '管理势力/组织，支持层级结构',
+    defaultConfig: {},
+    configFields: [],
+  },
+  // 交互组件
+  {
+    type: 'tabs',
+    name: '分页标签',
+    icon: <LayoutGrid size={16} />,
+    category: 'interactive',
+    description: '多个标签页，每页可放置不同组件',
+    defaultConfig: { tabs: [] },
+  },
+  {
+    type: 'relation-graph',
+    name: '关系图',
+    icon: <GitBranch size={16} />,
+    category: 'interactive',
+    description: '节点和关系的可视化图谱',
+    defaultConfig: { nodeTypes: [], relationTypes: [] },
+    configFields: [
+      { key: 'nodeTypes', label: '节点类型', type: 'nodeTypes' },
+      { key: 'relationTypes', label: '关系类型', type: 'nodeTypes' },
+    ],
+  },
+  {
+    type: 'timeline',
+    name: '时间线',
+    icon: <Clock size={16} />,
+    category: 'interactive',
+    description: '按时间顺序的事件列表',
+    defaultConfig: {},
+  },
+];
+
+// ============ 预设模板 ============
+
+const presetTemplates: TemplateConfig[] = [
+  {
+    id: 'novel-standard',
+    name: '小说标准模板',
+    description: '通用小说创作模板',
+    modules: [
       {
-        id: 'basic',
+        id: 'basic-info',
         name: '基本信息',
-        expanded: true,
-        items: [
-          { id: 'title', label: '作品名称', type: 'text', value: '', placeholder: '输入作品名称' },
-          { id: 'subtitle', label: '副标题', type: 'text', value: '', placeholder: '输入副标题（可选）' },
-          { id: 'author', label: '作者', type: 'text', value: '', placeholder: '输入作者名' },
-          { id: 'cover', label: '封面图', type: 'image', value: '' },
-          { id: 'genre', label: '题材类型', type: 'tags', value: [], options: ['言情', '悬疑', '科幻', '武侠', '玄幻', '都市', '历史', '军事', '奇幻', '仙侠'], maxCount: 3 },
-          { id: 'summary', label: '作品简介', type: 'textarea', value: '', placeholder: '输入作品简介...' },
+        icon: 'FileText',
+        color: '#3b82f6',
+        components: [
+          { id: 'genre', type: 'multiselect', label: '题材类型', config: { 
+            options: [
+              { label: '言情', value: 'romance', color: '#ec4899' },
+              { label: '悬疑', value: 'mystery', color: '#8b5cf6' },
+              { label: '科幻', value: 'scifi', color: '#06b6d4' },
+              { label: '玄幻', value: 'fantasy', color: '#f59e0b' },
+              { label: '都市', value: 'urban', color: '#10b981' },
+            ],
+            maxCount: 3
+          }, value: [] },
+          { id: 'summary', type: 'textarea', label: '作品简介', config: { placeholder: '输入作品简介...' }, value: '' },
+          { id: 'cover', type: 'image', label: '封面图', config: {}, value: '' },
+        ]
+      },
+      {
+        id: 'characters',
+        name: '角色设定',
+        icon: 'Users',
+        color: '#8b5cf6',
+        components: [
+          { id: 'char-tabs', type: 'tabs', label: '角色管理', config: {
+            tabs: [
+              { id: 'list', label: '角色列表', components: [
+                { id: 'char-table', type: 'table', label: '角色表', config: {
+                  columns: [
+                    { key: 'name', label: '姓名', width: '100px' },
+                    { key: 'role', label: '身份' },
+                    { key: 'personality', label: '性格' },
+                    { key: 'description', label: '简介' },
+                  ]
+                }, value: [] }
+              ]},
+              { id: 'relations', label: '关系图谱', components: [
+                { id: 'char-relations', type: 'relation-graph', label: '人物关系', config: {
+                  nodeTypes: [
+                    { type: 'protagonist', label: '主角', color: '#ef4444' },
+                    { type: 'supporting', label: '配角', color: '#3b82f6' },
+                    { type: 'antagonist', label: '反派', color: '#6b7280' },
+                  ],
+                  relationTypes: [
+                    { type: 'family', label: '亲属', color: '#ec4899' },
+                    { type: 'friend', label: '朋友', color: '#10b981' },
+                    { type: 'enemy', label: '敌对', color: '#ef4444' },
+                    { type: 'lover', label: '恋人', color: '#f472b6' },
+                  ]
+                }, value: { characters: [], relations: [] } }
+              ]},
+              { id: 'timeline', label: '时间线', components: [
+                { id: 'char-timeline', type: 'timeline', label: '角色时间线', config: {}, value: [] }
+              ]},
+            ]
+          }, value: null },
+        ]
+      },
+      {
+        id: 'world',
+        name: '世界设定',
+        icon: 'Map',
+        color: '#10b981',
+        components: [
+          { id: 'era', type: 'select', label: '时代背景', config: {
+            options: [
+              { label: '古代', value: 'ancient' },
+              { label: '现代', value: 'modern' },
+              { label: '未来', value: 'future' },
+              { label: '架空', value: 'fictional' },
+            ]
+          }, value: '' },
+          { id: 'world-desc', type: 'textarea', label: '世界描述', config: { placeholder: '描述故事发生的世界...' }, value: '' },
+          { id: 'rules', type: 'keyvalue', label: '世界规则', config: {}, value: [] },
+          { id: 'factions', type: 'faction', label: '势力设定', config: {}, value: [], generatePrompt: '根据世界观背景，生成故事中的主要势力、组织或阵营，包含势力名称、简介、内部等级体系' },
         ]
       },
       {
         id: 'plot',
-        name: '剧情要素',
-        expanded: true,
-        items: [
-          { id: 'mainline', label: '主线剧情', type: 'textarea', value: '', placeholder: '描述主要剧情线...' },
-          { id: 'conflicts', label: '核心冲突', type: 'list', value: [] },
-          { id: 'turning', label: '关键转折', type: 'list', value: [] },
+        name: '剧情设计',
+        icon: 'Zap',
+        color: '#f59e0b',
+        components: [
+          { id: 'mainline', type: 'textarea', label: '主线剧情', config: { placeholder: '描述主要剧情线...' }, value: '' },
+          { id: 'conflicts', type: 'keyvalue', label: '核心冲突', config: {}, value: [] },
+          { id: 'turning-points', type: 'list', label: '关键转折', config: {}, value: [] },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'novel-romance',
+    name: '言情小说模板',
+    description: '重点突出感情线和人物关系',
+    modules: [
+      {
+        id: 'basic-info',
+        name: '基本信息',
+        icon: 'FileText',
+        color: '#3b82f6',
+        components: [
+          { id: 'subgenre', type: 'multiselect', label: '感情类型', config: { 
+            options: [
+              { label: '甜宠', value: 'sweet', color: '#f472b6' },
+              { label: '虐恋', value: 'angst', color: '#6b7280' },
+              { label: '先婚后爱', value: 'marriage-first', color: '#ec4899' },
+              { label: '破镜重圆', value: 'reunion', color: '#8b5cf6' },
+              { label: '暗恋', value: 'secret-love', color: '#06b6d4' },
+              { label: '双向奔赴', value: 'mutual', color: '#10b981' },
+            ],
+            maxCount: 3
+          }, value: [] },
+          { id: 'summary', type: 'textarea', label: '作品简介', config: {}, value: '' },
         ]
       },
       {
-        id: 'worldview',
-        name: '世界观设定',
-        expanded: false,
-        items: [
-          { id: 'era', label: '时代背景', type: 'text', value: '', placeholder: '故事发生的时代' },
-          { id: 'location', label: '地理环境', type: 'textarea', value: '', placeholder: '描述地理环境...' },
-          { id: 'worldmap', label: '世界地图', type: 'image', value: '' },
-          { id: 'power', label: '力量体系', type: 'textarea', value: '', placeholder: '描述力量/修炼体系...' },
-          { id: 'rules', label: '世界规则', type: 'list', value: [] },
+        id: 'main-cp',
+        name: '主CP设定',
+        icon: 'Heart',
+        color: '#ec4899',
+        components: [
+          { id: 'cp-tabs', type: 'tabs', label: 'CP管理', config: {
+            tabs: [
+              { id: 'profiles', label: '人物档案', components: [
+                { id: 'female-lead', type: 'keyvalue', label: '女主角', config: {}, value: [] },
+                { id: 'male-lead', type: 'keyvalue', label: '男主角', config: {}, value: [] },
+              ]},
+              { id: 'love-line', label: '感情线', components: [
+                { id: 'stages', type: 'timeline', label: '感情发展', config: {}, value: [] },
+              ]},
+              { id: 'relations', label: '关系图', components: [
+                { id: 'cp-relations', type: 'relation-graph', label: 'CP关系', config: {
+                  nodeTypes: [
+                    { type: 'female', label: '女性', color: '#ec4899' },
+                    { type: 'male', label: '男性', color: '#3b82f6' },
+                  ],
+                  relationTypes: [
+                    { type: 'lover', label: '恋人', color: '#ef4444' },
+                    { type: 'rival', label: '情敌', color: '#f59e0b' },
+                    { type: 'friend', label: '闺蜜/兄弟', color: '#10b981' },
+                  ]
+                }, value: { characters: [], relations: [] } }
+              ]},
+            ]
+          }, value: null },
         ]
       },
       {
-        id: 'style',
-        name: '风格定位',
-        expanded: false,
-        items: [
-          { id: 'tone', label: '叙事风格', type: 'tags', value: [], options: ['轻松', '沉重', '幽默', '严肃', '温馨', '黑暗', '热血', '治愈'], maxCount: 3 },
-          { id: 'pov', label: '叙事视角', type: 'tags', value: [], options: ['第一人称', '第三人称', '全知视角', '多视角'], maxCount: 1 },
-          { id: 'target', label: '目标读者', type: 'text', value: '', placeholder: '描述目标读者群体' },
-          { id: 'reference', label: '参考作品', type: 'list', value: [] },
+        id: 'sweet-points',
+        name: '甜蜜设计',
+        icon: 'Sparkles',
+        color: '#f472b6',
+        components: [
+          { id: 'sweet-moments', type: 'keyvalue', label: '甜蜜高光', config: {}, value: [] },
+          { id: 'conflicts', type: 'keyvalue', label: '感情冲突', config: {}, value: [] },
         ]
-      }
+      },
     ]
   },
   {
     id: 'empty',
     name: '空白模板',
-    description: '从零开始创建自定义模板',
-    sections: []
-  }
+    description: '从零开始创建',
+    modules: []
+  },
 ];
 
-export default function WorkInfoManager() {
-  // 当前使用的模板
-  const [currentTemplate, setCurrentTemplate] = useState<WorkInfoTemplate>(
-    JSON.parse(JSON.stringify(defaultTemplates[0]))
-  );
-  
-  // 是否处于编辑模式（编辑模板结构）
-  const [isEditMode, setIsEditMode] = useState(false);
-  
-  // 模板选择器是否展开
-  const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
-  
-  // 新建分类的表单
-  const [newSectionName, setNewSectionName] = useState('');
-  const [showNewSectionForm, setShowNewSectionForm] = useState(false);
-  
-  // 新建项目的表单
-  const [newItemForm, setNewItemForm] = useState<{
-    sectionId: string | null;
-    label: string;
-    type: InfoItemType;
-  }>({ sectionId: null, label: '', type: 'text' });
-  
-  // 文件输入引用
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [currentImageItemId, setCurrentImageItemId] = useState<string | null>(null);
+// ============ 图标映射 ============
 
-  // 切换分类展开状态
-  const toggleSection = (sectionId: string) => {
-    setCurrentTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(section =>
-        section.id === sectionId
-          ? { ...section, expanded: !section.expanded }
-          : section
-      )
-    }));
-  };
+const IconMap: Record<string, React.ReactNode> = {
+  'FileText': <FileText size={18} />,
+  'Map': <Map size={18} />,
+  'Users': <Users size={18} />,
+  'Building2': <Building2 size={18} />,
+  'Heart': <Heart size={18} />,
+  'Zap': <Zap size={18} />,
+  'Sparkles': <Sparkles size={18} />,
+  'List': <List size={18} />,
+  'Tag': <Tag size={18} />,
+  'LayoutGrid': <LayoutGrid size={18} />,
+  'GitBranch': <GitBranch size={18} />,
+  'Clock': <Clock size={18} />,
+};
 
-  // 更新信息项的值
-  const updateItemValue = (sectionId: string, itemId: string, value: string | string[]) => {
-    setCurrentTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(section =>
-        section.id === sectionId
-          ? {
-              ...section,
-              items: section.items.map(item =>
-                item.id === itemId ? { ...item, value } : item
-              )
-            }
-          : section
-      )
-    }));
-  };
+// ============ 分页标签子组件 ============
 
-  // 添加新分类
-  const addSection = () => {
-    if (!newSectionName.trim()) return;
-    
-    const newSection: InfoSection = {
-      id: `section-${Date.now()}`,
-      name: newSectionName.trim(),
-      expanded: true,
-      items: []
-    };
-    
-    setCurrentTemplate(prev => ({
-      ...prev,
-      sections: [...prev.sections, newSection]
-    }));
-    
-    setNewSectionName('');
-    setShowNewSectionForm(false);
-  };
+interface TabsComponentProps {
+  tabs: { id: string; label: string; components: ComponentConfig[] }[];
+  moduleId: string;
+  renderComponent: (comp: ComponentConfig, moduleId: string) => React.ReactNode;
+}
 
-  // 删除分类
-  const deleteSection = (sectionId: string) => {
-    setCurrentTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.filter(s => s.id !== sectionId)
-    }));
-  };
+function TabsComponent({ tabs, moduleId, renderComponent }: TabsComponentProps) {
+  const [activeTab, setActiveTab] = useState(tabs[0]?.id || '');
 
-  // 添加新项目
-  const addItem = (sectionId: string) => {
-    if (!newItemForm.label.trim()) return;
-    
-    const newItem: InfoItem = {
-      id: `item-${Date.now()}`,
-      label: newItemForm.label.trim(),
-      type: newItemForm.type,
-      value: newItemForm.type === 'tags' || newItemForm.type === 'list' ? [] : '',
-      placeholder: `输入${newItemForm.label}...`,
-      options: newItemForm.type === 'tags' ? [] : undefined,
-      maxCount: newItemForm.type === 'tags' ? 3 : undefined
-    };
-    
-    setCurrentTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(section =>
-        section.id === sectionId
-          ? { ...section, items: [...section.items, newItem] }
-          : section
-      )
-    }));
-    
-    setNewItemForm({ sectionId: null, label: '', type: 'text' });
-  };
-
-  // 删除项目
-  const deleteItem = (sectionId: string, itemId: string) => {
-    setCurrentTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(section =>
-        section.id === sectionId
-          ? { ...section, items: section.items.filter(item => item.id !== itemId) }
-          : section
-      )
-    }));
-  };
-
-  // 处理图片上传
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentImageItemId) return;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const imageUrl = event.target?.result as string;
-      // 找到对应的 section 和 item 并更新
-      currentTemplate.sections.forEach(section => {
-        const item = section.items.find(i => i.id === currentImageItemId);
-        if (item) {
-          updateItemValue(section.id, currentImageItemId, imageUrl);
-        }
-      });
-      setCurrentImageItemId(null);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // 触发图片上传
-  const triggerImageUpload = (itemId: string) => {
-    setCurrentImageItemId(itemId);
-    fileInputRef.current?.click();
-  };
-
-  // 处理 tags 选择
-  const handleTagToggle = (sectionId: string, itemId: string, tag: string, currentTags: string[], maxCount: number) => {
-    if (currentTags.includes(tag)) {
-      updateItemValue(sectionId, itemId, currentTags.filter(t => t !== tag));
-    } else if (currentTags.length < maxCount) {
-      updateItemValue(sectionId, itemId, [...currentTags, tag]);
-    }
-  };
-
-  // 处理列表项添加
-  const handleListAdd = (sectionId: string, itemId: string, currentList: string[], newValue: string) => {
-    if (newValue.trim()) {
-      updateItemValue(sectionId, itemId, [...currentList, newValue.trim()]);
-    }
-  };
-
-  // 处理列表项删除
-  const handleListRemove = (sectionId: string, itemId: string, currentList: string[], index: number) => {
-    updateItemValue(sectionId, itemId, currentList.filter((_, i) => i !== index));
-  };
-
-  // 应用模板
-  const applyTemplate = (template: WorkInfoTemplate) => {
-    setCurrentTemplate(JSON.parse(JSON.stringify(template)));
-    setTemplateSelectorOpen(false);
-  };
-
-  // 渲染信息项
-  const renderInfoItem = (section: InfoSection, item: InfoItem) => {
-    switch (item.type) {
-      case 'text':
-        return (
-          <input
-            type="text"
-            className="info-input"
-            value={item.value as string}
-            onChange={(e) => updateItemValue(section.id, item.id, e.target.value)}
-            placeholder={item.placeholder}
-          />
-        );
-      
-      case 'textarea':
-        return (
-          <textarea
-            className="info-textarea"
-            value={item.value as string}
-            onChange={(e) => updateItemValue(section.id, item.id, e.target.value)}
-            placeholder={item.placeholder}
-            rows={4}
-          />
-        );
-      
-      case 'image':
-        return (
-          <div className="info-image-wrapper">
-            {item.value ? (
-              <div className="info-image-preview">
-                <img src={item.value as string} alt={item.label} />
-                <div className="image-overlay">
-                  <button 
-                    className="image-action-btn"
-                    onClick={() => triggerImageUpload(item.id)}
-                  >
-                    更换图片
-                  </button>
-                  <button 
-                    className="image-action-btn danger"
-                    onClick={() => updateItemValue(section.id, item.id, '')}
-                  >
-                    删除
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button 
-                className="info-image-upload"
-                onClick={() => triggerImageUpload(item.id)}
-              >
-                <Image size={24} />
-                <span>点击上传图片</span>
-              </button>
-            )}
-          </div>
-        );
-      
-      case 'tags':
-        const selectedTags = item.value as string[];
-        const maxCount = item.maxCount || 3;
-        return (
-          <div className="info-tags-wrapper">
-            <div className="selected-tags">
-              {selectedTags.map(tag => (
-                <span key={tag} className="selected-tag">
-                  {tag}
-                  <button
-                    className="remove-tag-btn"
-                    onClick={() => handleTagToggle(section.id, item.id, tag, selectedTags, maxCount)}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-              {selectedTags.length === 0 && (
-                <span className="tags-placeholder">点击下方标签选择</span>
-              )}
-            </div>
-            {selectedTags.length < maxCount && item.options && (
-              <div className="available-tags">
-                {item.options.filter(t => !selectedTags.includes(t)).map(tag => (
-                  <button
-                    key={tag}
-                    className="tag-option"
-                    onClick={() => handleTagToggle(section.id, item.id, tag, selectedTags, maxCount)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="tags-counter">{selectedTags.length}/{maxCount}</div>
-          </div>
-        );
-      
-      case 'list':
-        const listItems = item.value as string[];
-        return (
-          <div className="info-list-wrapper">
-            <div className="list-items">
-              {listItems.map((listItem, index) => (
-                <div key={index} className="list-item">
-                  <span className="list-item-order">{index + 1}</span>
-                  <span className="list-item-text">{listItem}</span>
-                  <button
-                    className="list-item-remove"
-                    onClick={() => handleListRemove(section.id, item.id, listItems, index)}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="list-add-form">
-              <input
-                type="text"
-                className="list-add-input"
-                placeholder={`添加${item.label}项...`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleListAdd(section.id, item.id, listItems, (e.target as HTMLInputElement).value);
-                    (e.target as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-              <button
-                className="list-add-btn"
-                onClick={(e) => {
-                  const input = (e.currentTarget.previousSibling as HTMLInputElement);
-                  handleListAdd(section.id, item.id, listItems, input.value);
-                  input.value = '';
-                }}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-        );
-      
-      default:
-        return null;
-    }
-  };
+  if (tabs.length === 0) {
+    return <div className="comp-empty">暂无标签页</div>;
+  }
 
   return (
-    <div className="work-info-manager">
-      {/* 隐藏的文件输入 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleImageUpload}
-      />
-
-      {/* 头部工具栏 */}
-      <div className="wim-header">
-        <h2 className="wim-title">作品信息</h2>
-        <div className="wim-actions">
-          {/* 模板选择器 */}
-          <div className="template-selector">
-            <button 
-              className="template-trigger"
-              onClick={() => setTemplateSelectorOpen(!templateSelectorOpen)}
-            >
-              <LayoutTemplate size={16} />
-              <span>{currentTemplate.name}</span>
-              <ChevronDown size={14} className={templateSelectorOpen ? 'rotated' : ''} />
-            </button>
-            {templateSelectorOpen && (
-              <div className="template-dropdown">
-                <div className="template-dropdown-header">选择模板</div>
-                {defaultTemplates.map(template => (
-                  <button
-                    key={template.id}
-                    className={`template-option ${currentTemplate.id === template.id ? 'active' : ''}`}
-                    onClick={() => applyTemplate(template)}
-                  >
-                    <div className="template-option-name">{template.name}</div>
-                    {template.description && (
-                      <div className="template-option-desc">{template.description}</div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* 编辑模式切换 */}
-          <button 
-            className={`wim-action-btn ${isEditMode ? 'active' : ''}`}
-            onClick={() => setIsEditMode(!isEditMode)}
-            title={isEditMode ? '完成编辑' : '编辑模板'}
+    <div className="comp-tabs">
+      <div className="tabs-header">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
           >
-            {isEditMode ? <Save size={16} /> : <Settings size={16} />}
-            <span>{isEditMode ? '完成' : '自定义'}</span>
+            {tab.label}
           </button>
-        </div>
+        ))}
       </div>
-
-      {/* 编辑模式提示 */}
-      {isEditMode && (
-        <div className="edit-mode-banner">
-          <Settings size={16} />
-          <span>模板编辑模式：可添加/删除分类和信息项</span>
-        </div>
-      )}
-
-      {/* 内容区域 */}
-      <div className="wim-content">
-        {currentTemplate.sections.map(section => (
-          <div key={section.id} className="wim-section">
-            <div 
-              className="wim-section-header"
-              onClick={() => toggleSection(section.id)}
-            >
-              <div className="section-header-left">
-                {section.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                <h3 className="section-name">{section.name}</h3>
-                <span className="section-item-count">{section.items.length} 项</span>
-              </div>
-              {isEditMode && (
-                <div className="section-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="section-action-btn danger"
-                    onClick={() => deleteSection(section.id)}
-                    title="删除分类"
+      <div className="tabs-content">
+        {tabs.find(t => t.id === activeTab)?.components.map(subComp => {
+          const showGenerateBtn = ['text', 'textarea', 'list', 'character-card', 'rank-system'].includes(subComp.type);
+          return (
+            <div key={subComp.id} className="comp-wrapper">
+              <div className="comp-header">
+                <label className="comp-label">{subComp.label}</label>
+                {showGenerateBtn && (
+                  <button 
+                    className="comp-generate-btn" 
+                    onClick={() => {
+                      console.log('生成内容:', subComp.label, subComp.generatePrompt);
+                    }}
+                    title={subComp.generatePrompt || '生成内容'}
                   >
-                    <Trash2 size={14} />
+                    <Sparkles size={14} />
+                    <span>生成</span>
                   </button>
-                </div>
-              )}
-            </div>
-            
-            {section.expanded && (
-              <div className="wim-section-content">
-                {section.items.map(item => (
-                  <div key={item.id} className="wim-item">
-                    <div className="wim-item-header">
-                      {isEditMode && (
-                        <div className="item-drag-handle">
-                          <GripVertical size={14} />
-                        </div>
-                      )}
-                      <label className="wim-item-label">
-                        {item.label}
-                        <span className="item-type-badge">{getTypeLabel(item.type)}</span>
-                      </label>
-                      {isEditMode && (
-                        <button
-                          className="item-delete-btn"
-                          onClick={() => deleteItem(section.id, item.id)}
-                          title="删除项目"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="wim-item-content">
-                      {renderInfoItem(section, item)}
-                    </div>
-                  </div>
-                ))}
-                
-                {/* 添加新项目 */}
-                {isEditMode && (
-                  <div className="add-item-section">
-                    {newItemForm.sectionId === section.id ? (
-                      <div className="add-item-form">
-                        <input
-                          type="text"
-                          className="add-item-input"
-                          placeholder="项目名称"
-                          value={newItemForm.label}
-                          onChange={(e) => setNewItemForm({ ...newItemForm, label: e.target.value })}
-                          autoFocus
-                        />
-                        <select
-                          className="add-item-type"
-                          value={newItemForm.type}
-                          onChange={(e) => setNewItemForm({ ...newItemForm, type: e.target.value as InfoItemType })}
-                        >
-                          <option value="text">文本</option>
-                          <option value="textarea">多行文本</option>
-                          <option value="image">图片</option>
-                          <option value="tags">标签</option>
-                          <option value="list">列表</option>
-                        </select>
-                        <button
-                          className="add-item-confirm"
-                          onClick={() => addItem(section.id)}
-                        >
-                          添加
-                        </button>
-                        <button
-                          className="add-item-cancel"
-                          onClick={() => setNewItemForm({ sectionId: null, label: '', type: 'text' })}
-                        >
-                          取消
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="add-item-trigger"
-                        onClick={() => setNewItemForm({ sectionId: section.id, label: '', type: 'text' })}
-                      >
-                        <Plus size={14} />
-                        <span>添加信息项</span>
-                      </button>
-                    )}
-                  </div>
                 )}
               </div>
-            )}
-          </div>
-        ))}
-
-        {/* 添加新分类 */}
-        {isEditMode && (
-          <div className="add-section-area">
-            {showNewSectionForm ? (
-              <div className="add-section-form">
-                <input
-                  type="text"
-                  className="add-section-input"
-                  placeholder="输入分类名称"
-                  value={newSectionName}
-                  onChange={(e) => setNewSectionName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addSection()}
-                  autoFocus
-                />
-                <button className="add-section-confirm" onClick={addSection}>
-                  确定
-                </button>
-                <button 
-                  className="add-section-cancel" 
-                  onClick={() => {
-                    setShowNewSectionForm(false);
-                    setNewSectionName('');
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            ) : (
-              <button
-                className="add-section-trigger"
-                onClick={() => setShowNewSectionForm(true)}
-              >
-                <Plus size={16} />
-                <span>添加新分类</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* 空状态 */}
-        {currentTemplate.sections.length === 0 && (
-          <div className="empty-template">
-            <LayoutTemplate size={48} />
-            <h3>模板为空</h3>
-            <p>点击上方"自定义"按钮开始添加分类和信息项</p>
-          </div>
-        )}
+              {renderComponent(subComp, moduleId)}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// 获取类型标签
-function getTypeLabel(type: InfoItemType): string {
-  const labels: Record<InfoItemType, string> = {
-    text: '文本',
-    textarea: '长文本',
-    image: '图片',
-    tags: '标签',
-    list: '列表'
-  };
-  return labels[type];
-}
+// ============ 主组件 ============
 
+export default function WorkInfoManager() {
+  // 初始化时尝试从缓存加载
+  const [template, setTemplate] = useState<TemplateConfig>(() => {
+    const cached = loadFromCache();
+    if (cached) {
+      // 找到对应的模板并用缓存数据覆盖
+      const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
+      return {
+        ...baseTemplate,
+        modules: cached.modules
+      };
+    }
+    return JSON.parse(JSON.stringify(presetTemplates[0]));
+  });
+  const [activeModuleIndex, setActiveModuleIndex] = useState(0);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showAddModule, setShowAddModule] = useState(false);
+  const [showAddComponent, setShowAddComponent] = useState(false);
+  const [newModuleForm, setNewModuleForm] = useState({ name: '', icon: 'LayoutGrid', color: '#64748b' });
+  const [newComponentForm, setNewComponentForm] = useState<{
+    type: ComponentType;
+    label: string;
+    config: any;
+    generatePrompt: string;
+    validatePrompt: string;
+    tabsConfig: { id: string; label: string }[];
+    cardFields: { key: string; label: string; type: 'text' | 'textarea' | 'image' }[];
+  }>({ type: 'text', label: '', config: {}, generatePrompt: '', validatePrompt: '', tabsConfig: [], cardFields: [] });
+  const [addComponentStep, setAddComponentStep] = useState<'type' | 'config'>('type');
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
+  const [newTabName, setNewTabName] = useState('');
+  const [newCardFieldForm, setNewCardFieldForm] = useState({ label: '', type: 'text' as 'text' | 'textarea' | 'image' });
+  const [newTagOption, setNewTagOption] = useState({ label: '', color: '#64748b' });
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // 角色编辑弹窗状态
+  const [characterModal, setCharacterModal] = useState<{
+    isOpen: boolean;
+    compId: string;
+    moduleId: string;
+    editIndex: number | null; // null表示新建
+    form: { name: string; gender: string; type: string; description: string };
+  }>({
+    isOpen: false,
+    compId: '',
+    moduleId: '',
+    editIndex: null,
+    form: { name: '', gender: '男', type: '主要角色', description: '' }
+  });
+  
+  // 势力编辑弹窗状态
+  const [factionModal, setFactionModal] = useState<{
+    isOpen: boolean;
+    compId: string;
+    moduleId: string;
+    editId: string | null; // null表示新建
+    parentId: string | null; // 父级势力ID
+    form: { name: string; summary: string; details: string; levels: string[] };
+    newLevel: string;
+  }>({
+    isOpen: false,
+    compId: '',
+    moduleId: '',
+    editId: null,
+    parentId: null,
+    form: { name: '', summary: '', details: '', levels: [] },
+    newLevel: ''
+  });
+  
+  // 势力展开状态
+  const [expandedFactions, setExpandedFactions] = useState<Record<string, boolean>>({});
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentImageId, setCurrentImageId] = useState<string | null>(null);
+
+  const activeModule = template.modules[activeModuleIndex];
+
+  // 自动保存到缓存（防抖）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveToCache({
+        templateId: template.id,
+        modules: template.modules,
+        lastModified: Date.now()
+      });
+      setHasUnsavedChanges(false);
+    }, 1000); // 1秒后自动保存
+
+    setHasUnsavedChanges(true);
+    return () => clearTimeout(timer);
+  }, [template]);
+
+  // 手动保存（未来对接后端时使用）
+  const handleManualSave = useCallback(() => {
+    saveToCache({
+      templateId: template.id,
+      modules: template.modules,
+      lastModified: Date.now()
+    });
+    setHasUnsavedChanges(false);
+    // TODO: 未来这里调用后端 API 保存
+    console.log('Saved to cache:', { templateId: template.id, modules: template.modules });
+  }, [template]);
+
+  // 更新组件值
+  const updateComponentValue = (moduleId: string, componentId: string, value: any, parentTabId?: string) => {
+    setTemplate(prev => ({
+      ...prev,
+      modules: prev.modules.map(m => {
+        if (m.id !== moduleId) return m;
+        return {
+          ...m,
+          components: updateComponentInList(m.components, componentId, value, parentTabId)
+        };
+      })
+    }));
+  };
+
+  const updateComponentInList = (components: ComponentConfig[], targetId: string, value: any, parentTabId?: string): ComponentConfig[] => {
+    return components.map(comp => {
+      if (comp.id === targetId) {
+        return { ...comp, value };
+      }
+      // 递归处理 tabs 组件
+      if (comp.type === 'tabs' && comp.config.tabs) {
+        return {
+          ...comp,
+          config: {
+            ...comp.config,
+            tabs: comp.config.tabs.map(tab => ({
+              ...tab,
+              components: updateComponentInList(tab.components, targetId, value, parentTabId)
+            }))
+          }
+        };
+      }
+      return comp;
+    });
+  };
+
+  // 应用模板
+  const applyTemplate = (t: TemplateConfig) => {
+    setTemplate(JSON.parse(JSON.stringify(t)));
+    setActiveModuleIndex(0);
+    setShowTemplateSelector(false);
+  };
+
+  // 添加模块
+  const addModule = () => {
+    if (!newModuleForm.name.trim()) return;
+    const newModule: ModuleConfig = {
+      id: `module-${Date.now()}`,
+      name: newModuleForm.name.trim(),
+      icon: newModuleForm.icon,
+      color: newModuleForm.color,
+      components: []
+    };
+    setTemplate(prev => ({ ...prev, modules: [...prev.modules, newModule] }));
+    setActiveModuleIndex(template.modules.length);
+    setShowAddModule(false);
+    setNewModuleForm({ name: '', icon: 'LayoutGrid', color: '#64748b' });
+  };
+
+  // 删除模块
+  const deleteModule = (index: number) => {
+    setTemplate(prev => ({
+      ...prev,
+      modules: prev.modules.filter((_, i) => i !== index)
+    }));
+    if (activeModuleIndex >= template.modules.length - 1) {
+      setActiveModuleIndex(Math.max(0, activeModuleIndex - 1));
+    }
+  };
+
+  // 添加组件到当前模块
+  const addComponentToModule = () => {
+    if (!newComponentForm.label.trim() || !activeModule) return;
+    
+    // 如果是 tabs 类型，必须至少有一个分页
+    if (newComponentForm.type === 'tabs' && newComponentForm.tabsConfig.length === 0) {
+      return;
+    }
+    
+    // 如果是 card-list 类型，必须至少有一个字段
+    if (newComponentForm.type === 'card-list' && newComponentForm.cardFields.length === 0) {
+      return;
+    }
+    
+    const compDef = componentRegistry.find(c => c.type === newComponentForm.type);
+    
+    // 构建配置
+    let finalConfig = { ...compDef?.defaultConfig, ...newComponentForm.config };
+    
+    // 如果是 tabs 类型，转换 tabsConfig 为实际的 tabs 配置
+    if (newComponentForm.type === 'tabs') {
+      finalConfig.tabs = newComponentForm.tabsConfig.map(t => ({
+        id: t.id,
+        label: t.label,
+        components: []
+      }));
+    }
+    
+    // 如果是 card-list 类型，设置 cardFields 配置
+    if (newComponentForm.type === 'card-list') {
+      finalConfig.cardFields = newComponentForm.cardFields.map(f => ({
+        key: f.label.toLowerCase().replace(/\s+/g, '_'),
+        label: f.label,
+        type: f.type
+      }));
+    }
+    
+    const newComp: ComponentConfig = {
+      id: `comp-${Date.now()}`,
+      type: newComponentForm.type,
+      label: newComponentForm.label.trim(),
+      config: finalConfig,
+      generatePrompt: newComponentForm.generatePrompt.trim() || undefined,
+      validatePrompt: newComponentForm.validatePrompt.trim() || undefined,
+      value: getDefaultValue(newComponentForm.type),
+    };
+    
+    setTemplate(prev => ({
+      ...prev,
+      modules: prev.modules.map((m, i) => 
+        i === activeModuleIndex 
+          ? { ...m, components: [...m.components, newComp] }
+          : m
+      )
+    }));
+    closeAddComponentModal();
+  };
+
+  // 关闭添加/编辑组件弹窗
+  const closeAddComponentModal = () => {
+    setShowAddComponent(false);
+    setAddComponentStep('type');
+    setEditingComponentId(null);
+    setNewComponentForm({ type: 'text', label: '', config: {}, generatePrompt: '', validatePrompt: '', tabsConfig: [], cardFields: [] });
+    setNewTabName('');
+    setNewCardFieldForm({ label: '', type: 'text' });
+    setNewTagOption({ label: '', color: '#64748b' });
+  };
+
+  // 关闭添加模块弹窗
+  const closeAddModuleModal = () => {
+    setShowAddModule(false);
+    setNewModuleForm({ name: '', icon: 'LayoutGrid', color: '#64748b' });
+  };
+
+  // 选择组件类型后进入配置步骤
+  const selectComponentType = (type: ComponentType) => {
+    const compDef = componentRegistry.find(c => c.type === type);
+    setNewComponentForm(prev => ({ 
+      ...prev, 
+      type, 
+      config: { ...compDef?.defaultConfig } 
+    }));
+    setAddComponentStep('config');
+  };
+
+  // 开始编辑组件
+  const startEditComponent = (comp: ComponentConfig) => {
+    setEditingComponentId(comp.id);
+    
+    // 如果是 tabs 类型，提取 tabsConfig
+    const tabsConfig = comp.type === 'tabs' && comp.config.tabs
+      ? comp.config.tabs.map((t: any) => ({ id: t.id, label: t.label }))
+      : [];
+    
+    // 如果是 card-list 类型，提取 cardFields
+    const cardFields = comp.type === 'card-list' && comp.config.cardFields
+      ? comp.config.cardFields.map((f: any) => ({ key: f.key, label: f.label, type: f.type }))
+      : [];
+    
+    setNewComponentForm({
+      type: comp.type,
+      label: comp.label,
+      config: { ...comp.config },
+      generatePrompt: comp.generatePrompt || '',
+      validatePrompt: comp.validatePrompt || '',
+      tabsConfig,
+      cardFields,
+    });
+    setAddComponentStep('config');
+    setShowAddComponent(true);
+  };
+
+  // 保存编辑的组件
+  const saveEditedComponent = () => {
+    if (!editingComponentId || !newComponentForm.label.trim() || !activeModule) return;
+    
+    // 如果是 tabs 类型，必须至少有一个分页
+    if (newComponentForm.type === 'tabs' && newComponentForm.tabsConfig.length === 0) {
+      return;
+    }
+    
+    // 如果是 card-list 类型，必须至少有一个字段
+    if (newComponentForm.type === 'card-list' && newComponentForm.cardFields.length === 0) {
+      return;
+    }
+    
+    setTemplate(prev => ({
+      ...prev,
+      modules: prev.modules.map((m, i) => 
+        i === activeModuleIndex 
+          ? { 
+              ...m, 
+              components: m.components.map(c => {
+                if (c.id !== editingComponentId) return c;
+                
+                let newConfig = { ...newComponentForm.config };
+                
+                // 如果是 tabs 类型，更新 tabs 配置（保留已有的 components）
+                if (newComponentForm.type === 'tabs') {
+                  const existingTabs = c.config.tabs || [];
+                  newConfig.tabs = newComponentForm.tabsConfig.map(t => {
+                    const existingTab = existingTabs.find((et: any) => et.id === t.id);
+                    return {
+                      id: t.id,
+                      label: t.label,
+                      components: existingTab?.components || []
+                    };
+                  });
+                }
+                
+                // 如果是 card-list 类型，更新 cardFields 配置
+                if (newComponentForm.type === 'card-list') {
+                  newConfig.cardFields = newComponentForm.cardFields.map(f => ({
+                    key: f.label.toLowerCase().replace(/\s+/g, '_'),
+                    label: f.label,
+                    type: f.type
+                  }));
+                }
+                
+                return {
+                  ...c,
+                  label: newComponentForm.label.trim(),
+                  config: newConfig,
+                  generatePrompt: newComponentForm.generatePrompt.trim() || undefined,
+                  validatePrompt: newComponentForm.validatePrompt.trim() || undefined,
+                };
+              })
+            }
+          : m
+      )
+    }));
+    closeAddComponentModal();
+  };
+
+  // 删除组件
+  const deleteComponent = (componentId: string) => {
+    setTemplate(prev => ({
+      ...prev,
+      modules: prev.modules.map((m, i) => 
+        i === activeModuleIndex 
+          ? { ...m, components: m.components.filter(c => c.id !== componentId) }
+          : m
+      )
+    }));
+  };
+
+  // 获取默认值
+  const getDefaultValue = (type: ComponentType): any => {
+    switch (type) {
+      case 'multiselect':
+      case 'list':
+      case 'keyvalue':
+      case 'table':
+      case 'timeline':
+      case 'card-list':
+      case 'character-card':
+      case 'rank-system':
+      case 'faction':
+        return [];
+      case 'relation-graph':
+        return { characters: [], relations: [] };
+      case 'tabs':
+        return null;
+      default:
+        return '';
+    }
+  };
+
+  // 处理图片上传
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentImageId || !activeModule) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      updateComponentValue(activeModule.id, currentImageId, event.target?.result as string);
+      setCurrentImageId(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ============ 组件渲染器 ============
+  
+  const renderComponent = (comp: ComponentConfig, moduleId: string) => {
+    const updateValue = (value: any) => updateComponentValue(moduleId, comp.id, value);
+
+    switch (comp.type) {
+      case 'text':
+        return (
+          <input
+            type="text"
+            className="comp-input"
+            value={comp.value || ''}
+            onChange={(e) => updateValue(e.target.value)}
+            placeholder={comp.config.placeholder}
+          />
+        );
+
+      case 'textarea':
+        return (
+          <textarea
+            className="comp-textarea"
+            value={comp.value || ''}
+            onChange={(e) => updateValue(e.target.value)}
+            placeholder={comp.config.placeholder}
+            rows={4}
+          />
+        );
+
+      case 'image':
+        return (
+          <div className="comp-image">
+            {comp.value ? (
+              <div className="image-preview">
+                <img src={comp.value} alt={comp.label} />
+                <div className="image-overlay">
+                  <button onClick={() => { setCurrentImageId(comp.id); fileInputRef.current?.click(); }}>更换</button>
+                  <button onClick={() => updateValue('')}>删除</button>
+                </div>
+              </div>
+            ) : (
+              <button className="image-upload-btn" onClick={() => { setCurrentImageId(comp.id); fileInputRef.current?.click(); }}>
+                <Image size={24} />
+                <span>点击上传</span>
+              </button>
+            )}
+          </div>
+        );
+
+      case 'select':
+        return (
+          <select
+            className="comp-select"
+            value={comp.value || ''}
+            onChange={(e) => updateValue(e.target.value)}
+          >
+            <option value="">请选择...</option>
+            {comp.config.options?.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        );
+
+      case 'multiselect':
+        const selected = (comp.value as string[]) || [];
+        const maxCount = comp.config.maxCount || 5;
+        return (
+          <div className="comp-multiselect">
+            <div className="selected-tags">
+              {selected.map(val => {
+                const opt = comp.config.options?.find(o => o.value === val);
+                return (
+                  <span key={val} className="tag-item" style={{ background: opt?.color || '#64748b' }}>
+                    {opt?.label || val}
+                    <button onClick={() => updateValue(selected.filter(v => v !== val))}><X size={12} /></button>
+                  </span>
+                );
+              })}
+              {selected.length === 0 && <span className="placeholder">点击下方标签选择</span>}
+            </div>
+            {selected.length < maxCount && (
+              <div className="available-tags">
+                {comp.config.options?.filter(o => !selected.includes(o.value)).map(opt => (
+                  <button
+                    key={opt.value}
+                    className="tag-option"
+                    style={{ borderColor: opt.color, color: opt.color }}
+                    onClick={() => updateValue([...selected, opt.value])}
+                  >
+                    + {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'list':
+        const listItems = (comp.value as string[]) || [];
+        return (
+          <div className="comp-list">
+            {listItems.map((item, i) => (
+              <div key={i} className="list-row">
+                <span className="list-num">{i + 1}</span>
+                <input
+                  type="text"
+                  value={item}
+                  onChange={(e) => {
+                    const newList = [...listItems];
+                    newList[i] = e.target.value;
+                    updateValue(newList);
+                  }}
+                  placeholder="输入内容..."
+                />
+                <button className="list-del" onClick={() => updateValue(listItems.filter((_, idx) => idx !== i))}>
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+            <button className="list-add" onClick={() => updateValue([...listItems, ''])}>
+              <Plus size={14} /> 添加项目
+            </button>
+          </div>
+        );
+
+      case 'keyvalue':
+        const kvItems = (comp.value as { key: string; value: string }[]) || [];
+        return (
+          <div className="comp-keyvalue">
+            {kvItems.map((item, i) => (
+              <div key={i} className="kv-card">
+                <div className="kv-header">
+                  <span className="kv-num">{i + 1}</span>
+                  <input
+                    type="text"
+                    className="kv-key"
+                    value={item.key}
+                    onChange={(e) => {
+                      const newItems = [...kvItems];
+                      newItems[i] = { ...item, key: e.target.value };
+                      updateValue(newItems);
+                    }}
+                    placeholder="标题"
+                  />
+                  <button onClick={() => updateValue(kvItems.filter((_, idx) => idx !== i))}><X size={14} /></button>
+                </div>
+                <textarea
+                  className="kv-value"
+                  value={item.value}
+                  onChange={(e) => {
+                    const newItems = [...kvItems];
+                    newItems[i] = { ...item, value: e.target.value };
+                    updateValue(newItems);
+                  }}
+                  placeholder="详细描述..."
+                  rows={2}
+                />
+              </div>
+            ))}
+            <button className="list-add" onClick={() => updateValue([...kvItems, { key: '', value: '' }])}>
+              <Plus size={14} /> 添加项目
+            </button>
+          </div>
+        );
+
+      case 'table':
+        const tableData = (comp.value as Record<string, string>[]) || [];
+        const columns = comp.config.columns || [];
+        return (
+          <div className="comp-table">
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    {columns.map(col => <th key={col.key} style={{ width: col.width }}>{col.label}</th>)}
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableData.map((row, i) => (
+                    <tr key={i}>
+                      <td className="row-num">{i + 1}</td>
+                      {columns.map(col => (
+                        <td key={col.key}>
+                          <input
+                            type="text"
+                            value={row[col.key] || ''}
+                            onChange={(e) => {
+                              const newData = [...tableData];
+                              newData[i] = { ...row, [col.key]: e.target.value };
+                              updateValue(newData);
+                            }}
+                          />
+                        </td>
+                      ))}
+                      <td>
+                        <button onClick={() => updateValue(tableData.filter((_, idx) => idx !== i))}><X size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button className="list-add" onClick={() => {
+              const newRow: Record<string, string> = {};
+              columns.forEach(c => newRow[c.key] = '');
+              updateValue([...tableData, newRow]);
+            }}>
+              <Plus size={14} /> 添加行
+            </button>
+          </div>
+        );
+
+      case 'tabs':
+        const tabs = comp.config.tabs || [];
+        return (
+          <TabsComponent 
+            tabs={tabs} 
+            moduleId={moduleId} 
+            renderComponent={renderComponent} 
+          />
+        );
+
+      case 'relation-graph':
+        // 转换数据格式
+        const relationData = comp.value as { characters?: any[]; relations?: any[] } || {};
+        const graphData: CharacterRelationsData = {
+          characters: relationData.characters || [],
+          relations: relationData.relations || []
+        };
+        return (
+          <div className="comp-relation-graph">
+            <CharacterRelations 
+              data={graphData}
+              onChange={(newData) => updateValue({ 
+                characters: newData.characters, 
+                relations: newData.relations 
+              })}
+            />
+          </div>
+        );
+
+      case 'timeline':
+        const timelineData = (comp.value as { time: string; event: string; description: string }[]) || [];
+        return (
+          <div className="comp-timeline">
+            {timelineData.map((item, i) => (
+              <div key={i} className="timeline-item">
+                <div className="timeline-dot" />
+                <div className="timeline-content">
+                  <input
+                    type="text"
+                    className="timeline-time"
+                    value={item.time}
+                    onChange={(e) => {
+                      const newData = [...timelineData];
+                      newData[i] = { ...item, time: e.target.value };
+                      updateValue(newData);
+                    }}
+                    placeholder="时间点"
+                  />
+                  <input
+                    type="text"
+                    className="timeline-event"
+                    value={item.event}
+                    onChange={(e) => {
+                      const newData = [...timelineData];
+                      newData[i] = { ...item, event: e.target.value };
+                      updateValue(newData);
+                    }}
+                    placeholder="事件标题"
+                  />
+                  <textarea
+                    className="timeline-desc"
+                    value={item.description}
+                    onChange={(e) => {
+                      const newData = [...timelineData];
+                      newData[i] = { ...item, description: e.target.value };
+                      updateValue(newData);
+                    }}
+                    placeholder="事件描述..."
+                    rows={2}
+                  />
+                  <button className="timeline-del" onClick={() => updateValue(timelineData.filter((_, idx) => idx !== i))}>
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button className="list-add" onClick={() => updateValue([...timelineData, { time: '', event: '', description: '' }])}>
+              <Plus size={14} /> 添加事件
+            </button>
+          </div>
+        );
+
+      case 'character-card':
+        // 角色卡片 - 只读展示 + 弹窗编辑
+        const characterData = (comp.value as { name: string; gender: string; type: string; description: string }[]) || [];
+        const mainChars = characterData.filter(c => c.type === '主要角色');
+        const secondaryChars = characterData.filter(c => c.type === '次要角色');
+        
+        const openCharacterModal = (char: typeof characterData[0] | null, idx: number | null) => {
+          setCharacterModal({
+            isOpen: true,
+            compId: comp.id,
+            moduleId: moduleId,
+            editIndex: idx,
+            form: char ? { ...char } : { name: '', gender: '男', type: '主要角色', description: '' }
+          });
+        };
+        
+        const renderCharCard = (char: typeof characterData[0], realIdx: number) => (
+          <div 
+            key={realIdx} 
+            className="character-card-item clickable"
+            onClick={() => openCharacterModal(char, realIdx)}
+          >
+            <div className="character-card-header">
+              <div className="character-name-row">
+                <span className="character-name-display">{char.name || '未命名角色'}</span>
+                <span className="character-gender-tag">{char.gender}</span>
+              </div>
+              <button 
+                className="character-delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateValue(characterData.filter((_, i) => i !== realIdx));
+                }}
+                title="删除角色"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <div className="character-desc-display">
+              {char.description || '暂无简介'}
+            </div>
+          </div>
+        );
+        
+        return (
+          <div className="comp-character-cards">
+            {mainChars.length > 0 && (
+              <div className="character-section">
+                <h4 className="character-section-title">主要角色</h4>
+                <div className="character-grid">
+                  {mainChars.map((char) => {
+                    const realIdx = characterData.indexOf(char);
+                    return renderCharCard(char, realIdx);
+                  })}
+                </div>
+              </div>
+            )}
+            {secondaryChars.length > 0 && (
+              <div className="character-section">
+                <h4 className="character-section-title">次要角色</h4>
+                <div className="character-grid">
+                  {secondaryChars.map((char) => {
+                    const realIdx = characterData.indexOf(char);
+                    return renderCharCard(char, realIdx);
+                  })}
+                </div>
+              </div>
+            )}
+            {characterData.length === 0 && (
+              <div className="character-empty">
+                <Users size={32} />
+                <span>暂无角色，点击添加</span>
+              </div>
+            )}
+            <button 
+              className="character-add-btn"
+              onClick={() => openCharacterModal(null, null)}
+            >
+              <Plus size={16} />
+              <span>添加角色</span>
+            </button>
+          </div>
+        );
+
+      case 'card-list':
+        // 通用卡片列表
+        const cardFields = comp.config.cardFields || [
+          { key: 'name', label: '名称', type: 'text' },
+          { key: 'description', label: '描述', type: 'textarea' },
+        ];
+        const cardData = (comp.value as Record<string, any>[]) || [];
+        return (
+          <div className="comp-card-list">
+            <div className="card-grid">
+              {cardData.map((card, cardIndex) => (
+                <div key={cardIndex} className="card-item">
+                  <div className="card-header">
+                    <span className="card-number">#{cardIndex + 1}</span>
+                    <button 
+                      className="card-delete"
+                      onClick={() => updateValue(cardData.filter((_, i) => i !== cardIndex))}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="card-body">
+                    {cardFields.map((field: { key: string; label: string; type: string }) => (
+                      <div key={field.key} className="card-field">
+                        <label className="card-field-label">{field.label}</label>
+                        {field.type === 'image' ? (
+                          <div className="card-field-image">
+                            {card[field.key] ? (
+                              <div className="card-image-preview">
+                                <img src={card[field.key]} alt={field.label} />
+                                <div className="card-image-overlay">
+                                  <button onClick={() => {
+                                    setCurrentImageId(`card-${cardIndex}-${field.key}`);
+                                    fileInputRef.current?.click();
+                                  }}>更换</button>
+                                  <button onClick={() => {
+                                    const newData = [...cardData];
+                                    newData[cardIndex] = { ...card, [field.key]: '' };
+                                    updateValue(newData);
+                                  }}>删除</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                className="card-image-upload"
+                                onClick={() => {
+                                  setCurrentImageId(`card-${cardIndex}-${field.key}`);
+                                  fileInputRef.current?.click();
+                                }}
+                              >
+                                <Image size={20} />
+                                <span>上传图片</span>
+                              </button>
+                            )}
+                          </div>
+                        ) : field.type === 'textarea' ? (
+                          <textarea
+                            className="card-field-textarea"
+                            value={card[field.key] || ''}
+                            onChange={(e) => {
+                              const newData = [...cardData];
+                              newData[cardIndex] = { ...card, [field.key]: e.target.value };
+                              updateValue(newData);
+                            }}
+                            placeholder={`输入${field.label}...`}
+                            rows={2}
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            className="card-field-input"
+                            value={card[field.key] || ''}
+                            onChange={(e) => {
+                              const newData = [...cardData];
+                              newData[cardIndex] = { ...card, [field.key]: e.target.value };
+                              updateValue(newData);
+                            }}
+                            placeholder={`输入${field.label}...`}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button 
+              className="card-add-btn"
+              onClick={() => {
+                const newCard: Record<string, any> = {};
+                cardFields.forEach((f: { key: string }) => newCard[f.key] = '');
+                updateValue([...cardData, newCard]);
+              }}
+            >
+              <Plus size={16} />
+              <span>添加卡片</span>
+            </button>
+          </div>
+        );
+
+      case 'rank-system':
+        // 等级体系组件
+        const rankData = (comp.value as { level: number; name: string; description: string }[]) || [];
+        return (
+          <div className="comp-rank-system">
+            <div className="rank-list">
+              {rankData.map((rank, idx) => (
+                <div key={idx} className="rank-item">
+                  <div className="rank-level">
+                    <span className="level-badge">{rank.level || idx + 1}</span>
+                  </div>
+                  <div className="rank-content">
+                    <input
+                      type="text"
+                      className="rank-name-input"
+                      value={rank.name || ''}
+                      onChange={(e) => {
+                        const newData = [...rankData];
+                        newData[idx] = { ...rank, name: e.target.value };
+                        updateValue(newData);
+                      }}
+                      placeholder="等级名称（如：炼气期、筑基期）"
+                    />
+                    <textarea
+                      className="rank-desc-input"
+                      value={rank.description || ''}
+                      onChange={(e) => {
+                        const newData = [...rankData];
+                        newData[idx] = { ...rank, description: e.target.value };
+                        updateValue(newData);
+                      }}
+                      placeholder="等级描述、特征、能力..."
+                      rows={2}
+                    />
+                  </div>
+                  <button 
+                    className="rank-delete-btn"
+                    onClick={() => {
+                      const newData = rankData.filter((_, i) => i !== idx);
+                      // 重新计算等级序号
+                      newData.forEach((r, i) => r.level = i + 1);
+                      updateValue(newData);
+                    }}
+                    title="删除等级"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {rankData.length === 0 && (
+              <div className="rank-empty">
+                <TrendingUp size={32} />
+                <span>暂无等级，点击添加</span>
+              </div>
+            )}
+            <button 
+              className="rank-add-btn"
+              onClick={() => {
+                updateValue([...rankData, { 
+                  level: rankData.length + 1, 
+                  name: '', 
+                  description: '' 
+                }]);
+              }}
+            >
+              <Plus size={16} />
+              <span>添加等级</span>
+            </button>
+          </div>
+        );
+
+      case 'faction':
+        // 势力组件
+        const factionData = (comp.value as FactionData[]) || [];
+        
+        // 切换势力展开状态
+        const toggleFaction = (factionId: string) => {
+          setExpandedFactions(prev => ({
+            ...prev,
+            [factionId]: !prev[factionId]
+          }));
+        };
+        
+        // 打开势力编辑弹窗
+        const openFactionModal = (faction: FactionData | null, parentId: string | null = null) => {
+          setFactionModal({
+            isOpen: true,
+            compId: comp.id,
+            moduleId: moduleId,
+            editId: faction?.id || null,
+            parentId: parentId,
+            form: faction 
+              ? { name: faction.name, summary: faction.summary || '', details: faction.details || '', levels: [...faction.levels] }
+              : { name: '', summary: '', details: '', levels: [] },
+            newLevel: ''
+          });
+        };
+        
+        // 删除势力（递归）
+        const deleteFaction = (factions: FactionData[], targetId: string): FactionData[] => {
+          return factions
+            .filter(f => f.id !== targetId)
+            .map(f => ({
+              ...f,
+              children: f.children ? deleteFaction(f.children, targetId) : undefined
+            }));
+        };
+        
+        // 渲染势力树
+        const renderFactionTree = (factions: FactionData[], level: number = 0): React.ReactNode => {
+          return factions.map(faction => {
+            const hasChildren = faction.children && faction.children.length > 0;
+            const isExpanded = expandedFactions[faction.id];
+            
+            return (
+              <div key={faction.id} className="faction-tree-item">
+                <div className="faction-tree-row" style={{ paddingLeft: `${level * 24}px` }}>
+                  {hasChildren ? (
+                    <button
+                      className="faction-toggle-btn"
+                      onClick={() => toggleFaction(faction.id)}
+                    >
+                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                  ) : (
+                    <div className="faction-toggle-placeholder" />
+                  )}
+                  <div className="faction-tree-content">
+                    <div className="faction-display">
+                      <div className="faction-name-display">{faction.name}</div>
+                      {faction.summary && (
+                        <div className="faction-summary-display">
+                          <span className="faction-info-label-text">简述</span>
+                          <p className="faction-info-text">{faction.summary}</p>
+                        </div>
+                      )}
+                      {faction.details && (
+                        <div className="faction-details-display">
+                          <span className="faction-info-label-text">详细信息</span>
+                          <p className="faction-info-text">{faction.details}</p>
+                        </div>
+                      )}
+                      {faction.levels.length > 0 && (
+                        <div className="faction-levels-display">
+                          {faction.levels.map((lvl, idx) => (
+                            <div key={idx} className="level-badge">
+                              <span className="level-order-small">{idx + 1}</span>
+                              <span>{lvl}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="faction-actions-display">
+                        <button
+                          className="edit-faction-btn"
+                          onClick={() => openFactionModal(faction)}
+                          title="编辑"
+                        >
+                          <Settings size={14} />
+                        </button>
+                        <button
+                          className="add-child-btn"
+                          onClick={() => openFactionModal(null, faction.id)}
+                          title="添加子势力"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          className="delete-faction-btn"
+                          onClick={() => {
+                            if (confirm('确定要删除这个势力吗？删除后其子势力也会被删除。')) {
+                              updateValue(deleteFaction(factionData, faction.id));
+                            }
+                          }}
+                          title="删除"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {hasChildren && isExpanded && (
+                  <div className="faction-children">
+                    {renderFactionTree(faction.children!, level + 1)}
+                  </div>
+                )}
+              </div>
+            );
+          });
+        };
+        
+        return (
+          <div className="comp-faction">
+            {factionData.length === 0 ? (
+              <div className="faction-empty">
+                <Building2 size={32} />
+                <span>暂无势力，点击添加</span>
+              </div>
+            ) : (
+              <div className="faction-tree">
+                {renderFactionTree(factionData)}
+              </div>
+            )}
+            <button 
+              className="faction-add-btn"
+              onClick={() => openFactionModal(null)}
+            >
+              <Plus size={16} />
+              <span>添加势力</span>
+            </button>
+          </div>
+        );
+
+      default:
+        return <div className="comp-unsupported">不支持的组件类型: {comp.type}</div>;
+    }
+  };
+
+  // ============ 渲染 ============
+
+  return (
+    <div className="work-info-manager">
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+
+      {/* 顶部工具栏 */}
+      <div className="wim-toolbar">
+        <div className="toolbar-left">
+          <button className="template-btn" onClick={() => setShowTemplateSelector(!showTemplateSelector)}>
+            <LayoutTemplate size={16} />
+            <span>{template.name}</span>
+            <ChevronRight size={14} className={showTemplateSelector ? 'rotated' : ''} />
+          </button>
+          <span className={`save-status ${hasUnsavedChanges ? 'unsaved' : 'saved'}`}>
+            {hasUnsavedChanges ? '未保存' : '已保存'}
+          </span>
+        </div>
+        <div className="toolbar-right">
+          <button className="save-btn" onClick={handleManualSave} title="手动保存">
+            <Save size={16} />
+          </button>
+          <button className={`edit-btn ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>
+            {isEditMode ? <Check size={16} /> : <Settings size={16} />}
+            <span>{isEditMode ? '完成' : '编辑'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 模板选择器 */}
+      {showTemplateSelector && (
+        <div className="template-panel">
+          <div className="panel-header">
+            <h4>选择模板</h4>
+            <button onClick={() => setShowTemplateSelector(false)}><X size={16} /></button>
+          </div>
+          <div className="template-grid">
+            {presetTemplates.map(t => (
+              <button key={t.id} className={`template-card ${template.id === t.id ? 'active' : ''}`} onClick={() => applyTemplate(t)}>
+                <div className="card-name">{t.name}</div>
+                <div className="card-desc">{t.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 模块标签栏 */}
+      <div className="module-tabs">
+        {template.modules.map((m, i) => (
+          <button
+            key={m.id}
+            className={`module-tab ${i === activeModuleIndex ? 'active' : ''}`}
+            onClick={() => setActiveModuleIndex(i)}
+            style={{ '--tab-color': m.color } as React.CSSProperties}
+          >
+            <span className="tab-icon" style={{ color: m.color }}>{IconMap[m.icon] || <LayoutGrid size={16} />}</span>
+            <span>{m.name}</span>
+            {isEditMode && template.modules.length > 1 && (
+              <button className="tab-del" onClick={(e) => { e.stopPropagation(); deleteModule(i); }}><X size={12} /></button>
+            )}
+          </button>
+        ))}
+        {isEditMode && (
+          <button className="module-tab add-tab" onClick={() => setShowAddModule(true)}>
+            <Plus size={16} />
+          </button>
+        )}
+      </div>
+
+
+      {/* 模块内容 */}
+      <div className="module-content">
+        {template.modules.length === 0 ? (
+          <div className="empty-state">
+            <LayoutTemplate size={48} />
+            <h3>暂无模块</h3>
+            <p>点击"编辑"添加模块</p>
+          </div>
+        ) : activeModule ? (
+          <div className="module-page">
+            <div className="page-header">
+              <div className="page-title">
+                <div className="title-icon" style={{ background: activeModule.color }}>{IconMap[activeModule.icon] || <LayoutGrid size={20} />}</div>
+                <h2>{activeModule.name}</h2>
+              </div>
+              <div className="page-nav">
+                <button disabled={activeModuleIndex === 0} onClick={() => setActiveModuleIndex(activeModuleIndex - 1)}><ChevronLeft size={18} /></button>
+                <span>{activeModuleIndex + 1}/{template.modules.length}</span>
+                <button disabled={activeModuleIndex === template.modules.length - 1} onClick={() => setActiveModuleIndex(activeModuleIndex + 1)}><ChevronRight size={18} /></button>
+              </div>
+            </div>
+
+            <div className="page-body">
+              {activeModule.components.map(comp => {
+                // 文本框、列表、角色卡片、等级体系显示生成按钮（固定选项的不需要）
+                const showGenerateBtn = ['text', 'textarea', 'list', 'character-card', 'rank-system'].includes(comp.type);
+                return (
+                  <div key={comp.id} className="comp-wrapper">
+                    <div className="comp-header">
+                      <label className="comp-label">{comp.label}</label>
+                      <div className="comp-header-actions">
+                        {showGenerateBtn && (
+                          <button 
+                            className="comp-generate-btn" 
+                            onClick={() => {
+                              // TODO: 调用 AI 生成
+                              console.log('生成内容:', comp.label, comp.generatePrompt);
+                            }}
+                            title={comp.generatePrompt || '生成内容'}
+                          >
+                            <Sparkles size={14} />
+                            <span>生成</span>
+                          </button>
+                        )}
+                        {isEditMode && (
+                          <div className="comp-actions">
+                            <button className="comp-edit" onClick={() => startEditComponent(comp)} title="编辑组件">
+                              <Settings size={14} />
+                            </button>
+                            <button className="comp-del" onClick={() => deleteComponent(comp.id)} title="删除组件">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {renderComponent(comp, activeModule.id)}
+                  </div>
+                );
+              })}
+
+              {isEditMode && (
+                <div className="add-comp-area">
+                  <button className="add-comp-btn" onClick={() => setShowAddComponent(true)}>
+                    <Plus size={16} />
+                    <span>添加组件</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* 添加/编辑组件弹窗 */}
+      {showAddComponent && (
+        <div className="modal-overlay" onClick={closeAddComponentModal}>
+          <div className="modal-content add-component-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>
+                {editingComponentId 
+                  ? '编辑组件' 
+                  : (addComponentStep === 'type' ? '选择组件类型' : '配置组件')
+                }
+              </h3>
+              <button className="modal-close" onClick={closeAddComponentModal}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {addComponentStep === 'type' && !editingComponentId ? (
+                // 第一步：选择组件类型（仅新增时显示）
+                <div className="component-type-selector">
+                  <div className="type-category">
+                    <div className="category-label">基础组件</div>
+                    <div className="type-grid">
+                      {componentRegistry.filter(c => c.category === 'basic').map(c => (
+                        <button
+                          key={c.type}
+                          className="type-card"
+                          onClick={() => selectComponentType(c.type)}
+                        >
+                          <div className="type-icon">{c.icon}</div>
+                          <div className="type-info">
+                            <div className="type-name">{c.name}</div>
+                            <div className="type-desc">{c.description}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="type-category">
+                    <div className="category-label">高级组件</div>
+                    <div className="type-grid">
+                      {componentRegistry.filter(c => c.category === 'advanced').map(c => (
+                        <button
+                          key={c.type}
+                          className="type-card"
+                          onClick={() => selectComponentType(c.type)}
+                        >
+                          <div className="type-icon">{c.icon}</div>
+                          <div className="type-info">
+                            <div className="type-name">{c.name}</div>
+                            <div className="type-desc">{c.description}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="type-category">
+                    <div className="category-label">交互组件</div>
+                    <div className="type-grid">
+                      {componentRegistry.filter(c => c.category === 'interactive').map(c => (
+                        <button
+                          key={c.type}
+                          className="type-card"
+                          onClick={() => selectComponentType(c.type)}
+                        >
+                          <div className="type-icon">{c.icon}</div>
+                          <div className="type-info">
+                            <div className="type-name">{c.name}</div>
+                            <div className="type-desc">{c.description}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // 第二步：配置组件详情
+                <div className="component-config-form">
+                  <div className="selected-type-info">
+                    <span className="selected-type-icon">
+                      {componentRegistry.find(c => c.type === newComponentForm.type)?.icon}
+                    </span>
+                    <span className="selected-type-name">
+                      {componentRegistry.find(c => c.type === newComponentForm.type)?.name}
+                    </span>
+                    {!editingComponentId && (
+                      <button 
+                        className="change-type-btn"
+                        onClick={() => setAddComponentStep('type')}
+                      >
+                        更换类型
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="form-section">
+                    <div className="section-title">基本信息</div>
+                    <div className="form-group">
+                      <label>组件名称 <span className="required">*</span></label>
+                      <input 
+                        type="text" 
+                        value={newComponentForm.label} 
+                        onChange={(e) => setNewComponentForm({ ...newComponentForm, label: e.target.value })} 
+                        placeholder="例如：作品简介、角色列表..."
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* 组件特定配置 */}
+                    {newComponentForm.type === 'multiselect' && (
+                      <>
+                      <div className="form-group">
+                        <label>标签选项 <span className="required">*</span></label>
+                        <div className="tag-options-config">
+                          {(newComponentForm.config.options || []).map((opt: { label: string; value: string; color: string }, index: number) => (
+                            <div key={index} className="tag-option-item">
+                              <span className="tag-preview" style={{ background: opt.color }}>{opt.label}</span>
+                              <input
+                                type="text"
+                                value={opt.label}
+                                onChange={(e) => {
+                                  const newOptions = [...(newComponentForm.config.options || [])];
+                                  newOptions[index] = { ...opt, label: e.target.value, value: e.target.value.toLowerCase() };
+                                  setNewComponentForm({ ...newComponentForm, config: { ...newComponentForm.config, options: newOptions } });
+                                }}
+                                placeholder="标签名称"
+                                className="tag-label-input"
+                              />
+                              <input
+                                type="color"
+                                className="tag-color-input"
+                                value={opt.color}
+                                onChange={(e) => {
+                                  const newOptions = [...(newComponentForm.config.options || [])];
+                                  newOptions[index] = { ...opt, color: e.target.value };
+                                  setNewComponentForm({ ...newComponentForm, config: { ...newComponentForm.config, options: newOptions } });
+                                }}
+                                title="选择颜色"
+                              />
+                              <button
+                                className="tag-remove-btn"
+                                onClick={() => {
+                                  const newOptions = (newComponentForm.config.options || []).filter((_: any, i: number) => i !== index);
+                                  setNewComponentForm({ ...newComponentForm, config: { ...newComponentForm.config, options: newOptions } });
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="tag-add-row">
+                            <input
+                              type="text"
+                              value={newTagOption.label}
+                              onChange={(e) => setNewTagOption({ ...newTagOption, label: e.target.value })}
+                              placeholder="新标签名称"
+                              className="tag-label-input"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newTagOption.label.trim()) {
+                                  const newOptions = [...(newComponentForm.config.options || []), {
+                                    label: newTagOption.label.trim(),
+                                    value: newTagOption.label.trim().toLowerCase(),
+                                    color: newTagOption.color
+                                  }];
+                                  setNewComponentForm({ ...newComponentForm, config: { ...newComponentForm.config, options: newOptions } });
+                                  setNewTagOption({ label: '', color: '#64748b' });
+                                }
+                              }}
+                            />
+                            <input
+                              type="color"
+                              className="tag-color-input"
+                              value={newTagOption.color}
+                              onChange={(e) => setNewTagOption({ ...newTagOption, color: e.target.value })}
+                              title="选择颜色"
+                            />
+                            <button
+                              className="tag-add-btn"
+                              onClick={() => {
+                                if (newTagOption.label.trim()) {
+                                  const newOptions = [...(newComponentForm.config.options || []), {
+                                    label: newTagOption.label.trim(),
+                                    value: newTagOption.label.trim().toLowerCase(),
+                                    color: newTagOption.color
+                                  }];
+                                  setNewComponentForm({ ...newComponentForm, config: { ...newComponentForm.config, options: newOptions } });
+                                  setNewTagOption({ label: '', color: '#64748b' });
+                                }
+                              }}
+                              disabled={!newTagOption.label.trim()}
+                            >
+                              <Plus size={14} />
+                              添加
+                            </button>
+                          </div>
+                        </div>
+                        {(!newComponentForm.config.options || newComponentForm.config.options.length === 0) && (
+                          <div className="tabs-hint">请至少添加一个标签选项</div>
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <label>最大可选数量</label>
+                        <div className="max-count-config">
+                          <input
+                            type="number"
+                            min="1"
+                            max="20"
+                            className="max-count-input"
+                            value={newComponentForm.config.maxCount || 5}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 5;
+                              setNewComponentForm({ 
+                                ...newComponentForm, 
+                                config: { ...newComponentForm.config, maxCount: Math.max(1, Math.min(20, val)) } 
+                              });
+                            }}
+                          />
+                          <span className="max-count-hint">用户最多可选择 {newComponentForm.config.maxCount || 5} 个标签</span>
+                        </div>
+                      </div>
+                      </>
+                    )}
+                    
+                    {newComponentForm.type === 'table' && (
+                      <div className="form-group">
+                        <label>表格列名</label>
+                        <textarea
+                          rows={4}
+                          placeholder="每行一个列名&#10;例如：&#10;姓名&#10;身份&#10;简介"
+                          defaultValue={
+                            newComponentForm.config.columns
+                              ?.map((c: any) => c.label)
+                              .join('\n') || ''
+                          }
+                          onChange={(e) => {
+                            const columns = e.target.value.split('\n').filter(Boolean).map(label => ({
+                              key: label.trim().toLowerCase(),
+                              label: label.trim()
+                            }));
+                            setNewComponentForm({ ...newComponentForm, config: { ...newComponentForm.config, columns } });
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {newComponentForm.type === 'tabs' && (
+                      <div className="form-group">
+                        <label>分页标签 <span className="required">*</span></label>
+                        <div className="tabs-config-list">
+                          {newComponentForm.tabsConfig.map((tab, index) => (
+                            <div key={tab.id} className="tab-config-item">
+                              <span className="tab-order">{index + 1}</span>
+                              <input
+                                type="text"
+                                value={tab.label}
+                                onChange={(e) => {
+                                  const newTabs = [...newComponentForm.tabsConfig];
+                                  newTabs[index] = { ...tab, label: e.target.value };
+                                  setNewComponentForm({ ...newComponentForm, tabsConfig: newTabs });
+                                }}
+                                placeholder="分页名称"
+                              />
+                              <button
+                                className="tab-remove-btn"
+                                onClick={() => {
+                                  setNewComponentForm({
+                                    ...newComponentForm,
+                                    tabsConfig: newComponentForm.tabsConfig.filter((_, i) => i !== index)
+                                  });
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="tab-add-row">
+                            <input
+                              type="text"
+                              value={newTabName}
+                              onChange={(e) => setNewTabName(e.target.value)}
+                              placeholder="输入新分页名称"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newTabName.trim()) {
+                                  setNewComponentForm({
+                                    ...newComponentForm,
+                                    tabsConfig: [...newComponentForm.tabsConfig, { id: `tab-${Date.now()}`, label: newTabName.trim() }]
+                                  });
+                                  setNewTabName('');
+                                }
+                              }}
+                            />
+                            <button
+                              className="tab-add-btn"
+                              onClick={() => {
+                                if (newTabName.trim()) {
+                                  setNewComponentForm({
+                                    ...newComponentForm,
+                                    tabsConfig: [...newComponentForm.tabsConfig, { id: `tab-${Date.now()}`, label: newTabName.trim() }]
+                                  });
+                                  setNewTabName('');
+                                }
+                              }}
+                              disabled={!newTabName.trim()}
+                            >
+                              <Plus size={14} />
+                              添加
+                            </button>
+                          </div>
+                        </div>
+                        {newComponentForm.tabsConfig.length === 0 && (
+                          <div className="tabs-hint">请至少添加一个分页</div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {newComponentForm.type === 'card-list' && (
+                      <div className="form-group">
+                        <label>卡片字段 <span className="required">*</span></label>
+                        <p className="field-hint">定义每个卡片包含的字段，例如：头像、姓名、描述等</p>
+                        <div className="card-fields-config">
+                          {newComponentForm.cardFields.map((field, index) => (
+                            <div key={index} className="card-field-config-item">
+                              <span className="field-order">{index + 1}</span>
+                              <input
+                                type="text"
+                                value={field.label}
+                                onChange={(e) => {
+                                  const newFields = [...newComponentForm.cardFields];
+                                  newFields[index] = { ...field, label: e.target.value };
+                                  setNewComponentForm({ ...newComponentForm, cardFields: newFields });
+                                }}
+                                placeholder="字段名称"
+                                className="field-label-input"
+                              />
+                              <select
+                                value={field.type}
+                                onChange={(e) => {
+                                  const newFields = [...newComponentForm.cardFields];
+                                  newFields[index] = { ...field, type: e.target.value as 'text' | 'textarea' | 'image' };
+                                  setNewComponentForm({ ...newComponentForm, cardFields: newFields });
+                                }}
+                                className="field-type-select"
+                              >
+                                <option value="text">单行文本</option>
+                                <option value="textarea">多行文本</option>
+                                <option value="image">图片</option>
+                              </select>
+                              <button
+                                className="field-remove-btn"
+                                onClick={() => {
+                                  setNewComponentForm({
+                                    ...newComponentForm,
+                                    cardFields: newComponentForm.cardFields.filter((_, i) => i !== index)
+                                  });
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="card-field-add-row">
+                            <input
+                              type="text"
+                              value={newCardFieldForm.label}
+                              onChange={(e) => setNewCardFieldForm({ ...newCardFieldForm, label: e.target.value })}
+                              placeholder="新字段名称"
+                              className="field-label-input"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newCardFieldForm.label.trim()) {
+                                  setNewComponentForm({
+                                    ...newComponentForm,
+                                    cardFields: [...newComponentForm.cardFields, { 
+                                      key: newCardFieldForm.label.toLowerCase().replace(/\s+/g, '_'),
+                                      label: newCardFieldForm.label.trim(), 
+                                      type: newCardFieldForm.type 
+                                    }]
+                                  });
+                                  setNewCardFieldForm({ label: '', type: 'text' });
+                                }
+                              }}
+                            />
+                            <select
+                              value={newCardFieldForm.type}
+                              onChange={(e) => setNewCardFieldForm({ ...newCardFieldForm, type: e.target.value as 'text' | 'textarea' | 'image' })}
+                              className="field-type-select"
+                            >
+                              <option value="text">单行文本</option>
+                              <option value="textarea">多行文本</option>
+                              <option value="image">图片</option>
+                            </select>
+                            <button
+                              className="field-add-btn"
+                              onClick={() => {
+                                if (newCardFieldForm.label.trim()) {
+                                  setNewComponentForm({
+                                    ...newComponentForm,
+                                    cardFields: [...newComponentForm.cardFields, { 
+                                      key: newCardFieldForm.label.toLowerCase().replace(/\s+/g, '_'),
+                                      label: newCardFieldForm.label.trim(), 
+                                      type: newCardFieldForm.type 
+                                    }]
+                                  });
+                                  setNewCardFieldForm({ label: '', type: 'text' });
+                                }
+                              }}
+                              disabled={!newCardFieldForm.label.trim()}
+                            >
+                              <Plus size={14} />
+                              添加
+                            </button>
+                          </div>
+                        </div>
+                        {newComponentForm.cardFields.length === 0 && (
+                          <div className="tabs-hint">请至少添加一个字段</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="form-section">
+                    <div className="section-title">
+                      AI 提示词配置
+                      <span className="section-hint">用于 AI 辅助生成和校验内容</span>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>
+                        生成 Prompt
+                        <span className="label-hint">AI 根据此提示词生成内容</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={newComponentForm.generatePrompt}
+                        onChange={(e) => setNewComponentForm({ ...newComponentForm, generatePrompt: e.target.value })}
+                        placeholder="例如：请根据小说的题材和背景，生成一段吸引读者的作品简介，包含主要角色和核心冲突..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>
+                        检验 Prompt
+                        <span className="label-hint">AI 根据此提示词检查内容质量</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={newComponentForm.validatePrompt}
+                        onChange={(e) => setNewComponentForm({ ...newComponentForm, validatePrompt: e.target.value })}
+                        placeholder="例如：请检查这段简介是否：1. 吸引读者兴趣 2. 包含核心冲突 3. 不剧透关键情节..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {(addComponentStep === 'config' || editingComponentId) && (
+              <div className="modal-footer">
+                {!editingComponentId && (
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setAddComponentStep('type')}
+                  >
+                    上一步
+                  </button>
+                )}
+                {editingComponentId && (
+                  <button
+                    className="btn-secondary"
+                    onClick={closeAddComponentModal}
+                  >
+                    取消
+                  </button>
+                )}
+                <div className="footer-spacer" />
+                <button
+                  className="btn-primary"
+                  onClick={editingComponentId ? saveEditedComponent : addComponentToModule}
+                  disabled={!newComponentForm.label.trim() || (newComponentForm.type === 'tabs' && newComponentForm.tabsConfig.length === 0) || (newComponentForm.type === 'card-list' && newComponentForm.cardFields.length === 0)}
+                >
+                  {editingComponentId ? '保存修改' : '添加组件'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 添加模块弹窗 */}
+      {showAddModule && (
+        <div className="modal-overlay" onClick={closeAddModuleModal}>
+          <div className="modal-content add-module-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>添加模块</h3>
+              <button className="modal-close" onClick={closeAddModuleModal}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-group">
+                <label>模块名称 <span className="required">*</span></label>
+                <input 
+                  type="text" 
+                  value={newModuleForm.name} 
+                  onChange={(e) => setNewModuleForm({ ...newModuleForm, name: e.target.value })} 
+                  placeholder="例如：角色设定、世界观、剧情线..."
+                  autoFocus
+                />
+              </div>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>选择图标</label>
+                  <div className="icon-grid">
+                    {Object.keys(IconMap).map(icon => (
+                      <button 
+                        key={icon} 
+                        className={`icon-btn ${newModuleForm.icon === icon ? 'active' : ''}`} 
+                        onClick={() => setNewModuleForm({ ...newModuleForm, icon })} 
+                        style={{ color: newModuleForm.color }}
+                      >
+                        {IconMap[icon]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>选择颜色</label>
+                  <div className="color-grid">
+                    {['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#6366f1'].map(c => (
+                      <button 
+                        key={c} 
+                        className={`color-btn ${newModuleForm.color === c ? 'active' : ''}`} 
+                        style={{ background: c }} 
+                        onClick={() => setNewModuleForm({ ...newModuleForm, color: c })} 
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* 预览 */}
+              <div className="module-preview">
+                <div className="preview-icon" style={{ background: newModuleForm.color }}>
+                  {IconMap[newModuleForm.icon] || <LayoutGrid size={20} />}
+                </div>
+                <span className="preview-name">{newModuleForm.name || '模块名称'}</span>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={closeAddModuleModal}>
+                取消
+              </button>
+              <div className="footer-spacer" />
+              <button 
+                className="btn-primary" 
+                onClick={addModule} 
+                disabled={!newModuleForm.name.trim()}
+              >
+                创建模块
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 角色编辑弹窗 */}
+      {characterModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setCharacterModal({ ...characterModal, isOpen: false })}>
+          <div className="modal-content character-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{characterModal.editIndex !== null ? '编辑角色' : '添加角色'}</h3>
+              <button className="modal-close" onClick={() => setCharacterModal({ ...characterModal, isOpen: false })}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-group">
+                <label>角色名称 <span className="required">*</span></label>
+                <input
+                  type="text"
+                  value={characterModal.form.name}
+                  onChange={(e) => setCharacterModal({
+                    ...characterModal,
+                    form: { ...characterModal.form, name: e.target.value }
+                  })}
+                  placeholder="请输入角色名称"
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group half">
+                  <label>性别</label>
+                  <select
+                    value={characterModal.form.gender}
+                    onChange={(e) => setCharacterModal({
+                      ...characterModal,
+                      form: { ...characterModal.form, gender: e.target.value }
+                    })}
+                  >
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                  </select>
+                </div>
+                <div className="form-group half">
+                  <label>角色类型</label>
+                  <select
+                    value={characterModal.form.type}
+                    onChange={(e) => setCharacterModal({
+                      ...characterModal,
+                      form: { ...characterModal.form, type: e.target.value }
+                    })}
+                  >
+                    <option value="主要角色">主要角色</option>
+                    <option value="次要角色">次要角色</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>角色简介</label>
+                <textarea
+                  value={characterModal.form.description}
+                  onChange={(e) => setCharacterModal({
+                    ...characterModal,
+                    form: { ...characterModal.form, description: e.target.value }
+                  })}
+                  placeholder="请输入角色简介、性格特点、背景故事等..."
+                  rows={5}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setCharacterModal({ ...characterModal, isOpen: false })}>
+                取消
+              </button>
+              <div className="footer-spacer" />
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  const module = template.modules.find(m => m.id === characterModal.moduleId);
+                  const comp = module?.components.find(c => c.id === characterModal.compId);
+                  if (!comp) return;
+                  
+                  const currentData = (comp.value as { name: string; gender: string; type: string; description: string }[]) || [];
+                  let newData: typeof currentData;
+                  
+                  if (characterModal.editIndex !== null) {
+                    // 编辑现有角色
+                    newData = [...currentData];
+                    newData[characterModal.editIndex] = { ...characterModal.form };
+                  } else {
+                    // 添加新角色
+                    newData = [...currentData, { ...characterModal.form }];
+                  }
+                  
+                  updateComponentValue(characterModal.moduleId, characterModal.compId, newData);
+                  setCharacterModal({ ...characterModal, isOpen: false });
+                }}
+                disabled={!characterModal.form.name.trim()}
+              >
+                {characterModal.editIndex !== null ? '保存修改' : '添加角色'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 势力编辑弹窗 */}
+      {factionModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setFactionModal({ ...factionModal, isOpen: false })}>
+          <div className="modal-content faction-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{factionModal.editId ? '编辑势力' : (factionModal.parentId ? '添加子势力' : '添加势力')}</h3>
+              <button className="modal-close" onClick={() => setFactionModal({ ...factionModal, isOpen: false })}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-group">
+                <label>势力名称 <span className="required">*</span></label>
+                <input
+                  type="text"
+                  value={factionModal.form.name}
+                  onChange={(e) => setFactionModal({
+                    ...factionModal,
+                    form: { ...factionModal.form, name: e.target.value }
+                  })}
+                  placeholder="请输入势力名称"
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-group">
+                <label>势力简述</label>
+                <textarea
+                  value={factionModal.form.summary}
+                  onChange={(e) => setFactionModal({
+                    ...factionModal,
+                    form: { ...factionModal.form, summary: e.target.value }
+                  })}
+                  placeholder="请输入势力简述..."
+                  rows={2}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>详细信息</label>
+                <textarea
+                  value={factionModal.form.details}
+                  onChange={(e) => setFactionModal({
+                    ...factionModal,
+                    form: { ...factionModal.form, details: e.target.value }
+                  })}
+                  placeholder="请输入详细信息、背景故事等..."
+                  rows={6}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>等级阶梯</label>
+                <div className="faction-levels-section">
+                  <div className="levels-list">
+                    {factionModal.form.levels.map((level, index) => (
+                      <div key={index} className="level-item">
+                        <span className="level-order">{index + 1}</span>
+                        <span className="level-name">{level}</span>
+                        <button
+                          className="remove-level-btn"
+                          onClick={() => {
+                            setFactionModal({
+                              ...factionModal,
+                              form: {
+                                ...factionModal.form,
+                                levels: factionModal.form.levels.filter((_, i) => i !== index)
+                              }
+                            });
+                          }}
+                          title="删除"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="add-level-row">
+                    <input
+                      type="text"
+                      value={factionModal.newLevel}
+                      onChange={(e) => setFactionModal({ ...factionModal, newLevel: e.target.value })}
+                      placeholder="输入等级名称"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && factionModal.newLevel.trim()) {
+                          setFactionModal({
+                            ...factionModal,
+                            form: {
+                              ...factionModal.form,
+                              levels: [...factionModal.form.levels, factionModal.newLevel.trim()]
+                            },
+                            newLevel: ''
+                          });
+                        }
+                      }}
+                    />
+                    <button
+                      className="add-level-btn"
+                      onClick={() => {
+                        if (factionModal.newLevel.trim()) {
+                          setFactionModal({
+                            ...factionModal,
+                            form: {
+                              ...factionModal.form,
+                              levels: [...factionModal.form.levels, factionModal.newLevel.trim()]
+                            },
+                            newLevel: ''
+                          });
+                        }
+                      }}
+                      disabled={!factionModal.newLevel.trim()}
+                    >
+                      <Plus size={14} />
+                      添加
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setFactionModal({ ...factionModal, isOpen: false })}>
+                取消
+              </button>
+              <div className="footer-spacer" />
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  const module = template.modules.find(m => m.id === factionModal.moduleId);
+                  const comp = module?.components.find(c => c.id === factionModal.compId);
+                  if (!comp) return;
+                  
+                  const currentData = (comp.value as FactionData[]) || [];
+                  let newData: FactionData[];
+                  
+                  // 递归查找并添加/更新势力
+                  const addOrUpdateFaction = (
+                    factions: FactionData[], 
+                    targetParentId: string | null, 
+                    newFaction: FactionData,
+                    editId: string | null
+                  ): FactionData[] => {
+                    if (editId) {
+                      // 编辑现有势力
+                      return factions.map(f => {
+                        if (f.id === editId) {
+                          return { ...f, ...newFaction, children: f.children };
+                        }
+                        if (f.children) {
+                          return { ...f, children: addOrUpdateFaction(f.children, targetParentId, newFaction, editId) };
+                        }
+                        return f;
+                      });
+                    } else if (targetParentId) {
+                      // 添加到父级势力
+                      return factions.map(f => {
+                        if (f.id === targetParentId) {
+                          return { ...f, children: [...(f.children || []), newFaction] };
+                        }
+                        if (f.children) {
+                          return { ...f, children: addOrUpdateFaction(f.children, targetParentId, newFaction, editId) };
+                        }
+                        return f;
+                      });
+                    }
+                    return factions;
+                  };
+                  
+                  const newFaction: FactionData = {
+                    id: factionModal.editId || `faction-${Date.now()}`,
+                    name: factionModal.form.name,
+                    summary: factionModal.form.summary,
+                    details: factionModal.form.details,
+                    levels: factionModal.form.levels,
+                    parentId: factionModal.parentId || undefined
+                  };
+                  
+                  if (factionModal.editId) {
+                    // 编辑现有势力
+                    newData = addOrUpdateFaction(currentData, null, newFaction, factionModal.editId);
+                  } else if (factionModal.parentId) {
+                    // 添加子势力
+                    newData = addOrUpdateFaction(currentData, factionModal.parentId, newFaction, null);
+                  } else {
+                    // 添加顶级势力
+                    newData = [...currentData, newFaction];
+                  }
+                  
+                  updateComponentValue(factionModal.moduleId, factionModal.compId, newData);
+                  setFactionModal({ 
+                    isOpen: false, 
+                    compId: '', 
+                    moduleId: '', 
+                    editId: null, 
+                    parentId: null,
+                    form: { name: '', summary: '', details: '', levels: [] },
+                    newLevel: ''
+                  });
+                }}
+                disabled={!factionModal.form.name.trim()}
+              >
+                {factionModal.editId ? '保存修改' : '添加势力'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
