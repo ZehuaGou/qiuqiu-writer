@@ -63,6 +63,40 @@
   overflow: hidden;
 }
 
+/* 空状态 */
+.relations-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #f9fafb;
+  color: #9ca3af;
+}
+
+.relations-empty h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #6b7280;
+  margin: 0;
+}
+
+.relations-empty p {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.list-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
 /* 确保 G6 容器有尺寸 */
 .relations-canvas > div {
   width: 100% !important;

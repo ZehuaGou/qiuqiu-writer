@@ -2,7 +2,7 @@
   width: 100vw;
   height: 100vh;
   display: flex;
-  background-image: linear-gradient(to bottom right,#F1FBF6 , #F2FAF2  );;
+  background: var(--bg-secondary);
   overflow: hidden;
   position: relative;
   outline: none;

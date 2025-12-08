@@ -517,7 +517,7 @@
 }
 
 .comp-label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -586,40 +586,53 @@
 
 /* 文本输入 */
 .comp-input {
-  padding: 12px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  color: var(--text-primary);
+  width: 100%;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
   font-size: 14px;
-  transition: all var(--transition-base);
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.comp-input::placeholder {
+  color: #9ca3af;
 }
 
 .comp-input:focus {
   outline: none;
-  border-color: var(--accent-primary);
-  background: var(--bg-primary);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 /* 多行文本 */
 .comp-textarea {
-  padding: 12px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  color: var(--text-primary);
+  width: 100%;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
   font-size: 14px;
   font-family: inherit;
   line-height: 1.6;
   resize: vertical;
-  min-height: 100px;
-  transition: all var(--transition-base);
+  min-height: 80px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.comp-textarea::placeholder {
+  color: #9ca3af;
 }
 
 .comp-textarea:focus {
   outline: none;
-  border-color: var(--accent-primary);
-  background: var(--bg-primary);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 /* 图片 */
@@ -894,18 +907,20 @@
 
 .kv-key {
   flex: 1;
-  padding: 8px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  color: var(--text-primary);
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
   font-size: 14px;
   font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .kv-key:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 .kv-header button {
@@ -928,20 +943,27 @@
 
 .kv-value {
   width: 100%;
-  padding: 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
   font-size: 14px;
   font-family: inherit;
   line-height: 1.6;
   resize: vertical;
   box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.kv-value::placeholder {
+  color: #9ca3af;
 }
 
 .kv-value:focus {
   outline: none;
-  background: var(--accent-light);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 /* 表格 */
@@ -1151,20 +1173,28 @@
 }
 
 .timeline-desc {
-  padding: 8px 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  font-size: 13px;
+  width: 100%;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
+  font-size: 14px;
   font-family: inherit;
   line-height: 1.5;
   resize: vertical;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.timeline-desc::placeholder {
+  color: #9ca3af;
 }
 
 .timeline-desc:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 .timeline-del {
@@ -2058,37 +2088,52 @@
 }
 
 .card-field-input {
+  width: 100%;
   padding: 10px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  color: var(--text-primary);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
   font-size: 14px;
-  transition: all var(--transition-base);
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.card-field-input::placeholder {
+  color: #9ca3af;
 }
 
 .card-field-input:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 .card-field-textarea {
+  width: 100%;
   padding: 10px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius);
-  color: var(--text-primary);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
   font-size: 14px;
   font-family: inherit;
   line-height: 1.5;
   resize: vertical;
   min-height: 60px;
-  transition: all var(--transition-base);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.card-field-textarea::placeholder {
+  color: #9ca3af;
 }
 
 .card-field-textarea:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: #10b981;
+  background: #ffffff;
 }
 
 .card-field-image {
@@ -2864,47 +2909,52 @@
   margin-top: 16px;
 }
 
-.comp-faction .faction-levels-display .level-badge {
+/* 势力组件中的等级标签 - 覆盖全局样式 */
+.comp-faction .faction-display .faction-levels-display .level-badge {
   display: inline-flex !important;
-  align-items: stretch !important;
+  align-items: center !important;
   gap: 0 !important;
   padding: 0 !important;
+  width: auto !important;
+  max-width: none !important;
   background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%) !important;
   color: white !important;
   border-radius: var(--radius) !important;
   font-size: 14px !important;
   font-weight: 500 !important;
-  overflow: visible !important;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
   transition: all var(--transition-base);
+  overflow: visible !important;
 }
 
-.comp-faction .faction-levels-display .level-badge:hover {
+.comp-faction .faction-display .faction-levels-display .level-badge:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
 }
 
-.comp-faction .faction-levels-display .level-badge .level-order-small {
+.comp-faction .faction-display .faction-levels-display .level-badge .level-order-small {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   width: auto !important;
   height: auto !important;
-  min-width: auto !important;
-  padding: 10px 14px !important;
+  min-width: 36px !important;
+  padding: 8px 12px !important;
   background: rgba(0, 0, 0, 0.15) !important;
   color: white !important;
   font-size: 13px !important;
   font-weight: 700 !important;
   border-radius: var(--radius) 0 0 var(--radius) !important;
+  flex-shrink: 0;
 }
 
-.comp-faction .faction-levels-display .level-badge > span:last-child {
+.comp-faction .faction-display .faction-levels-display .level-badge span:not(.level-order-small) {
   display: inline-flex !important;
   align-items: center !important;
-  padding: 10px 18px 10px 12px !important;
+  padding: 8px 16px 8px 10px !important;
+  color: white !important;
   white-space: nowrap !important;
-  overflow: visible !important;
+  flex-shrink: 0;
 }
 
 .faction-actions-display {

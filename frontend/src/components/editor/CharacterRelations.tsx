@@ -8,13 +8,14 @@ import './CharacterRelations.css';
 // 注册 React 节点扩展
 register(ExtensionCategory.NODE, 'react', ReactNode);
 
-interface Character {
+// 导出接口供外部使用
+export interface Character {
   id: string;
   name: string;
   gender: '男' | '女';
 }
 
-interface Relation {
+export interface Relation {
   id: string;
   from: string;
   to: string;
@@ -22,27 +23,16 @@ interface Relation {
   description?: string;
 }
 
-// Mock 数据 - 角色列表
-const initialCharacters: Character[] = [
-  { id: '1', name: '苏逸飞', gender: '男' },
-  { id: '2', name: '林小雨', gender: '女' },
-  { id: '3', name: '霍明月', gender: '女' },
-  { id: '4', name: '陈小鱼', gender: '女' },
-  { id: '5', name: '顾星河', gender: '女' },
-  { id: '6', name: '张天宇', gender: '男' },
-  { id: '7', name: '王思雨', gender: '女' },
-];
+export interface CharacterRelationsData {
+  characters: Character[];
+  relations: Relation[];
+}
 
-// Mock 数据 - 关系列表
-const initialRelations: Relation[] = [
-  { id: 'r1', from: '1', to: '2', type: '恋人', description: '青梅竹马，从小一起长大' },
-  { id: 'r2', from: '1', to: '3', type: '朋友', description: '大学同学，关系很好' },
-  { id: 'r3', from: '2', to: '4', type: '闺蜜', description: '从小一起长大的好闺蜜' },
-  { id: 'r4', from: '3', to: '5', type: '对手', description: '在学业上存在竞争关系' },
-  { id: 'r5', from: '1', to: '6', type: '兄弟', description: '结拜兄弟，生死之交' },
-  { id: 'r6', from: '2', to: '7', type: '室友', description: '大学室友，关系亲密' },
-  { id: 'r7', from: '4', to: '7', type: '同学', description: '高中同学' },
-];
+// 组件属性
+interface CharacterRelationsProps {
+  data?: CharacterRelationsData;
+  onChange?: (data: CharacterRelationsData) => void;
+}
 
 // 自定义 React 节点组件
 const CharacterNode = ({ data }: { data: any }) => {
@@ -58,9 +48,25 @@ const CharacterNode = ({ data }: { data: any }) => {
   );
 };
 
-export default function CharacterRelations() {
-  const [characters, setCharacters] = useState<Character[]>(initialCharacters);
-  const [relations, setRelations] = useState<Relation[]>(initialRelations);
+export default function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
+  // 使用外部传入的数据，如果没有则使用空数组
+  const [characters, setCharacters] = useState<Character[]>(data?.characters || []);
+  const [relations, setRelations] = useState<Relation[]>(data?.relations || []);
+
+  // 同步外部数据变化
+  useEffect(() => {
+    if (data) {
+      setCharacters(data.characters || []);
+      setRelations(data.relations || []);
+    }
+  }, [data]);
+
+  // 数据变化时通知父组件
+  useEffect(() => {
+    if (onChange) {
+      onChange({ characters, relations });
+    }
+  }, [characters, relations, onChange]);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
   const [editingRelation, setEditingRelation] = useState<string | null>(null);
   const [addingCharacter, setAddingCharacter] = useState(false);
@@ -412,13 +418,24 @@ export default function CharacterRelations() {
       </div>
 
       <div className="relations-content">
-        <div className="relations-canvas" ref={containerRef}></div>
+        {characters.length === 0 ? (
+          <div className="relations-empty">
+            <User size={48} />
+            <h4>暂无角色</h4>
+            <p>点击"添加角色"开始创建人物关系网</p>
+          </div>
+        ) : (
+          <div className="relations-canvas" ref={containerRef}></div>
+        )}
 
         {/* 侧边栏 - 角色和关系列表 */}
         <div className="relations-sidebar">
           <div className="sidebar-section">
-            <h4>角色列表</h4>
+            <h4>角色列表 ({characters.length})</h4>
             <div className="character-list">
+              {characters.length === 0 && (
+                <div className="list-empty">点击上方按钮添加角色</div>
+              )}
               {characters.map((character) => (
                 <div
                   key={character.id}
@@ -453,8 +470,13 @@ export default function CharacterRelations() {
           </div>
 
           <div className="sidebar-section">
-            <h4>关系列表</h4>
+            <h4>关系列表 ({relations.length})</h4>
             <div className="relations-list">
+              {relations.length === 0 && (
+                <div className="list-empty">
+                  {characters.length < 2 ? '至少需要2个角色才能添加关系' : '点击上方按钮添加关系'}
+                </div>
+              )}
               {relations.map((relation) => {
                 const fromChar = characters.find((c) => c.id === relation.from);
                 const toChar = characters.find((c) => c.id === relation.to);

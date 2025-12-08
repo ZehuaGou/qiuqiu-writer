@@ -1,14 +1,28 @@
-import { BookOpen, Tag, FileText, Users, ChevronDown, ChevronRight, Map, Plus, Building2, Edit2, X } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Plus, Settings, ArrowUpDown } from 'lucide-react';
 import { useState } from 'react';
 import './SideNav.css';
 
 export type NavItem = 'work-info' | 'tags' | 'outline' | 'characters' | 'settings' | 'map' | 'factions';
 
+export interface ChapterFullData {
+  id: string;
+  volumeId: string;
+  volumeTitle: string;
+  title: string;
+  characters: string[];
+  locations: string[];
+  outline: string;
+  detailOutline: string;
+}
+
 interface Chapter {
   id: string;
   volumeId: string;
   title: string;
-  isEditing?: boolean;
+  characters?: string[];
+  locations?: string[];
+  outline?: string;
+  detailOutline?: string;
 }
 
 interface Volume {
@@ -17,17 +31,41 @@ interface Volume {
   chapters: Chapter[];
 }
 
+interface Draft {
+  id: string;
+  title: string;
+  volumeId?: string;
+  volumeTitle?: string;
+  characters?: string[];
+  locations?: string[];
+  outline?: string;
+  detailOutline?: string;
+}
+
 interface SideNavProps {
   activeNav: NavItem;
   onNavChange: (nav: NavItem) => void;
   selectedChapter?: string | null;
   onChapterSelect?: (chapterId: string | null) => void;
+  onOpenChapterModal?: (mode: 'create' | 'edit', volumeId: string, volumeTitle: string, chapterData?: ChapterFullData) => void;
+  drafts?: Draft[];
+  onDraftsChange?: (drafts: Draft[]) => void;
 }
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect }: SideNavProps) {
+// 导出 Chapter 和 Volume 类型供外部使用
+export type { Chapter, Volume };
+
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, drafts: externalDrafts, onDraftsChange }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [draftsExpanded, setDraftsExpanded] = useState(false);
-  const [workInfoExpanded, setWorkInfoExpanded] = useState(true);
+  const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
+  
+  // 草稿数据 - 使用外部传入的或内部状态
+  const [internalDrafts, setInternalDrafts] = useState<Draft[]>([
+    { id: 'draft1', title: '草稿 1' },
+  ]);
+  const drafts = externalDrafts || internalDrafts;
+  const setDrafts = onDraftsChange || setInternalDrafts;
   
   // 初始化卷和章节数据
   const [volumes, setVolumes] = useState<Volume[]>([
@@ -35,16 +73,16 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
       id: 'vol1',
       title: '第一卷',
       chapters: [
-        { id: 'vol1-chap1', volumeId: 'vol1', title: '第1章' },
-        { id: 'vol1-chap2', volumeId: 'vol1', title: '第2章' },
-        { id: 'vol1-chap3', volumeId: 'vol1', title: '第3章' },
+        { id: 'vol1-chap1', volumeId: 'vol1', title: '第1章', characters: [], locations: [], outline: '', detailOutline: '' },
+        { id: 'vol1-chap2', volumeId: 'vol1', title: '第2章', characters: [], locations: [], outline: '', detailOutline: '' },
+        { id: 'vol1-chap3', volumeId: 'vol1', title: '第3章', characters: [], locations: [], outline: '', detailOutline: '' },
       ],
     },
     {
       id: 'vol2',
       title: '第二卷',
       chapters: [
-        { id: 'vol2-chap1', volumeId: 'vol2', title: '第1章' },
+        { id: 'vol2-chap1', volumeId: 'vol2', title: '第1章', characters: [], locations: [], outline: '', detailOutline: '' },
       ],
     },
   ]);
@@ -53,9 +91,6 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     vol1: true,
     vol2: false,
   });
-
-  const [editingChapter, setEditingChapter] = useState<string | null>(null);
-  const [editingChapterTitle, setEditingChapterTitle] = useState('');
 
   const setVolumeExpanded = (volumeId: string, expanded: boolean) => {
     setVolumesExpanded(prev => ({
@@ -78,63 +113,31 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     setVolumesExpanded(prev => ({ ...prev, [volumeId]: true }));
   };
 
-  // 添加新章节
-  const handleAddChapter = (volumeId: string, e: React.MouseEvent) => {
+  // 打开新建章节弹框
+  const handleAddChapter = (volumeId: string, volumeTitle: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const volume = volumes.find(v => v.id === volumeId);
-    if (!volume) return;
-
-    const chapterNumber = volume.chapters.length + 1;
-    const chapterId = `${volumeId}-chap${chapterNumber}`;
-    const newChapter: Chapter = {
-      id: chapterId,
-      volumeId,
-      title: `第${chapterNumber}章`,
-      isEditing: true,
-    };
-
-    setVolumes(volumes.map(v => 
-      v.id === volumeId 
-        ? { ...v, chapters: [...v.chapters, newChapter] }
-        : v
-    ));
-
-    setEditingChapter(chapterId);
-    setEditingChapterTitle(newChapter.title);
     setVolumesExpanded(prev => ({ ...prev, [volumeId]: true }));
+    onOpenChapterModal?.('create', volumeId, volumeTitle);
   };
 
-  // 开始编辑章节名称
-  const handleStartEditChapter = (chapter: Chapter, e: React.MouseEvent) => {
+  // 打开编辑章节弹框
+  const handleEditChapter = (chapter: Chapter, volumeTitle: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditingChapter(chapter.id);
-    setEditingChapterTitle(chapter.title);
+    const volume = volumes.find(v => v.chapters.some(c => c.id === chapter.id));
+    if (volume) {
+      onOpenChapterModal?.('edit', volume.id, volumeTitle, {
+        id: chapter.id,
+        volumeId: volume.id,
+        volumeTitle,
+        title: chapter.title,
+        characters: chapter.characters || [],
+        locations: chapter.locations || [],
+        outline: chapter.outline || '',
+        detailOutline: chapter.detailOutline || '',
+      });
+    }
   };
 
-  // 保存章节名称
-  const handleSaveChapterTitle = (chapterId: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!editingChapterTitle.trim()) return;
-
-    setVolumes(volumes.map(volume => ({
-      ...volume,
-      chapters: volume.chapters.map(chap =>
-        chap.id === chapterId
-          ? { ...chap, title: editingChapterTitle.trim() }
-          : chap
-      ),
-    })));
-
-    setEditingChapter(null);
-    setEditingChapterTitle('');
-  };
-
-  // 取消编辑
-  const handleCancelEdit = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setEditingChapter(null);
-    setEditingChapterTitle('');
-  };
 
   // 获取卷的中文数字
   const getVolumeNumber = (num: number): string => {
@@ -144,58 +147,86 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     return `${numbers[Math.floor(num / 10) - 1]}十${numbers[(num % 10) - 1] || ''}`;
   };
 
-  const navItems = [
-    { id: 'tags' as NavItem, label: '设定', icon: Tag },
-    { id: 'outline' as NavItem, label: '总纲', icon: FileText },
-    { id: 'characters' as NavItem, label: '角色', icon: Users },
-    { id: 'factions' as NavItem, label: '势力', icon: Building2 },
-    { id: 'map' as NavItem, label: '地图', icon: Map },
-  ];
+  // 点击作品信息标题
+  const handleWorkInfoClick = () => {
+    onNavChange('work-info');
+    onChapterSelect?.(null); // 清除选中的章节，这样才能显示 WorkInfoManager
+  };
+
+  // 添加新草稿
+  const handleAddDraft = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const draftNumber = drafts.length + 1;
+    const draftId = `draft${draftNumber}`;
+    const newDraft: Draft = {
+      id: draftId,
+      title: `草稿 ${draftNumber}`,
+    };
+    setDrafts([...drafts, newDraft]);
+    // 打开草稿编辑弹框
+    onOpenChapterModal?.('create', 'draft', '草稿箱', {
+      id: draftId,
+      volumeId: 'draft',
+      volumeTitle: '草稿箱',
+      title: newDraft.title,
+      characters: [],
+      locations: [],
+      outline: '',
+      detailOutline: '',
+    });
+  };
+
+  // 打开编辑草稿弹框
+  const handleEditDraft = (draft: Draft, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onOpenChapterModal?.('edit', 'draft', '草稿箱', {
+      id: draft.id,
+      volumeId: 'draft',
+      volumeTitle: '草稿箱',
+      title: draft.title,
+      characters: draft.characters || [],
+      locations: draft.locations || [],
+      outline: draft.outline || '',
+      detailOutline: draft.detailOutline || '',
+    });
+  };
 
   return (
     <aside className="side-nav">
-      <div className="nav-section">
-        <div className="nav-section">
-          <button
-            className="nav-section-header"
-            onClick={() => setWorkInfoExpanded(!workInfoExpanded)}
-          >
-            {workInfoExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            <BookOpen size={18} />
-            <span>作品信息</span>
-          </button>
-          {workInfoExpanded && (
-            <nav className="nav-menu">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    className={`nav-item ${activeNav === item.id ? 'active' : ''}`}
-                    onClick={() => onNavChange(item.id)}
-                  >
-                    <Icon size={18} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          )}
-        </div>
+      <div className="nav-volume-header">
+            <button
+              className={`nav-section-header ${activeNav === 'work-info' && selectedChapter === null ? 'active' : ''}`}
+              onClick={handleWorkInfoClick}
+            >
+              <BookOpen size={24} />
+              <span>作品信息</span>
+            </button>
       </div>
 
       <div className="nav-section">
-        <div className="nav-section-header-with-action">
+        <div className="nav-volume-header">
           <button
             className="nav-section-header"
             onClick={() => setChaptersExpanded(!chaptersExpanded)}
           >
-            {chaptersExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {chaptersExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
             <span>章节</span>
           </button>
-          <button className="nav-add-btn" title="添加卷" onClick={handleAddVolume}>
-            <Plus size={14} />
-          </button>
+          <div className="nav-header-actions">
+            <button 
+              className={`nav-sort-btn ${isChaptersReversed ? 'reversed' : ''}`}
+              title={isChaptersReversed ? '正序显示' : '倒序显示'}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsChaptersReversed(!isChaptersReversed);
+              }}
+            >
+              <ArrowUpDown size={14} />
+            </button>
+            <button className="nav-add-btn" title="添加卷" onClick={handleAddVolume}>
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
         {chaptersExpanded && (
           <div className="nav-submenu">
@@ -206,7 +237,7 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                     className="nav-volume-toggle"
                     onClick={() => setVolumeExpanded(volume.id, !volumesExpanded[volume.id])}
                   >
-                    {volumesExpanded[volume.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    {volumesExpanded[volume.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
                   <button className="nav-volume-item">
                     <span>{volume.title}</span>
@@ -214,59 +245,38 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                   <button 
                     className="nav-add-btn small" 
                     title="添加章"
-                    onClick={(e) => handleAddChapter(volume.id, e)}
+                    onClick={(e) => handleAddChapter(volume.id, volume.title, e)}
                   >
                     <Plus size={12} />
                   </button>
                 </div>
                 {volumesExpanded[volume.id] && (
                   <div className="nav-chapters">
-                    {volume.chapters.map((chapter) => (
+                    {(isChaptersReversed ? [...volume.chapters].reverse() : volume.chapters).map((chapter) => (
                       <div
                         key={chapter.id}
                         className={`nav-chapter-item-wrapper ${selectedChapter === chapter.id ? 'active' : ''}`}
                       >
-                        {editingChapter === chapter.id ? (
-                          <div className="nav-chapter-edit" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="text"
-                              className="nav-chapter-input"
-                              value={editingChapterTitle}
-                              onChange={(e) => setEditingChapterTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveChapterTitle(chapter.id);
-                                } else if (e.key === 'Escape') {
-                                  handleCancelEdit();
-                                }
-                              }}
-                              onBlur={() => handleSaveChapterTitle(chapter.id)}
-                              autoFocus
-                            />
-                            <button
-                              className="nav-chapter-save"
-                              onClick={(e) => handleSaveChapterTitle(chapter.id, e)}
-                              title="保存"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ) : (
+                        <div
+                          className={`nav-chapter-item ${selectedChapter === chapter.id ? 'active' : ''}`}
+                          onClick={() => onChapterSelect?.(chapter.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              onChapterSelect?.(chapter.id);
+                            }
+                          }}
+                        >
+                          <span>{chapter.title}</span>
                           <button
-                            className={`nav-chapter-item ${selectedChapter === chapter.id ? 'active' : ''}`}
-                            onClick={() => onChapterSelect?.(chapter.id)}
-                            onDoubleClick={(e) => handleStartEditChapter(chapter, e)}
+                            className="nav-chapter-edit-btn"
+                            onClick={(e) => handleEditChapter(chapter, volume.title, e)}
+                            title="编辑章节设置"
                           >
-                            <span>{chapter.title}</span>
-                            <button
-                              className="nav-chapter-edit-btn"
-                              onClick={(e) => handleStartEditChapter(chapter, e)}
-                              title="编辑章节名"
-                            >
-                              <Edit2 size={10} />
-                            </button>
+                            <Settings size={12} />
                           </button>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -278,18 +288,49 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
       </div>
 
       <div className="nav-section">
-        <button
-          className="nav-section-header"
-          onClick={() => setDraftsExpanded(!draftsExpanded)}
-        >
-          {draftsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span>草稿箱</span>
-        </button>
+        <div className="nav-volume-header">
+          <button
+            className="nav-section-header"
+            onClick={() => setDraftsExpanded(!draftsExpanded)}
+          >
+            {draftsExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            <span>草稿箱</span>
+          </button>
+          <div className="nav-header-actions">
+            <button className="nav-add-btn" title="添加草稿" onClick={handleAddDraft}>
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
         {draftsExpanded && (
           <div className="nav-submenu">
-            <button className="nav-subitem">
-              <span>草稿 1</span>
-            </button>
+            {drafts.map((draft) => (
+              <div
+                key={draft.id}
+                className={`nav-chapter-item-wrapper ${selectedChapter === draft.id ? 'active' : ''}`}
+              >
+                <div
+                  className={`nav-chapter-item ${selectedChapter === draft.id ? 'active' : ''}`}
+                  onClick={() => onChapterSelect?.(draft.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      onChapterSelect?.(draft.id);
+                    }
+                  }}
+                >
+                  <span>{draft.title}</span>
+                  <button
+                    className="nav-chapter-edit-btn"
+                    onClick={(e) => handleEditDraft(draft, e)}
+                    title="编辑草稿设置"
+                  >
+                    <Settings size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

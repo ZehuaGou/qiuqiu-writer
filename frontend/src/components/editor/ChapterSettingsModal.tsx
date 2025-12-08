@@ -1,0 +1,383 @@
+import { useState, useEffect } from 'react';
+import { X, Sparkles, Plus, MapPin, Users, FileText, BookOpen } from 'lucide-react';
+import './ChapterSettingsModal.css';
+
+interface Character {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+interface Location {
+  id: string;
+  name: string;
+}
+
+interface ChapterData {
+  id?: string;
+  title: string;
+  volumeId: string;
+  volumeTitle: string;
+  characters: string[]; // 人物 ID 列表
+  locations: string[]; // 地点列表
+  outline: string;
+  detailOutline: string;
+}
+
+interface ChapterSettingsModalProps {
+  isOpen: boolean;
+  mode: 'create' | 'edit';
+  volumeId: string;
+  volumeTitle: string;
+  initialData?: Partial<ChapterData>;
+  availableCharacters?: Character[];
+  availableLocations?: Location[];
+  onClose: () => void;
+  onSave: (data: ChapterData) => void;
+  onGenerateOutline?: () => string;
+  onGenerateDetailOutline?: () => string;
+}
+
+export default function ChapterSettingsModal({
+  isOpen,
+  mode,
+  volumeId,
+  volumeTitle,
+  initialData,
+  availableCharacters = [],
+  availableLocations = [],
+  onClose,
+  onSave,
+  onGenerateOutline,
+  onGenerateDetailOutline,
+}: ChapterSettingsModalProps) {
+  const [title, setTitle] = useState('');
+  const [selectedCharacters, setSelectedCharacters] = useState<string[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
+  const [newLocation, setNewLocation] = useState('');
+  const [outline, setOutline] = useState('');
+  const [detailOutline, setDetailOutline] = useState('');
+  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
+  const [isGeneratingDetail, setIsGeneratingDetail] = useState(false);
+  const [activeTab, setActiveTab] = useState<'basic' | 'outline'>('basic');
+
+  // 模拟的可用角色数据
+  const mockCharacters: Character[] = availableCharacters.length > 0 ? availableCharacters : [
+    { id: '1', name: '林晓风' },
+    { id: '2', name: '苏雨晴' },
+    { id: '3', name: '陈浩然' },
+    { id: '4', name: '王雪琳' },
+    { id: '5', name: '张明远' },
+  ];
+
+  // 模拟的可用地点数据
+  const mockLocations: Location[] = availableLocations.length > 0 ? availableLocations : [
+    { id: '1', name: '古城遗址' },
+    { id: '2', name: '学院广场' },
+    { id: '3', name: '密林深处' },
+    { id: '4', name: '王府大殿' },
+  ];
+
+  // 初始化数据
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setTitle(initialData.title || '');
+        setSelectedCharacters(initialData.characters || []);
+        setLocations(initialData.locations || []);
+        setOutline(initialData.outline || '');
+        setDetailOutline(initialData.detailOutline || '');
+      } else {
+        // 新建章节时重置
+        setTitle('');
+        setSelectedCharacters([]);
+        setLocations([]);
+        setOutline('');
+        setDetailOutline('');
+      }
+      setActiveTab('basic');
+    }
+  }, [isOpen, initialData]);
+
+  const handleCharacterToggle = (characterId: string) => {
+    setSelectedCharacters(prev => 
+      prev.includes(characterId)
+        ? prev.filter(id => id !== characterId)
+        : [...prev, characterId]
+    );
+  };
+
+  const handleAddLocation = () => {
+    if (newLocation.trim() && !locations.includes(newLocation.trim())) {
+      setLocations([...locations, newLocation.trim()]);
+      setNewLocation('');
+    }
+  };
+
+  const handleRemoveLocation = (location: string) => {
+    setLocations(locations.filter(l => l !== location));
+  };
+
+  const handleSelectPresetLocation = (locationName: string) => {
+    if (!locations.includes(locationName)) {
+      setLocations([...locations, locationName]);
+    }
+  };
+
+  const handleGenerateOutline = async () => {
+    setIsGeneratingOutline(true);
+    // 模拟 AI 生成
+    setTimeout(() => {
+      const generated = `【AI生成大纲】
+本章主要情节：
+1. 主角面临新的挑战
+2. 与关键人物的对话与冲突
+3. 发现重要线索，推动故事发展
+
+核心冲突：内心矛盾与外部压力的交织
+情感基调：紧张中带有希望`;
+      setOutline(generated);
+      setIsGeneratingOutline(false);
+    }, 1500);
+  };
+
+  const handleGenerateDetailOutline = async () => {
+    setIsGeneratingDetail(true);
+    // 模拟 AI 生成
+    setTimeout(() => {
+      const generated = `【AI生成细纲】
+场景一（开场）：
+- 时间：清晨
+- 地点：主角住所
+- 情节：主角醒来，回忆昨日事件
+- 对话要点：内心独白，展现困惑
+
+场景二（发展）：
+- 地点：城市街道
+- 情节：偶遇关键人物
+- 对话要点：信息交换，伏笔铺设
+- 情绪：好奇转为警惕
+
+场景三（高潮）：
+- 地点：神秘场所
+- 情节：发现重要线索
+- 转折点：认知颠覆
+- 悬念设置：为下一章埋下伏笔`;
+      setDetailOutline(generated);
+      setIsGeneratingDetail(false);
+    }, 1500);
+  };
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      alert('请输入章节名称');
+      return;
+    }
+
+    onSave({
+      id: initialData?.id,
+      title: title.trim(),
+      volumeId,
+      volumeTitle,
+      characters: selectedCharacters,
+      locations,
+      outline,
+      detailOutline,
+    });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="chapter-modal-overlay" onClick={onClose}>
+      <div className="chapter-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="chapter-modal-header">
+          <div className="modal-header-content">
+            <BookOpen size={20} />
+            <h2>{mode === 'create' ? '新建章节' : '编辑章节'}</h2>
+            <span className="volume-badge">{volumeTitle}</span>
+          </div>
+          <button className="modal-close-btn" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="chapter-modal-tabs">
+          <button
+            className={`modal-tab ${activeTab === 'basic' ? 'active' : ''}`}
+            onClick={() => setActiveTab('basic')}
+          >
+            <FileText size={16} />
+            <span>基本信息</span>
+          </button>
+          <button
+            className={`modal-tab ${activeTab === 'outline' ? 'active' : ''}`}
+            onClick={() => setActiveTab('outline')}
+          >
+            <BookOpen size={16} />
+            <span>大纲细纲</span>
+          </button>
+        </div>
+
+        <div className="chapter-modal-body">
+          {activeTab === 'basic' && (
+            <div className="modal-section-content">
+              {/* 章节名称 */}
+              <div className="form-group">
+                <label className="form-label">
+                  <FileText size={16} />
+                  章节名称
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="请输入章节名称，如：第1章 初遇"
+                  autoFocus
+                />
+              </div>
+
+              {/* 出场人物 */}
+              <div className="form-group">
+                <label className="form-label">
+                  <Users size={16} />
+                  出场人物
+                </label>
+                <div className="character-grid">
+                  {mockCharacters.map(char => (
+                    <button
+                      key={char.id}
+                      className={`character-chip ${selectedCharacters.includes(char.id) ? 'selected' : ''}`}
+                      onClick={() => handleCharacterToggle(char.id)}
+                    >
+                      <span className="character-avatar">{char.name[0]}</span>
+                      <span>{char.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 剧情地点 */}
+              <div className="form-group">
+                <label className="form-label">
+                  <MapPin size={16} />
+                  剧情地点
+                </label>
+                <div className="location-input-row">
+                  <input
+                    type="text"
+                    className="form-input location-input"
+                    value={newLocation}
+                    onChange={(e) => setNewLocation(e.target.value)}
+                    placeholder="输入地点名称"
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddLocation()}
+                  />
+                  <button className="add-location-btn" onClick={handleAddLocation}>
+                    <Plus size={16} />
+                    添加
+                  </button>
+                </div>
+                {/* 预设地点 */}
+                <div className="preset-locations">
+                  <span className="preset-label">快速选择：</span>
+                  {mockLocations.map(loc => (
+                    <button
+                      key={loc.id}
+                      className={`preset-location-chip ${locations.includes(loc.name) ? 'selected' : ''}`}
+                      onClick={() => handleSelectPresetLocation(loc.name)}
+                    >
+                      {loc.name}
+                    </button>
+                  ))}
+                </div>
+                {/* 已选地点 */}
+                {locations.length > 0 && (
+                  <div className="selected-locations">
+                    {locations.map(loc => (
+                      <span key={loc} className="location-tag">
+                        <MapPin size={12} />
+                        {loc}
+                        <button
+                          className="remove-location-btn"
+                          onClick={() => handleRemoveLocation(loc)}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'outline' && (
+            <div className="modal-section-content">
+              {/* 大纲 */}
+              <div className="form-group">
+                <div className="form-label-row">
+                  <label className="form-label">
+                    <FileText size={16} />
+                    大纲
+                  </label>
+                  <button
+                    className={`ai-generate-btn ${isGeneratingOutline ? 'generating' : ''}`}
+                    onClick={handleGenerateOutline}
+                    disabled={isGeneratingOutline}
+                  >
+                    <Sparkles size={14} />
+                    <span>{isGeneratingOutline ? '生成中...' : 'AI生成'}</span>
+                  </button>
+                </div>
+                <textarea
+                  className="form-textarea"
+                  value={outline}
+                  onChange={(e) => setOutline(e.target.value)}
+                  placeholder="在这里编写本章大纲，概括主要情节走向、核心事件..."
+                  rows={8}
+                />
+              </div>
+
+              {/* 细纲 */}
+              <div className="form-group">
+                <div className="form-label-row">
+                  <label className="form-label">
+                    <FileText size={16} />
+                    细纲
+                  </label>
+                  <button
+                    className={`ai-generate-btn ${isGeneratingDetail ? 'generating' : ''}`}
+                    onClick={handleGenerateDetailOutline}
+                    disabled={isGeneratingDetail}
+                  >
+                    <Sparkles size={14} />
+                    <span>{isGeneratingDetail ? '生成中...' : 'AI生成'}</span>
+                  </button>
+                </div>
+                <textarea
+                  className="form-textarea detail"
+                  value={detailOutline}
+                  onChange={(e) => setDetailOutline(e.target.value)}
+                  placeholder="在这里编写本章细纲，详细描述每个场景、对话要点、情绪转折..."
+                  rows={12}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="chapter-modal-footer">
+          <button className="modal-btn cancel" onClick={onClose}>
+            取消
+          </button>
+          <button className="modal-btn save" onClick={handleSave}>
+            {mode === 'create' ? '创建章节' : '保存修改'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

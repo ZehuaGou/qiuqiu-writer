@@ -622,17 +622,6 @@ export default function WorkInfoManager() {
     return () => clearTimeout(timer);
   }, [template]);
 
-  // 手动保存（未来对接后端时使用）
-  const handleManualSave = useCallback(() => {
-    saveToCache({
-      templateId: template.id,
-      modules: template.modules,
-      lastModified: Date.now()
-    });
-    setHasUnsavedChanges(false);
-    // TODO: 未来这里调用后端 API 保存
-    console.log('Saved to cache:', { templateId: template.id, modules: template.modules });
-  }, [template]);
 
   // 更新组件值
   const updateComponentValue = (moduleId: string, componentId: string, value: any, parentTabId?: string) => {
@@ -1643,9 +1632,6 @@ export default function WorkInfoManager() {
           </span>
         </div>
         <div className="toolbar-right">
-          <button className="save-btn" onClick={handleManualSave} title="手动保存">
-            <Save size={16} />
-          </button>
           <button className={`edit-btn ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>
             {isEditMode ? <Check size={16} /> : <Settings size={16} />}
             <span>{isEditMode ? '完成' : '编辑'}</span>

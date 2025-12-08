@@ -3,7 +3,7 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: white;
+  background: var(--bg-primary);
   overflow: hidden;
   position: fixed;
   top: 0;
@@ -18,8 +18,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: white;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-primary);
   flex-shrink: 0;
 }
 
@@ -305,9 +305,6 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fafafa;
 }
 
 .setting-item {
@@ -315,7 +312,6 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #6b7280;
 }
 
 .toggle-btn {
@@ -406,6 +402,219 @@
 
 .novel-editor-content u {
   text-decoration: underline;
+}
+
+/* 章节编辑器容器 */
+.chapter-editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 标题和工具栏合并容器 */
+.chapter-header-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+/* 左侧工具栏 */
+.chapter-header-toolbar .novel-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  flex: 0 0 auto;
+}
+
+/* 中间标题区域 */
+.chapter-title-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.chapter-title-centered {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin: 0;
+  text-align: center;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 右侧设置栏 */
+.chapter-header-toolbar .editor-settings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  flex: 0 0 auto;
+}
+
+.chapter-header-toolbar .setting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.chapter-header-toolbar .setting-item:hover {
+  background: var(--bg-secondary);
+  opacity: 0.9;
+}
+
+.chapter-header-toolbar .setting-item span:first-child {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.chapter-header-toolbar .toggle-btn {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border: none;
+  background: var(--border-light);
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.chapter-header-toolbar .toggle-btn::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  left: 2px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.chapter-header-toolbar .toggle-btn[data-active="true"],
+.chapter-header-toolbar .toggle-btn:has(svg[data-toggle="on"]) {
+  background: var(--accent-primary);
+}
+
+.chapter-header-toolbar .toggle-btn[data-active="true"]::before,
+.chapter-header-toolbar .toggle-btn:has(svg[data-toggle="on"])::before {
+  left: 22px;
+  box-shadow: 0 2px 6px var(--accent-light);
+}
+
+.chapter-header-toolbar .toggle-btn:hover {
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.chapter-header-toolbar .toggle-btn:active {
+  transform: scale(0.95);
+}
+
+.chapter-header-toolbar .toggle-btn svg {
+  display: none;
+}
+
+.chapter-header-toolbar .beta-tag {
+  padding: 3px 8px;
+  background: #fef3c7;
+  color: #d97706;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+/* 章节设置按钮 */
+.chapter-settings-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.chapter-settings-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+/* 编辑器包装器样式 */
+.chapter-editor-container .novel-editor-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+}
+
+.chapter-editor-container .novel-editor-wrapper > div {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
+}
+
+.chapter-editor-container .novel-editor-wrapper .ProseMirror {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  outline: none;
+  flex: 1;
+  background: var(--bg-primary);
+  border-radius: 0;
+  padding: 48px 60px;
+  box-shadow: none;
+}
+
+.chapter-title-centered {
+  font-size: 15px;
+  font-weight: 500;
+  color: #4b5563;
+  margin: 0;
+  text-align: center;
+  letter-spacing: 0.3px;
 }
 
 /* 响应式设计 */

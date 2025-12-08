@@ -1,0 +1,223 @@
+// 主题配置类型
+export interface ThemeConfig {
+  id: string;
+  name: string;
+  colors: {
+    // 背景色
+    bgPrimary: string;
+    bgSecondary: string;
+    bgSidebar: string;
+    bgGradientStart: string;
+    bgGradientEnd: string;
+    // 文字颜色
+    textPrimary: string;
+    textSecondary: string;
+    textTertiary: string;
+    textInverse: string;
+    // 边框颜色
+    borderColor: string;
+    borderLight: string;
+    // 主题色
+    accentPrimary: string;
+    accentSecondary: string;
+    accentTertiary: string;
+    accentHover: string;
+  };
+}
+
+// 预定义主题
+export const themes: ThemeConfig[] = [
+  {
+    id: 'green',
+    name: '清新绿',
+    colors: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#f0fdf4',
+      bgSidebar: '#ffffff',
+      bgGradientStart: '#34d399',
+      bgGradientEnd: '#10b981',
+      textPrimary: '#1f2937',
+      textSecondary: '#6b7280',
+      textTertiary: '#9ca3af',
+      textInverse: '#ffffff',
+      borderColor: '#d1fae5',
+      borderLight: '#d1fae5',
+      accentPrimary: '#34d399',
+      accentSecondary: '#10b981',
+      accentTertiary: '#059669',
+      accentHover: '#10b981',
+    },
+  },
+  {
+    id: 'blue',
+    name: '天空蓝',
+    colors: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#eff6ff',
+      bgSidebar: '#ffffff',
+      bgGradientStart: '#60a5fa',
+      bgGradientEnd: '#3b82f6',
+      textPrimary: '#1f2937',
+      textSecondary: '#6b7280',
+      textTertiary: '#9ca3af',
+      textInverse: '#ffffff',
+      borderColor: '#bfdbfe',
+      borderLight: '#bfdbfe',
+      accentPrimary: '#60a5fa',
+      accentSecondary: '#3b82f6',
+      accentTertiary: '#2563eb',
+      accentHover: '#3b82f6',
+    },
+  },
+  {
+    id: 'purple',
+    name: '梦幻紫',
+    colors: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#faf5ff',
+      bgSidebar: '#ffffff',
+      bgGradientStart: '#a78bfa',
+      bgGradientEnd: '#8b5cf6',
+      textPrimary: '#1f2937',
+      textSecondary: '#6b7280',
+      textTertiary: '#9ca3af',
+      textInverse: '#ffffff',
+      borderColor: '#e9d5ff',
+      borderLight: '#e9d5ff',
+      accentPrimary: '#a78bfa',
+      accentSecondary: '#8b5cf6',
+      accentTertiary: '#7c3aed',
+      accentHover: '#8b5cf6',
+    },
+  },
+  {
+    id: 'orange',
+    name: '温暖橙',
+    colors: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#fff7ed',
+      bgSidebar: '#ffffff',
+      bgGradientStart: '#fb923c',
+      bgGradientEnd: '#f97316',
+      textPrimary: '#1f2937',
+      textSecondary: '#6b7280',
+      textTertiary: '#9ca3af',
+      textInverse: '#ffffff',
+      borderColor: '#fed7aa',
+      borderLight: '#fed7aa',
+      accentPrimary: '#fb923c',
+      accentSecondary: '#f97316',
+      accentTertiary: '#ea580c',
+      accentHover: '#f97316',
+    },
+  },
+  {
+    id: 'pink',
+    name: '浪漫粉',
+    colors: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#fdf2f8',
+      bgSidebar: '#ffffff',
+      bgGradientStart: '#f472b6',
+      bgGradientEnd: '#ec4899',
+      textPrimary: '#1f2937',
+      textSecondary: '#6b7280',
+      textTertiary: '#9ca3af',
+      textInverse: '#ffffff',
+      borderColor: '#fbcfe8',
+      borderLight: '#fbcfe8',
+      accentPrimary: '#f472b6',
+      accentSecondary: '#ec4899',
+      accentTertiary: '#db2777',
+      accentHover: '#ec4899',
+    },
+  },
+  {
+    id: 'dark',
+    name: '深色模式',
+    colors: {
+      bgPrimary: '#1f2937',
+      bgSecondary: '#111827',
+      bgSidebar: '#1f2937',
+      bgGradientStart: '#10b981',
+      bgGradientEnd: '#059669',
+      textPrimary: '#f9fafb',
+      textSecondary: '#d1d5db',
+      textTertiary: '#9ca3af',
+      textInverse: '#1f2937',
+      borderColor: '#374151',
+      borderLight: '#374151',
+      accentPrimary: '#10b981',
+      accentSecondary: '#059669',
+      accentTertiary: '#047857',
+      accentHover: '#059669',
+    },
+  },
+];
+
+// 主题存储键
+const THEME_STORAGE_KEY = 'wawawriter_theme';
+
+// 获取当前主题
+export function getCurrentTheme(): string {
+  if (typeof window === 'undefined') return 'green';
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  return saved || 'green';
+}
+
+// 保存主题选择
+export function saveTheme(themeId: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(THEME_STORAGE_KEY, themeId);
+}
+
+// 应用主题
+export function applyTheme(themeId: string): void {
+  const theme = themes.find(t => t.id === themeId) || themes[0];
+  const root = document.documentElement;
+  
+  // 应用CSS变量
+  root.style.setProperty('--bg-primary', theme.colors.bgPrimary);
+  root.style.setProperty('--bg-secondary', theme.colors.bgSecondary);
+  root.style.setProperty('--bg-sidebar', theme.colors.bgSidebar);
+  root.style.setProperty('--bg-gradient-start', theme.colors.bgGradientStart);
+  root.style.setProperty('--bg-gradient-end', theme.colors.bgGradientEnd);
+  root.style.setProperty('--text-primary', theme.colors.textPrimary);
+  root.style.setProperty('--text-secondary', theme.colors.textSecondary);
+  root.style.setProperty('--text-tertiary', theme.colors.textTertiary);
+  root.style.setProperty('--text-inverse', theme.colors.textInverse);
+  root.style.setProperty('--border-color', theme.colors.borderColor);
+  root.style.setProperty('--border-light', theme.colors.borderLight);
+  root.style.setProperty('--accent-primary', theme.colors.accentPrimary);
+  root.style.setProperty('--accent-secondary', theme.colors.accentSecondary);
+  root.style.setProperty('--accent-tertiary', theme.colors.accentTertiary);
+  root.style.setProperty('--accent-hover', theme.colors.accentHover);
+  
+  // 更新渐变
+  root.style.setProperty(
+    '--bg-gradient-light',
+    `linear-gradient(135deg, ${theme.colors.bgGradientStart} 0%, ${theme.colors.bgGradientEnd} 100%)`
+  );
+  root.style.setProperty(
+    '--bg-gradient-soft',
+    `linear-gradient(135deg, ${theme.colors.bgGradientStart}08 0%, ${theme.colors.bgGradientEnd}08 100%)`
+  );
+  root.style.setProperty(
+    '--accent-gradient',
+    `linear-gradient(135deg, ${theme.colors.bgGradientStart} 0%, ${theme.colors.bgGradientEnd} 100%)`
+  );
+  root.style.setProperty(
+    '--accent-light',
+    `${theme.colors.accentPrimary}26`
+  );
+  
+  // 保存主题选择
+  saveTheme(themeId);
+}
+
+// 初始化主题（在应用启动时调用）
+export function initTheme(): void {
+  const currentTheme = getCurrentTheme();
+  applyTheme(currentTheme);
+}
+

@@ -98,19 +98,6 @@ export default function NovelEditor({
             >
               {smartCompletion ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
             </button>
-            <span className="beta-tag">内测</span>
-          </div>
-          <div className="setting-item">
-            <span>字体:</span>
-            <select
-              className="font-select"
-              value={font}
-              onChange={(e) => onFontChange?.(e.target.value)}
-            >
-              <option>默认</option>
-              <option>宋体</option>
-              <option>微软雅黑</option>
-            </select>
           </div>
         </div>
       </div>
