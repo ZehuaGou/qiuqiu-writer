@@ -50,12 +50,14 @@ interface SideNavProps {
   onOpenChapterModal?: (mode: 'create' | 'edit', volumeId: string, volumeTitle: string, chapterData?: ChapterFullData) => void;
   drafts?: Draft[];
   onDraftsChange?: (drafts: Draft[]) => void;
+  volumes?: Volume[];
+  onVolumesChange?: (volumes: Volume[]) => void;
 }
 
 // 导出 Chapter 和 Volume 类型供外部使用
 export type { Chapter, Volume };
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, drafts: externalDrafts, onDraftsChange }: SideNavProps) {
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, drafts: externalDrafts, onDraftsChange, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [draftsExpanded, setDraftsExpanded] = useState(false);
   const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
@@ -67,8 +69,8 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
   const drafts = externalDrafts || internalDrafts;
   const setDrafts = onDraftsChange || setInternalDrafts;
   
-  // 初始化卷和章节数据
-  const [volumes, setVolumes] = useState<Volume[]>([
+  // 卷和章节数据 - 使用外部传入的或内部状态
+  const [internalVolumes, setInternalVolumes] = useState<Volume[]>([
     {
       id: 'vol1',
       title: '第一卷',
@@ -86,6 +88,8 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
       ],
     },
   ]);
+  const volumes = externalVolumes || internalVolumes;
+  const setVolumes = onVolumesChange || setInternalVolumes;
 
   const [volumesExpanded, setVolumesExpanded] = useState<Record<string, boolean>>({
     vol1: true,

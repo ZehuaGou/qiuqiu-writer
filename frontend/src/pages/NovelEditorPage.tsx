@@ -72,6 +72,21 @@ export default function NovelEditorPage() {
     { id: 'draft1', title: '草稿 1' },
   ]);
 
+  // 卷和章节数据 - 从首页或API获取，这里先使用默认数据
+  const [volumes, setVolumes] = useState<Array<{ id: string; title: string; chapters: Array<{ id: string; volumeId: string; title: string; characters?: string[]; locations?: string[]; outline?: string; detailOutline?: string }> }>>([
+    {
+      id: 'vol1',
+      title: '第一卷',
+      chapters: [
+        { id: 'vol1-chap1', volumeId: 'vol1', title: '第1章', characters: [], locations: [], outline: '', detailOutline: '' },
+        { id: 'vol1-chap2', volumeId: 'vol1', title: '第2章', characters: [], locations: [], outline: '', detailOutline: '' },
+        { id: 'vol1-chap3', volumeId: 'vol1', title: '第3章', characters: [], locations: [], outline: '', detailOutline: '' },
+        { id: 'vol1-chap4', volumeId: 'vol1', title: '第4章', characters: [], locations: [], outline: '', detailOutline: '' },
+        { id: 'vol1-chap5', volumeId: 'vol1', title: '第5章', characters: [], locations: [], outline: '', detailOutline: '' },
+      ],
+    },
+  ]);
+
   // 打开章节弹框
   const handleOpenChapterModal = (
     mode: 'create' | 'edit',
@@ -265,6 +280,8 @@ export default function NovelEditorPage() {
           onOpenChapterModal={handleOpenChapterModal}
           drafts={drafts}
           onDraftsChange={setDrafts}
+          volumes={volumes}
+          onVolumesChange={setVolumes}
         />
 
         {/* 主编辑区 */}
