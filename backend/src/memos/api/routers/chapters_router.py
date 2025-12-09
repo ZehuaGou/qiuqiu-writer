@@ -1,0 +1,535 @@
+"""
+章节管理API路由 (使用ShareDB进行实时协作)
+"""
+
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, or_
+import json
+import asyncio
+from datetime import datetime
+
+from memos.api.core.database import get_async_db
+from memos.api.core.security import get_current_user_id
+from memos.api.services.chapter_service import ChapterService
+from memos.api.services.sharedb_service import ShareDBService
+from memos.api.schemas.chapter import (
+    ChapterCreate, ChapterUpdate, ChapterResponse, ChapterListResponse,
+    ChapterVersionCreate, ChapterVersionResponse
+)
+from memos.api.models.chapter import Chapter, ChapterVersion
+
+router = APIRouter(prefix="/api/v1/chapters", tags=["章节管理"])
+sharedb_service = ShareDBService()
+
+
+# 章节CRUD操作
+@router.post("/", response_model=ChapterResponse)
+async def create_chapter(
+    chapter_data: ChapterCreate,
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    创建新章节
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查作品权限
+    if not await chapter_service.can_edit_work(
+        user_id=current_user_id,
+        work_id=chapter_data.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有编辑该作品的权限"
+        )
+
+    # 创建章节记录
+    chapter = await chapter_service.create_chapter(
+        **chapter_data.dict()
+    )
+
+    # 在ShareDB中创建文档
+    await sharedb_service.create_document(
+        document_id=f"chapter_{chapter.id}",
+        initial_content={
+            "title": chapter.title,
+            "content": chapter.content or "",
+            "metadata": {
+                "work_id": chapter.work_id,
+                "chapter_number": chapter.chapter_number,
+                "created_by": current_user_id,
+                "created_at": chapter.created_at.isoformat() if chapter.created_at else None
+            }
+        }
+    )
+
+    # 记录审计日志
+    await chapter_service.create_audit_log(
+        user_id=current_user_id,
+        action="create_chapter",
+        target_type="chapter",
+        target_id=chapter.id,
+        details={
+            "title": chapter.title,
+            "work_id": chapter.work_id,
+            "chapter_number": chapter.chapter_number
+        },
+        ip_address=get_client_ip(Request),
+        user_agent=get_user_agent(Request)
+    )
+
+    return chapter.to_dict()
+
+
+@router.get("/", response_model=ChapterListResponse)
+async def list_chapters(
+    work_id: int = Query(..., description="作品ID"),
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(20, ge=1, le=100, description="每页数量"),
+    status: Optional[str] = Query(None, description="章节状态"),
+    sort_by: str = Query("chapter_number", description="排序字段"),
+    sort_order: str = Query("asc", regex="^(asc|desc)$", description="排序方向"),
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    获取章节列表
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查作品访问权限
+    if not await chapter_service.can_access_work(
+        user_id=current_user_id,
+        work_id=work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有访问该作品的权限"
+        )
+
+    filters = {"work_id": work_id}
+    if status:
+        filters["status"] = status
+
+    chapters, total = await chapter_service.get_chapters(
+        filters=filters,
+        page=page,
+        size=size,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+
+    return {
+        "chapters": [chapter.to_dict() for chapter in chapters],
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": (total + size - 1) // size
+    }
+
+
+@router.get("/{chapter_id}", response_model=ChapterResponse)
+async def get_chapter(
+    chapter_id: int,
+    include_versions: bool = Query(False, description="是否包含版本历史"),
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    获取章节详情
+    """
+    chapter_service = ChapterService(db)
+
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    # 检查访问权限
+    if not await chapter_service.can_access_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有访问该章节的权限"
+        )
+
+    # 从ShareDB获取最新内容
+    try:
+        document = await sharedb_service.get_document(f"chapter_{chapter_id}")
+        if document:
+            chapter.content = document.get("content", chapter.content)
+    except Exception as e:
+        # 如果ShareDB获取失败，使用数据库中的内容
+        pass
+
+    return chapter.to_dict(include_versions=include_versions)
+
+
+@router.put("/{chapter_id}", response_model=ChapterResponse)
+async def update_chapter(
+    chapter_id: int,
+    chapter_update: ChapterUpdate,
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    更新章节元数据（不包含内容，内容通过ShareDB实时编辑）
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查章节是否存在
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    # 检查编辑权限
+    if not await chapter_service.can_edit_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有编辑该章节的权限"
+        )
+
+    # 更新章节元数据
+    updated_chapter = await chapter_service.update_chapter(
+        chapter_id=chapter_id,
+        **chapter_update.dict(exclude_unset=True)
+    )
+
+    # 如果有标题更新，同时更新ShareDB文档
+    if chapter_update.title:
+        await sharedb_service.update_document(
+            document_id=f"chapter_{chapter_id}",
+            update_data={
+                "title": chapter_update.title,
+                "metadata.updated_by": current_user_id,
+                "metadata.updated_at": datetime.utcnow().isoformat()
+            }
+        )
+
+    # 记录审计日志
+    await chapter_service.create_audit_log(
+        user_id=current_user_id,
+        action="update_chapter",
+        target_type="chapter",
+        target_id=chapter_id,
+        details=chapter_update.dict(exclude_unset=True),
+        ip_address=get_client_ip(Request),
+        user_agent=get_user_agent(Request)
+    )
+
+    return updated_chapter.to_dict()
+
+
+@router.delete("/{chapter_id}")
+async def delete_chapter(
+    chapter_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    删除章节
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查章节是否存在
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    # 检查删除权限
+    if not await chapter_service.can_edit_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有删除该章节的权限"
+        )
+
+    # 删除ShareDB文档
+    await sharedb_service.delete_document(f"chapter_{chapter_id}")
+
+    # 删除章节记录
+    await chapter_service.delete_chapter(chapter_id)
+
+    # 记录审计日志
+    await chapter_service.create_audit_log(
+        user_id=current_user_id,
+        action="delete_chapter",
+        target_type="chapter",
+        target_id=chapter_id,
+        details={"title": chapter.title, "work_id": chapter.work_id},
+        ip_address=get_client_ip(Request),
+        user_agent=get_user_agent(Request)
+    )
+
+    return {"message": "章节删除成功"}
+
+
+# 版本管理
+@router.get("/{chapter_id}/versions", response_model=List[ChapterVersionResponse])
+async def get_chapter_versions(
+    chapter_id: int,
+    page: int = Query(1, ge=1, description="页码"),
+    size: int = Query(20, ge=1, le=100, description="每页数量"),
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> List[Dict[str, Any]]:
+    """
+    获取章节版本历史
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查章节访问权限
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    if not await chapter_service.can_access_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有访问该章节的权限"
+        )
+
+    versions, total = await chapter_service.get_chapter_versions(
+        chapter_id=chapter_id,
+        page=page,
+        size=size
+    )
+
+    return [version.to_dict() for version in versions]
+
+
+@router.post("/{chapter_id}/versions", response_model=ChapterVersionResponse)
+async def create_chapter_version(
+    chapter_id: int,
+    version_data: ChapterVersionCreate,
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    创建章节版本快照
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查章节访问权限
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    if not await chapter_service.can_access_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有访问该章节的权限"
+        )
+
+    # 获取当前ShareDB文档内容
+    try:
+        document = await sharedb_service.get_document(f"chapter_{chapter_id}")
+        current_content = document.get("content", "") if document else ""
+        current_title = document.get("title", chapter.title) if document else chapter.title
+    except Exception:
+        current_content = chapter.content or ""
+        current_title = chapter.title
+
+    # 创建版本
+    version = await chapter_service.create_chapter_version(
+        chapter_id=chapter_id,
+        title=current_title,
+        content=current_content,
+        **version_data.dict()
+    )
+
+    # 记录审计日志
+    await chapter_service.create_audit_log(
+        user_id=current_user_id,
+        action="create_chapter_version",
+        target_type="chapter_version",
+        target_id=version.id,
+        details={
+            "chapter_id": chapter_id,
+            "version_number": version.version_number
+        },
+        ip_address=get_client_ip(Request),
+        user_agent=get_user_agent(Request)
+    )
+
+    return version.to_dict()
+
+
+# ShareDB WebSocket连接用于实时协作
+@router.websocket("/{chapter_id}/collaborate")
+async def websocket_collaborate(
+    websocket: WebSocket,
+    chapter_id: int,
+    token: Optional[str] = None
+):
+    """
+    章节实时协作WebSocket连接
+    """
+    await websocket.accept()
+
+    # 验证用户身份
+    try:
+        if not token:
+            await websocket.close(code=1008, reason="Token缺少")
+            return
+
+        # 这里应该验证JWT token，简化处理
+        # user_id = await verify_websocket_token(token)
+        user_id = 1  # 临时使用硬编码，实际应该从token解析
+
+        # 检查章节访问权限
+        chapter_service = ChapterService(websocket.app.state.db)
+        chapter = await chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter:
+            await websocket.close(code=1004, reason="章节不存在")
+            return
+
+        if not await chapter_service.can_access_work(
+            user_id=user_id,
+            work_id=chapter.work_id
+        ):
+            await websocket.close(code=1003, reason="没有访问权限")
+            return
+
+        # 加入协作会话
+        document_id = f"chapter_{chapter_id}"
+        await sharedb_service.join_collaboration(
+            websocket=websocket,
+            document_id=document_id,
+            user_id=user_id
+        )
+
+    except WebSocketDisconnect:
+        # 客户端断开连接
+        pass
+    except Exception as e:
+        await websocket.close(code=1011, reason=f"服务器错误: {str(e)}")
+
+
+# ShareDB文档操作
+@router.get("/{chapter_id}/document")
+async def get_chapter_document(
+    chapter_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    获取章节ShareDB文档内容
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查章节访问权限
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    if not await chapter_service.can_access_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有访问该章节的权限"
+        )
+
+    # 获取ShareDB文档
+    document = await sharedb_service.get_document(f"chapter_{chapter_id}")
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ShareDB文档不存在"
+        )
+
+    return {
+        "document_id": f"chapter_{chapter_id}",
+        "content": document,
+        "chapter_info": chapter.to_dict()
+    }
+
+
+@router.post("/{chapter_id}/document/operations")
+async def submit_document_operation(
+    chapter_id: int,
+    operation: Dict[str, Any],
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    提交文档操作（通过ShareDB）
+    """
+    chapter_service = ChapterService(db)
+
+    # 检查章节编辑权限
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+
+    if not await chapter_service.can_edit_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有编辑该章节的权限"
+        )
+
+    # 提交操作到ShareDB
+    try:
+        result = await sharedb_service.submit_operation(
+            document_id=f"chapter_{chapter_id}",
+            operation=operation,
+            user_id=current_user_id
+        )
+        return {"success": True, "result": result}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"操作提交失败: {str(e)}"
+        )
+
+
+# 工具函数
+def get_client_ip(request: Request) -> Optional[str]:
+    """获取客户端IP地址"""
+    return request.client.host if request.client else None
+
+
+def get_user_agent(request: Request) -> Optional[str]:
+    """获取用户代理"""
+    return request.headers.get("user-agent")

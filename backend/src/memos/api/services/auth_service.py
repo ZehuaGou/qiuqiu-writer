@@ -5,12 +5,12 @@
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 
-from app.core.security import (
+from memos.api.core.security import (
     create_access_token, create_refresh_token, verify_token,
     blacklist_token, is_token_blacklisted, PasswordValidator
 )
-from app.core.redis import get_redis
-from app.services.user_service import UserService
+from memos.api.core.redis import get_redis
+from memos.api.services.user_service import UserService
 
 
 class AuthService:

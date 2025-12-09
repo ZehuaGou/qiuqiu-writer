@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import get_settings
+from memos.api.core.config import get_settings
 
 settings = get_settings()
 
@@ -60,6 +60,15 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    获取异步数据库会话（别名，用于兼容性）
+
+    这是 get_async_session 的别名，用于保持与旧代码的兼容性
+    """
+    return get_async_session()
+
+
 def get_sync_session():
     """
     获取同步数据库会话
@@ -77,7 +86,10 @@ async def init_db():
     """
     async with engine.begin() as conn:
         # 导入所有模型以确保它们被注册
-        from app.models import user, work, chapter, template
+        from memos.api.models import (
+            user, work, chapter, template,
+            characters, writing, system
+        )
 
         # 创建所有表
         await conn.run_sync(Base.metadata.create_all)

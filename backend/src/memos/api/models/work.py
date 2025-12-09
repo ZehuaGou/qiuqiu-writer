@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from app.core.database import Base
+from memos.api.core.database import Base
 
 
 class Work(Base):
@@ -40,7 +40,7 @@ class Work(Base):
     is_public = Column(Boolean, default=False, index=True)
     is_collaborative = Column(Boolean, default=False)
     settings = Column(JSON, default=dict)  # 作品设置
-    metadata = Column(JSON, default=dict)  # 扩展元数据
+    work_metadata = Column("metadata", JSON, default=dict)  # 扩展元数据
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     published_at = Column(DateTime(timezone=True))
@@ -109,7 +109,7 @@ class Work(Base):
             "is_public": self.is_public,
             "is_collaborative": self.is_collaborative,
             "settings": self.settings or {},
-            "metadata": self.metadata or {},
+            "metadata": self.work_metadata or {},
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "published_at": self.published_at.isoformat() if self.published_at else None,

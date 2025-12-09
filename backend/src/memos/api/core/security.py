@@ -10,8 +10,8 @@ from passlib.hash import bcrypt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from app.core.config import get_settings
-from app.core.redis import get_redis
+from memos.api.core.config import get_settings
+from memos.api.core.redis import get_redis
 
 settings = get_settings()
 security = HTTPBearer()
@@ -192,7 +192,7 @@ async def get_current_active_user(
     Returns:
         用户信息字典
     """
-    from app.services.user_service import UserService
+    from memos.api.services.user_service import UserService
 
     user_service = UserService()
     user = await user_service.get_user_by_id(current_user_id)

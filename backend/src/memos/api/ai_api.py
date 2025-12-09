@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-独立的AI接口服务
-专门用于拆书分析功能
+WawaWriter API服务
+包含AI分析、产品API和服务器API等所有接口
 """
 
 import logging
@@ -9,9 +9,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 直接导入AI路由，避免其他路由的依赖问题
+from memos.api.exceptions import APIExceptionHandler
+from memos.api.middleware.request_context import RequestContextMiddleware
 from memos.api.routers.ai_router import router as ai_router
-
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # 创建FastAPI应用
 app = FastAPI(
-    title="WawaWriter AI Analysis API",
-    description="AI接口服务 - 用于小说章节分析",
+    title="WawaWriter API",
+    description="WawaWriter API服务 - 包含AI分析、产品API和服务器API",
     version="1.0.0",
 )
 
@@ -33,25 +33,83 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册AI路由
-app.include_router(ai_router)
+# 添加请求上下文中间件
+app.add_middleware(RequestContextMiddleware, source="ai_api")
 
-logger.info("✅ AI router registered successfully")
+# 注册所有路由
+try:
+    app.include_router(ai_router)
+    logger.info("✅ AI router registered successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to register AI router: {e}")
+
+# 注册WriterAI应用路由
+try:
+    from memos.api.routers import (
+        get_auth_router,
+        get_chapters_router,
+        get_templates_router,
+        get_works_router,
+    )
+    
+    app.include_router(get_auth_router())
+    app.include_router(get_chapters_router())
+    app.include_router(get_templates_router())
+    app.include_router(get_works_router())
+    logger.info("✅ WriterAI application routers registered successfully")
+except Exception as e:
+    logger.warning(f"⚠️  WriterAI application routers not available: {e}", exc_info=True)
+
+# 尝试注册产品路由
+try:
+    from memos.api.routers.product_router import router as product_router
+    app.include_router(product_router)
+    logger.info("✅ Product router registered successfully")
+except Exception as e:
+    logger.warning(f"⚠️  Product router not available: {e}")
+
+# 尝试注册服务器路由
+try:
+    from memos.api.routers.server_router import router as server_router
+    app.include_router(server_router)
+    logger.info("✅ Server router registered successfully")
+except Exception as e:
+    logger.warning(f"⚠️  Server router not available: {e}")
+
+# 异常处理
+app.exception_handler(ValueError)(APIExceptionHandler.value_error_handler)
+app.exception_handler(Exception)(APIExceptionHandler.global_exception_handler)
 
 
 @app.get("/")
 async def root():
     """根路径"""
-    return {
-        "service": "WawaWriter AI Analysis API",
-        "version": "1.0.0",
-        "status": "running",
-        "endpoints": {
+    endpoints = {
+        "ai": {
             "health": "/ai/health",
             "analyze": "/ai/analyze-chapter",
             "prompt": "/ai/default-prompt",
-            "docs": "/docs",
         },
+        "writerai": {
+            "auth": "/api/v1/auth/*",
+            "chapters": "/api/v1/chapters/*",
+            "templates": "/api/v1/templates/*",
+            "works": "/api/v1/works/*",
+        },
+        "docs": "/docs",
+    }
+    
+    # 动态添加其他路由的端点
+    try:
+        endpoints["product"] = "/product/*"
+    except:
+        pass
+    
+    return {
+        "service": "WawaWriter API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": endpoints,
     }
 
 

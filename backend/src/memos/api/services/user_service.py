@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, text
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_async_session
-from app.core.security import get_password_hash, verify_password
-from app.core.redis import get_redis
-from app.models.user import User, UserProfile
-from app.models.audit_log import AuditLog
+from memos.api.core.database import get_async_session
+from memos.api.core.security import get_password_hash, verify_password
+from memos.api.core.redis import get_redis
+from memos.api.models.user import User, UserProfile
+from memos.api.models.system import AuditLog
 
 
 class UserService:

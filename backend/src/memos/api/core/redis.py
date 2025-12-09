@@ -8,7 +8,7 @@ from typing import Any, Optional, List
 import redis.asyncio as redis
 from redis.asyncio import Redis
 
-from app.core.config import get_settings
+from memos.api.core.config import get_settings
 
 settings = get_settings()
 
@@ -249,9 +249,11 @@ class RedisClient:
 redis_client = RedisClient()
 
 
-async def get_redis() -> RedisClient:
+async def get_redis():
     """获取Redis客户端实例"""
-    return redis_client
+    if not redis_client.redis:
+        await redis_client.connect()
+    return redis_client.redis
 
 
 # 缓存装饰器

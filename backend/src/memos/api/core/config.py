@@ -6,7 +6,11 @@ import os
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import BaseSettings, validator
+try:
+    from pydantic_settings import BaseSettings
+except ImportError:
+    from pydantic import BaseSettings
+from pydantic import validator
 
 
 class Settings(BaseSettings):
@@ -113,6 +117,18 @@ class Settings(BaseSettings):
     # 缓存配置
     CACHE_TTL: int = 3600  # 1小时
 
+    # ShareDB配置
+    SHAREDB_DOCUMENT_TTL: int = 86400  # 24小时
+
+    # 受信任主机配置
+    ALLOWED_HOSTS: List[str] = ["*"]
+
+    @validator("ALLOWED_HOSTS", pre=True)
+    def assemble_allowed_hosts(cls, v):
+        if isinstance(v, str):
+            return [i.strip() for i in v.split(",")]
+        return v
+
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
@@ -120,6 +136,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "allow"  # 允许额外的环境变量
 
 
 @lru_cache()
