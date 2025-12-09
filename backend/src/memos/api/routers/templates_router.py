@@ -7,15 +7,57 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, or_
 
-from memos.api.core.database import get_async_db
-from memos.api.core.security import get_current_user_id
+from app.core.database import get_async_db
+from app.core.security import get_current_user_id
 from memos.api.services.template_service import TemplateService
-from memos.api.schemas.template import (
-    WorkTemplateCreate, WorkTemplateUpdate, WorkTemplateResponse,
-    TemplateFieldCreate, TemplateFieldUpdate, TemplateFieldResponse,
-    WorkInfoExtendedCreate, WorkInfoExtendedUpdate, WorkInfoExtendedResponse
-)
 from memos.api.models.template import WorkTemplate, TemplateField, WorkInfoExtended
+
+# Temporary schemas - will be replaced with proper schema files
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+
+class WorkTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    work_type: str
+    category: Optional[str] = None
+
+class WorkTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class WorkTemplateResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    work_type: str
+
+class TemplateFieldCreate(BaseModel):
+    field_name: str
+    field_type: str
+    field_label: str
+
+class TemplateFieldUpdate(BaseModel):
+    field_label: Optional[str] = None
+
+class TemplateFieldResponse(BaseModel):
+    id: int
+    field_name: str
+    field_type: str
+    field_label: str
+
+class WorkInfoExtendedCreate(BaseModel):
+    template_id: int
+    field_values: Dict[str, Any]
+
+class WorkInfoExtendedUpdate(BaseModel):
+    field_values: Optional[Dict[str, Any]] = None
+
+class WorkInfoExtendedResponse(BaseModel):
+    id: int
+    work_id: int
+    template_id: int
+    field_values: Dict[str, Any]
 
 router = APIRouter(prefix="/api/v1/templates", tags=["作品模板管理"])
 

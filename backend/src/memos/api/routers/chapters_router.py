@@ -14,11 +14,54 @@ from memos.api.core.database import get_async_db
 from memos.api.core.security import get_current_user_id
 from memos.api.services.chapter_service import ChapterService
 from memos.api.services.sharedb_service import ShareDBService
-from memos.api.schemas.chapter import (
-    ChapterCreate, ChapterUpdate, ChapterResponse, ChapterListResponse,
-    ChapterVersionCreate, ChapterVersionResponse
-)
+# Chapter schemas will be created later
+# from memos.api.schemas.chapter import (
+#     ChapterCreate, ChapterUpdate, ChapterResponse, ChapterListResponse,
+#     ChapterVersionCreate, ChapterVersionResponse
+# )
 from memos.api.models.chapter import Chapter, ChapterVersion
+
+# Temporary schemas - will be replaced with proper schema files
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+
+class ChapterCreate(BaseModel):
+    work_id: int
+    title: str
+    chapter_number: int
+    volume_number: Optional[int] = 1
+    content: Optional[str] = None
+
+class ChapterUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    status: Optional[str] = None
+
+class ChapterResponse(BaseModel):
+    id: int
+    work_id: int
+    title: str
+    chapter_number: int
+    volume_number: int
+    status: str
+    word_count: int
+    created_at: str
+    updated_at: str
+
+class ChapterListResponse(BaseModel):
+    items: List[ChapterResponse]
+    total: int
+
+class ChapterVersionCreate(BaseModel):
+    content: str
+    change_description: Optional[str] = None
+
+class ChapterVersionResponse(BaseModel):
+    id: int
+    chapter_id: int
+    version_number: int
+    title: str
+    created_at: str
 
 router = APIRouter(prefix="/api/v1/chapters", tags=["章节管理"])
 sharedb_service = ShareDBService()
