@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI接口对接测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .progress {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.healthy {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.unhealthy {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .models-list {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+        .model-item {
+            padding: 5px 10px;
+            margin: 5px 0;
+            background: #e9ecef;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI接口对接测试</h1>
+        
+        <div class="test-section">
+            <h2>1. 健康检查</h2>
+            <p>测试后端 AI 服务是否正常运行</p>
+            <button onclick="testHealth()">运行健康检查</button>
+            <div id="health-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. 获取默认提示词</h2>
+            <p>获取章节分析的默认提示词模板</p>
+            <button onclick="testDefaultPrompt()">获取提示词</button>
+            <div id="prompt-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. 章节分析测试</h2>
+            <p>测试流式章节分析功能</p>
+            <textarea id="chapter-content" placeholder="请输入章节内容...">第一章 重逢
+
+倪雾带着女儿岁岁去医院看病。推开诊室门的那一刻，她看到了坐在办公桌后的医生——裴淮聿。
+
+七年了，他还是那个样子，戴着金丝眼镜，温文尔雅。只是眼神比以前更加深邃了。
+
+"请坐。"裴淮聿抬起头，目光扫过她的脸，没有任何异样。
+
+倪雾的心狠狠一颤。他没认出她。也对，她已经改了名字，从程青渺变成了倪雾，而且瘦了很多。
+
+"妈妈，我不舒服。"岁岁拉着她的手，小声说。
+
+倪雾回过神来，坐下，尽量让自己看起来平静。
+
+检查很快结束。裴淮聿开了药，递给她："按时吃药，多休息。"
+
+"谢谢医生。"倪雾接过处方，匆忙离开。
+
+回家的路上，岁岁突然问："妈妈，那个医生叔叔是不是我爸爸？"
+
+倪雾愣住了。</textarea>
+            <button onclick="testAnalyze()">开始分析</button>
+            <button onclick="clearAnalysis()">清空结果</button>
+            <div id="analyze-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8001';
+
+        // 1. 健康检查
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '<div class="result info">正在检查...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ai/health`);
+                const data = await response.json();
+
+                if (response.ok && data.data.status === 'healthy') {
+                    let html = `<div class="result success">
+                        <strong>✅ 服务状态：</strong><span class="status healthy">${data.data.status}</span><br>
+                        <strong>📅 检查时间：</strong>${data.data.timestamp}<br>
+                        <strong>🤖 可用模型数量：</strong>${data.data.models.length}
+                    `;
+                    
+                    if (data.data.models.length > 0) {
+                        html += '<div class="models-list"><strong>可用模型列表：</strong>';
+                        data.data.models.forEach(model => {
+                            html += `<div class="model-item">📦 ${model}</div>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    html += '</div>';
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">
+                        <strong>❌ 服务不可用</strong><br>
+                        状态：${data.data.status}<br>
+                        消息：${data.message}
+                    </div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">
+                    <strong>❌ 连接失败</strong><br>
+                    ${error.message}
+                </div>`;
+            }
+        }
+
+        // 2. 获取默认提示词
+        async function testDefaultPrompt() {
+            const resultDiv = document.getElementById('prompt-result');
+            resultDiv.innerHTML = '<div class="result info">正在获取...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ai/default-prompt`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="result success">
+                        <strong>✅ 获取成功</strong><br>
+                        <strong>版本：</strong>${data.data.version}<br>
+                        <strong>提示词长度：</strong>${data.data.prompt.length} 字符<br>
+                        <details style="margin-top: 10px;">
+                            <summary style="cursor: pointer; color: #007bff;">点击查看完整提示词</summary>
+                            <pre style="margin-top: 10px; white-space: pre-wrap;">${data.data.prompt}</pre>
+                        </details>
+                    </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">
+                        <strong>❌ 获取失败</strong><br>
+                        ${data.message || response.statusText}
+                    </div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">
+                    <strong>❌ 请求失败</strong><br>
+                    ${error.message}
+                </div>`;
+            }
+        }
+
+        // 3. 章节分析
+        async function testAnalyze() {
+            const content = document.getElementById('chapter-content').value.trim();
+            const resultDiv = document.getElementById('analyze-result');
+
+            if (!content) {
+                resultDiv.innerHTML = '<div class="result error">❌ 请输入章节内容</div>';
+                return;
+            }
+
+            resultDiv.innerHTML = '<div class="result progress">🔄 正在分析中...\n\n</div>';
+            const progressDiv = resultDiv.querySelector('.result');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ai/analyze-chapter`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        settings: {
+                            model: 'codedrive-chat',
+                            temperature: 0.7,
+                            max_tokens: 4000,
+                        }
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API 调用失败: ${response.status} ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let fullResult = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6).trim();
+                            if (!data) continue;
+
+                            try {
+                                const parsed = JSON.parse(data);
+
+                                switch (parsed.type) {
+                                    case 'start':
+                                        progressDiv.textContent += `✅ ${parsed.message}\n\n`;
+                                        break;
+                                    
+                                    case 'chunk':
+                                        fullResult += parsed.content;
+                                        progressDiv.textContent += parsed.content;
+                                        progressDiv.scrollTop = progressDiv.scrollHeight;
+                                        break;
+                                    
+                                    case 'done':
+                                        progressDiv.textContent += `\n\n✅ ${parsed.message}`;
+                                        progressDiv.className = 'result success';
+                                        break;
+                                    
+                                    case 'error':
+                                        throw new Error(parsed.message);
+                                }
+                            } catch (e) {
+                                if (e.message && e.message !== 'Unexpected end of JSON input') {
+                                    throw e;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!fullResult) {
+                    throw new Error('未收到任何分析结果');
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">
+                    <strong>❌ 分析失败</strong><br>
+                    ${error.message}
+                </div>`;
+            }
+        }
+
+        function clearAnalysis() {
+            document.getElementById('analyze-result').innerHTML = '';
+        }
+
+        // 页面加载时自动运行健康检查
+        window.onload = function() {
+            console.log('🚀 页面加载完成，准备测试 AI 接口');
+            testHealth();
+        };
+    </script>
+</body>
+</html>
+

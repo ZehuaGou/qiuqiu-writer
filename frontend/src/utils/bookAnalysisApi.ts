@@ -15,6 +15,15 @@ export interface AnalysisSettings {
 export interface AnalysisProgress {
   text?: string;
   error?: string;
+  metadata?: {
+    model?: string;
+    temperature?: number;
+    max_tokens?: number;
+    duration?: number;
+    estimated_tokens?: number;
+    start_time?: string;
+    end_time?: string;
+  };
 }
 
 /**
@@ -62,7 +71,6 @@ ${content}`;
 
 /**
  * 调用 memos 后端的章节分析 API
- * TODO: 后端接口尚未实现，目前返回模拟数据
  * 
  * @param content 章节内容
  * @param onProgress 进度回调函数
@@ -75,92 +83,116 @@ export async function analyzeChapterContent(
   settings?: AnalysisSettings
 ): Promise<string> {
   try {
-    // TODO: 将来从 memos 后端获取模型服务配置
-    // const response = await fetch(`${API_BASE_URL}/api/ai/analyze-chapter`, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     content,
-    //     prompt: getAnalysisPrompt(content),
-    //     settings: settings || {},
-    //   }),
-    // });
-
-    // if (!response.ok) {
-    //   throw new Error(`API 调用失败: ${response.status}`);
-    // }
-
-    // // 处理流式响应
-    // const reader = response.body?.getReader();
-    // if (!reader) {
-    //   throw new Error('无法获取响应流');
-    // }
-
-    // const decoder = new TextDecoder();
-    // let result = '';
-
-    // while (true) {
-    //   const { done, value } = await reader.read();
-    //   if (done) break;
-
-    //   const chunk = decoder.decode(value);
-    //   const lines = chunk.split('\n');
-
-    //   for (const line of lines) {
-    //     if (line.startsWith('data: ')) {
-    //       const data = line.slice(6);
-    //       if (data === '[DONE]') continue;
-
-    //       try {
-    //         const parsed = JSON.parse(data);
-    //         const content = parsed.choices?.[0]?.delta?.content;
-    //         if (content) {
-    //           result += content;
-    //           onProgress?.({ text: content });
-    //         }
-    //       } catch (e) {
-    //         // 忽略解析错误
-    //       }
-    //     }
-    //   }
-    // }
-
-    // return result;
-
-    // ===== 临时：返回模拟数据 =====
-    console.warn('⚠️ 使用模拟数据，memos 后端接口尚未实现');
+    console.log('📡 调用后端 AI 分析接口...');
     
-    // 模拟流式响应
-    const mockResult = `| 章节号 | 章节标题 | 章节核心剧情梗概 | 本章核心功能/目的 | 画面感/镜头序列 | 关键情节点 (Key Points) | 本章氛围/情绪 | 结尾"钩子" (Hook) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | 开篇 | 主角接到一个神秘任务，需要前往未知的地点调查异常事件。 | 引入主角和核心冲突，建立故事的基本设定。 | \`["主角接到电话的特写", "城市夜景俯拍", "主角收拾装备的镜头"]\` | \`["接到神秘电话", "查看任务资料", "准备出发"]\` | \`["紧张", "期待", "神秘"]\` | 任务资料中的最后一页显示了一个不应该存在的符号。 |
+    const response = await fetch(`${API_BASE_URL}/ai/analyze-chapter`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content,
+        prompt: getAnalysisPrompt(content),
+        settings: settings || {},
+      }),
+    });
 
-**注意：这是模拟数据**
-实际使用时，将从 memos 后端的 AI 服务获取真实的分析结果。
+    if (!response.ok) {
+      throw new Error(`API 调用失败: ${response.status} ${response.statusText}`);
+    }
 
-后端接口规划：
-- 端点：\`POST ${API_BASE_URL}/api/ai/analyze-chapter\`
-- 请求体：\`{ content: string, prompt: string, settings: AnalysisSettings }\`
-- 响应：流式返回分析结果（Server-Sent Events）`;
+    // 处理流式响应 (SSE)
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
 
-    // 模拟逐字返回
-    const chars = mockResult.split('');
-    let currentResult = '';
-    
-    for (let i = 0; i < chars.length; i++) {
-      currentResult += chars[i];
-      if (i % 10 === 0 && onProgress) {
-        onProgress({ text: chars[i] });
-        await new Promise(resolve => setTimeout(resolve, 10));
+    const decoder = new TextDecoder();
+    let result = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // 解码数据块
+      buffer += decoder.decode(value, { stream: true });
+      
+      // 按行分割
+      const lines = buffer.split('\n');
+      
+      // 保留最后一个不完整的行
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        // 处理 SSE 格式: "data: {...}"
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          
+          if (!data) continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const msgType = parsed.type;
+
+            switch (msgType) {
+              case 'start':
+                console.log('✅', parsed.message);
+                // 传递开始时的元数据
+                if (parsed.metadata && onProgress) {
+                  onProgress({ metadata: parsed.metadata });
+                }
+                break;
+              
+              case 'chunk':
+                // 累积内容
+                const chunkContent = parsed.content || '';
+                if (chunkContent) {
+                  result += chunkContent;
+                  onProgress?.({ text: chunkContent });
+                  // 调试：每100个字符打印一次
+                  if (result.length % 500 === 0) {
+                    console.log(`📝 已累积 ${result.length} 字符`);
+                  }
+                }
+                break;
+              
+              case 'done':
+                console.log('✅', parsed.message);
+                console.log(`📊 最终内容长度: ${result.length} 字符`);
+                // 传递完成时的元数据
+                if (parsed.metadata && onProgress) {
+                  onProgress({ metadata: parsed.metadata });
+                }
+                break;
+              
+              case 'error':
+                throw new Error(parsed.message || '分析过程中出错');
+              
+              default:
+                console.warn('未知的消息类型:', msgType, parsed);
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== '分析过程中出错') {
+              console.warn('解析 SSE 消息失败:', e, 'Line:', data);
+            } else {
+              throw e;
+            }
+          }
+        }
       }
     }
 
-    return mockResult;
+    if (!result) {
+      throw new Error('未收到任何分析结果');
+    }
+
+    console.log('✅ 章节分析完成');
+    return result;
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';
+    console.error('❌ 分析失败:', errorMessage);
     onProgress?.({ error: errorMessage });
     throw new Error(errorMessage);
   }
@@ -227,37 +259,50 @@ export async function analyzeMultipleChapterGroups(
 
 /**
  * 测试 API 连接
- * TODO: 连接 memos 后端检查模型服务是否可用
+ * 连接 memos 后端检查 AI 服务是否可用
  */
 export async function testAPIConnection(): Promise<{
   success: boolean;
   message: string;
+  models?: string[];
 }> {
   try {
-    // TODO: 实现真实的连接测试
-    // const response = await fetch(`${API_BASE_URL}/api/ai/health`, {
-    //   method: 'GET',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    // });
+    console.log('🔍 测试 AI 服务连接...');
+    
+    const response = await fetch(`${API_BASE_URL}/ai/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    // if (response.ok) {
-    //   return { success: true, message: 'API 连接成功' };
-    // } else {
-    //   return { success: false, message: `连接失败: ${response.status}` };
-    // }
-
-    // 临时：返回模拟结果
-    console.warn('⚠️ API 连接测试使用模拟结果');
-    return {
-      success: true,
-      message: 'API 连接测试（模拟）- memos 后端接口待实现',
-    };
+    if (response.ok) {
+      const result = await response.json();
+      const data = result.data;
+      
+      console.log('✅ AI 服务连接成功', data);
+      
+      return {
+        success: data.status === 'healthy',
+        message: data.status === 'healthy' 
+          ? `AI 服务正常运行，可用模型: ${data.models?.length || 0} 个` 
+          : 'AI 服务不可用',
+        models: data.models,
+      };
+    } else {
+      const errorText = await response.text();
+      console.error('❌ 连接失败:', response.status, errorText);
+      return {
+        success: false,
+        message: `连接失败: ${response.status} ${response.statusText}`,
+      };
+    }
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '连接失败';
+    console.error('❌ API 连接错误:', errorMessage);
     return {
       success: false,
-      message: error instanceof Error ? error.message : '连接失败',
+      message: errorMessage,
     };
   }
 }

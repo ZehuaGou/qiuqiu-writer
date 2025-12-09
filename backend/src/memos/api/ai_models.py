@@ -1,0 +1,153 @@
+"""
+AI接口的数据模型定义
+包含章节分析相关的请求和响应模型
+"""
+
+from typing import Generic, Literal, TypeVar
+
+from pydantic import BaseModel, Field
+
+
+T = TypeVar("T")
+
+
+class BaseResponse(BaseModel, Generic[T]):
+    """基础响应模型"""
+
+    code: int = Field(200, description="响应状态码")
+    message: str = Field(..., description="响应消息")
+    data: T | None = Field(None, description="响应数据")
+
+
+# ─── 章节分析接口模型 ──────────────────────────────────────────────────────────
+
+
+class AnalysisSettings(BaseModel):
+    """AI分析设置"""
+
+    model: str = Field(
+        default="gpt-3.5-turbo",
+        description="AI模型名称",
+        json_schema_extra={"example": "gpt-4"},
+    )
+    temperature: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=2.0,
+        description="生成温度（0-2）",
+        json_schema_extra={"example": 0.7},
+    )
+    max_tokens: int = Field(
+        default=4000,
+        ge=1,
+        description="最大token数",
+        json_schema_extra={"example": 4000},
+    )
+
+
+class AnalyzeChapterRequest(BaseModel):
+    """章节分析请求模型"""
+
+    content: str = Field(
+        ...,
+        min_length=1,
+        description="要分析的章节内容",
+        json_schema_extra={"example": "第一章 开始\\n\\n这是一个故事的开始..."},
+    )
+    prompt: str | None = Field(
+        None,
+        description="自定义分析提示词（可选，如果不提供则使用默认提示词）",
+        json_schema_extra={"example": "请详细分析这个章节的情节发展"},
+    )
+    settings: AnalysisSettings | None = Field(
+        default_factory=AnalysisSettings,
+        description="AI分析设置",
+    )
+
+
+class SSEMessage(BaseModel):
+    """服务器发送事件消息模型"""
+
+    type: Literal["start", "chunk", "done", "error"] = Field(
+        ...,
+        description="消息类型",
+    )
+    content: str | None = Field(
+        None,
+        description="内容片段（仅chunk类型）",
+    )
+    message: str | None = Field(
+        None,
+        description="状态消息",
+    )
+
+
+# ─── 健康检查接口模型 ──────────────────────────────────────────────────────────
+
+
+class HealthCheckData(BaseModel):
+    """健康检查数据模型"""
+
+    status: Literal["healthy", "unhealthy"] = Field(
+        ...,
+        description="服务状态",
+        json_schema_extra={"example": "healthy"},
+    )
+    models: list[str] = Field(
+        ...,
+        description="可用的AI模型列表",
+        json_schema_extra={"example": ["gpt-3.5-turbo", "gpt-4", "claude-3-sonnet"]},
+    )
+    timestamp: str = Field(
+        ...,
+        description="检查时间（ISO 8601格式）",
+        json_schema_extra={"example": "2025-12-09T10:00:00Z"},
+    )
+
+
+class HealthCheckResponse(BaseResponse[HealthCheckData]):
+    """健康检查响应模型"""
+
+
+# ─── 默认提示词接口模型 ──────────────────────────────────────────────────────
+
+
+class DefaultPromptData(BaseModel):
+    """默认提示词数据模型"""
+
+    prompt: str = Field(
+        ...,
+        description="默认的章节分析提示词模板",
+    )
+    version: str = Field(
+        default="1.0",
+        description="提示词版本",
+        json_schema_extra={"example": "1.0"},
+    )
+
+
+class DefaultPromptResponse(BaseResponse[DefaultPromptData]):
+    """默认提示词响应模型"""
+
+
+# ─── 错误响应模型 ──────────────────────────────────────────────────────────────
+
+
+class ErrorResponse(BaseResponse[None]):
+    """错误响应模型"""
+
+    code: int = Field(
+        ...,
+        description="错误码",
+        json_schema_extra={"example": 400},
+    )
+    message: str = Field(
+        ...,
+        description="错误信息",
+        json_schema_extra={"example": "请求参数错误"},
+    )
+    data: None = Field(
+        None,
+        description="错误数据（始终为None）",
+    )
+
