@@ -286,12 +286,42 @@ class LocalCacheManager {
         this.evictLocalStorageLRU();
       }
 
-      localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(item));
+      const storageKey = `${STORAGE_PREFIX}${key}`;
+      const itemJson = JSON.stringify(item);
+      
+      console.log('💾 [Cache] 写入 localStorage:', {
+        key: storageKey,
+        dataSize: itemJson.length,
+        dataPreview: itemJson.substring(0, 200),
+        itemStructure: {
+          hasData: 'data' in item,
+          dataType: typeof item.data,
+          dataKeys: item.data && typeof item.data === 'object' ? Object.keys(item.data) : 'not object',
+        },
+      });
+      
+      localStorage.setItem(storageKey, itemJson);
+      
+      // 验证保存是否成功
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        console.log('✅ [Cache] localStorage 保存成功，验证通过');
+      } else {
+        console.error('❌ [Cache] localStorage 保存失败，验证未通过');
+      }
     } catch (e) {
-      console.error('写入 localStorage 缓存失败:', e);
+      console.error('❌ [Cache] 写入 localStorage 缓存失败:', e);
       // 如果存储空间不足，尝试清理
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        console.warn('⚠️ [Cache] 存储空间不足，尝试清理...');
         this.cleanupLocalStorage();
+        // 清理后重试
+        try {
+          localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(item));
+          console.log('✅ [Cache] 清理后重试保存成功');
+        } catch (retryErr) {
+          console.error('❌ [Cache] 清理后重试保存仍然失败:', retryErr);
+        }
       }
     }
   }

@@ -248,22 +248,23 @@ class SyncManager {
     documentId: string,
     cached: any
   ): Promise<void> {
-    const chapterId = parseInt(documentId.replace('chapter_', ''));
     const content = cached.data?.content || cached.content;
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
 
-    // 使用章节 API 更新
-    await sharedbClient.updateDocument(documentId, content, cached.data?.metadata);
+    // 使用新的同步方法（借鉴 nexcode_web 的实现）
+    // 这会自动处理版本控制和冲突解决
+    await sharedbClient.syncDocumentState(documentId, contentStr);
   }
 
   private async syncGenericDocument(
     documentId: string,
     cached: any
   ): Promise<void> {
-    await sharedbClient.updateDocument(
-      documentId,
-      cached.data || cached,
-      cached.metadata
-    );
+    const content = cached.data || cached;
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+
+    // 使用新的同步方法
+    await sharedbClient.syncDocumentState(documentId, contentStr);
   }
 
   private notifyStatusChange(): void {

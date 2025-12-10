@@ -392,6 +392,674 @@ class ShareDBService:
 
         current[keys[-1]] = value
 
+    async def _merge_with_diff(
+        self,
+        base_content: str,
+        client_content: str,
+        server_content: str
+    ) -> str:
+        """
+        基于差异的合并策略
+        计算从 base_content 到 client_content 的差异，然后应用到 server_content
+        
+        策略：
+        1. 找出客户端删除的内容（在 base 中但不在 client 中）
+        2. 找出客户端新增的内容（在 client 中但不在 base 中）
+        3. 将删除操作应用到服务器内容
+        4. 将新增操作应用到服务器内容
+        """
+        import re
+        
+        logger.info(f"开始基于差异的合并: base={len(base_content)}, client={len(client_content)}, server={len(server_content)}")
+        
+        # 对于 HTML 内容，使用块级差异
+        if base_content.startswith('<') and client_content.startswith('<') and server_content.startswith('<'):
+            return await self._merge_html_with_diff(base_content, client_content, server_content)
+        
+        # 对于纯文本，使用行级差异
+        return await self._merge_text_with_diff(base_content, client_content, server_content)
+    
+    async def _merge_html_with_diff(
+        self,
+        base_content: str,
+        client_content: str,
+        server_content: str
+    ) -> str:
+        """
+        基于差异的 HTML 合并
+        """
+        import re
+        
+        # 提取所有块级元素
+        block_pattern = r'(<(?:p|h[1-6]|li|div|blockquote|br|span)[^>]*>.*?</(?:p|h[1-6]|li|div|blockquote|span)>|<(?:p|h[1-6]|li|div|blockquote|br)[^>]*/?>)'
+        
+        base_blocks = re.findall(block_pattern, base_content, re.DOTALL)
+        client_blocks = re.findall(block_pattern, client_content, re.DOTALL)
+        server_blocks = re.findall(block_pattern, server_content, re.DOTALL)
+        
+        logger.info(f"差异合并：base {len(base_blocks)} 个块，client {len(client_blocks)} 个块，server {len(server_blocks)} 个块")
+        
+        # 提取块文本用于比较
+        def get_block_text(block: str) -> str:
+            text = re.sub(r'<[^>]+>', '', block)
+            return text.strip()
+        
+        # 创建文本到块的映射
+        base_text_to_block = {get_block_text(block): block for block in base_blocks if get_block_text(block)}
+        client_text_to_block = {get_block_text(block): block for block in client_blocks if get_block_text(block)}
+        server_text_to_block = {get_block_text(block): block for block in server_blocks if get_block_text(block)}
+        
+        # 找出客户端删除的内容（在 base 中但不在 client 中）
+        base_texts = set(base_text_to_block.keys())
+        client_texts = set(client_text_to_block.keys())
+        deleted_texts = base_texts - client_texts
+        
+        # 找出客户端新增的内容（在 client 中但不在 base 中）
+        added_texts = client_texts - base_texts
+        
+        logger.info(f"客户端删除: {len(deleted_texts)} 个块，新增: {len(added_texts)} 个块")
+        
+        # 策略：以服务器内容为基础
+        # 1. 删除客户端删除的内容（如果服务器中有）
+        # 2. 添加客户端新增的内容
+        merged_blocks = []
+        seen_texts = set()
+        
+        # 先添加服务器中未被客户端删除的块
+        for block in server_blocks:
+            block_text = get_block_text(block)
+            if block_text and block_text not in deleted_texts:
+                if block_text not in seen_texts:
+                    merged_blocks.append(block)
+                    seen_texts.add(block_text)
+        
+        # 添加客户端新增的块
+        for text in added_texts:
+            if text in client_text_to_block and text not in seen_texts:
+                merged_blocks.append(client_text_to_block[text])
+                seen_texts.add(text)
+                logger.debug(f"添加客户端新增的块: {text[:50]}")
+        
+        merged_html = ''.join(merged_blocks)
+        logger.info(f"✅ 差异合并完成：合并后 {len(merged_blocks)} 个块，长度 {len(merged_html)}")
+        return merged_html if merged_html else client_content
+    
+    async def _merge_text_with_diff(
+        self,
+        base_content: str,
+        client_content: str,
+        server_content: str
+    ) -> str:
+        """
+        基于差异的文本合并
+        """
+        base_lines = base_content.splitlines(keepends=True)
+        client_lines = client_content.splitlines(keepends=True)
+        server_lines = server_content.splitlines(keepends=True)
+        
+        # 找出删除的行和新增的行
+        base_line_set = set(line.strip() for line in base_lines if line.strip())
+        client_line_set = set(line.strip() for line in client_lines if line.strip())
+        deleted_lines = base_line_set - client_line_set
+        added_lines = client_line_set - base_line_set
+        
+        logger.info(f"文本差异合并：删除 {len(deleted_lines)} 行，新增 {len(added_lines)} 行")
+        
+        # 以服务器内容为基础，删除客户端删除的行，添加客户端新增的行
+        merged_lines = []
+        seen_lines = set()
+        
+        # 添加服务器中未被删除的行
+        for line in server_lines:
+            line_stripped = line.strip()
+            if line_stripped and line_stripped not in deleted_lines:
+                if line_stripped not in seen_lines:
+                    merged_lines.append(line)
+                    seen_lines.add(line_stripped)
+        
+        # 添加客户端新增的行
+        for line in client_lines:
+            line_stripped = line.strip()
+            if line_stripped in added_lines and line_stripped not in seen_lines:
+                merged_lines.append(line)
+                seen_lines.add(line_stripped)
+        
+        merged = ''.join(merged_lines)
+        logger.info(f"✅ 文本差异合并完成：合并后 {len(merged_lines)} 行")
+        return merged if merged else client_content
+    
+    async def _smart_merge_content(
+        self,
+        server_content: str,
+        client_content: str,
+        server_version: int,
+        client_version: int
+    ) -> str:
+        """
+        智能合并内容 - 改进版本，正确处理删除操作
+        策略：智能识别删除和新增操作
+        
+        核心原则：
+        1. 如果客户端内容明显更短，可能是删除操作，应该保留删除
+        2. 如果客户端内容更长，可能是新增操作，应该保留新增
+        3. 如果内容长度相近，进行智能合并
+        """
+        # 如果内容相同，直接返回
+        if server_content == client_content:
+            return server_content
+        
+        logger.info(f"开始智能合并: 服务器长度={len(server_content)}, 客户端长度={len(client_content)}")
+        
+        # 关键改进：如果客户端内容明显更短（小于服务器内容的70%），可能是删除操作
+        # 这种情况下，应该优先保留客户端的删除操作
+        if len(client_content) < len(server_content) * 0.7:
+            logger.info(f"检测到可能的删除操作: 客户端内容明显更短 ({len(client_content)} < {len(server_content) * 0.7})")
+            # 对于 HTML，尝试智能合并，但优先保留客户端的删除
+            if server_content.startswith('<') and client_content.startswith('<'):
+                merged = await self._merge_html_content_with_deletion(server_content, client_content)
+                if merged:
+                    logger.info(f"删除合并成功: 合并后长度={len(merged)}")
+                    return merged
+            # 如果合并失败，直接返回客户端内容（保留删除）
+            logger.info("保留客户端删除操作")
+            return client_content
+        
+        # 对于 HTML 内容，使用更智能的合并
+        if server_content.startswith('<') and client_content.startswith('<'):
+            merged = await self._merge_html_content_smart(server_content, client_content)
+            if merged and len(merged) >= max(len(server_content), len(client_content)) * 0.8:
+                # 合并后的内容应该至少包含大部分原始内容
+                logger.info(f"HTML 合并成功: 合并后长度={len(merged)}")
+                return merged
+            else:
+                logger.warning("HTML 合并结果不理想，使用备用策略")
+        
+        # 对于纯文本，使用文本合并
+        merged = await self._merge_text_content(server_content, client_content)
+        
+        # 验证合并结果：合并后的内容应该包含大部分原始内容
+        if len(merged) < min(len(server_content), len(client_content)) * 0.5:
+            logger.warning("合并结果异常，内容可能丢失，使用较长的版本")
+            return client_content if len(client_content) > len(server_content) else server_content
+        
+        return merged
+
+    async def _merge_text_content(self, server_text: str, client_text: str) -> str:
+        """
+        合并纯文本内容 - 改进版本，确保不丢失内容
+        策略：保留所有唯一行，确保不丢失内容
+        """
+        import difflib
+        
+        # 如果内容相同
+        if server_text == client_text:
+            return server_text
+        
+        # 按行分割
+        server_lines = server_text.splitlines(keepends=True)
+        client_lines = client_text.splitlines(keepends=True)
+        
+        # 找出所有唯一的行（保留顺序）
+        merged_lines = []
+        seen_lines = set()
+        
+        # 1. 先添加服务器行
+        for line in server_lines:
+            line_stripped = line.strip()
+            if line_stripped and line_stripped not in seen_lines:
+                merged_lines.append(line)
+                seen_lines.add(line_stripped)
+        
+        # 2. 添加客户端独有的行
+        for line in client_lines:
+            line_stripped = line.strip()
+            if line_stripped and line_stripped not in seen_lines:
+                merged_lines.append(line)
+                seen_lines.add(line_stripped)
+        
+        # 3. 如果客户端有更多行，确保都包含
+        if len(client_lines) > len(server_lines):
+            # 检查是否有客户端独有的行
+            client_set = set(line.strip() for line in client_lines if line.strip())
+            server_set = set(line.strip() for line in server_lines if line.strip())
+            client_only = client_set - server_set
+            
+            if client_only:
+                # 找出这些行在客户端中的位置，按顺序插入
+                for line in client_lines:
+                    if line.strip() in client_only and line.strip() not in seen_lines:
+                        merged_lines.append(line)
+                        seen_lines.add(line.strip())
+        
+        # 组合合并后的文本
+        merged = ''.join(merged_lines)
+        
+        # 验证：合并后的内容应该包含大部分原始内容
+        if len(merged) < max(len(server_text), len(client_text)) * 0.7:
+            logger.warning("合并结果异常，使用备用策略")
+            # 备用策略：简单拼接
+            if server_text not in client_text and client_text not in server_text:
+                merged = server_text + '\n' + client_text
+            else:
+                merged = client_text if len(client_text) > len(server_text) else server_text
+        
+        logger.info(f"文本合并完成: 服务器 {len(server_lines)} 行，客户端 {len(client_lines)} 行，合并后 {len(merged_lines)} 行")
+        return merged
+
+    async def _merge_html_content(
+        self, server_html: str, client_html: str
+    ) -> str:
+        """
+        合并 HTML 内容 - 旧版本（保留用于兼容）
+        """
+        return await self._merge_html_content_smart(server_html, client_html)
+
+    async def _merge_html_content_with_deletion(self, server_html: str, client_html: str) -> str:
+        """
+        合并 HTML 内容 - 处理删除操作
+        当客户端内容明显更短时，识别为删除操作，保留删除
+        策略：以客户端内容为基础，添加服务器中客户端没有的新内容
+        """
+        import re
+        
+        # 提取所有块级元素
+        block_pattern = r'(<(?:p|h[1-6]|li|div|blockquote|br|span)[^>]*>.*?</(?:p|h[1-6]|li|div|blockquote|span)>|<(?:p|h[1-6]|li|div|blockquote|br)[^>]*/?>)'
+        
+        server_blocks = re.findall(block_pattern, server_html, re.DOTALL)
+        client_blocks = re.findall(block_pattern, client_html, re.DOTALL)
+        
+        logger.info(f"删除合并：服务器 {len(server_blocks)} 个块，客户端 {len(client_blocks)} 个块")
+        
+        # 提取块文本用于比较
+        def get_block_text(block: str) -> str:
+            text = re.sub(r'<[^>]+>', '', block)
+            return text.strip()
+        
+        # 创建客户端块的文本集合（用于识别哪些块被保留了）
+        client_texts = set(get_block_text(block) for block in client_blocks if get_block_text(block))
+        
+        # 创建服务器块的文本集合（用于找出服务器新增的内容）
+        server_texts = set(get_block_text(block) for block in server_blocks if get_block_text(block))
+        
+        # 找出服务器中客户端没有的新内容
+        server_only_texts = server_texts - client_texts
+        
+        # 策略：以客户端内容为基础（保留删除），添加服务器新增的内容
+        merged_blocks = list(client_blocks)  # 先保留客户端的所有块（包括删除）
+        
+        # 添加服务器中客户端没有的新内容
+        for block in server_blocks:
+            block_text = get_block_text(block)
+            if block_text in server_only_texts:
+                merged_blocks.append(block)
+                logger.debug(f"添加服务器新增的块: {block_text[:50]}")
+        
+        merged_html = ''.join(merged_blocks)
+        logger.info(f"✅ 删除合并完成：保留客户端 {len(client_blocks)} 个块，添加服务器 {len(server_only_texts)} 个新块，合并后 {len(merged_blocks)} 个块")
+        logger.info(f"合并后内容长度: {len(merged_html)} (服务器: {len(server_html)}, 客户端: {len(client_html)})")
+        return merged_html if merged_html else client_html  # 如果合并后为空，返回客户端内容
+    
+    async def _merge_html_content_smart(self, server_html: str, client_html: str) -> str:
+        """
+        智能合并 HTML 内容 - 改进版本，确保不丢失内容
+        策略：提取所有有意义的块（段落、标题等），去重后合并，保留所有唯一内容
+        """
+        import re
+        
+        # 如果内容相同
+        if server_html == client_html:
+            return server_html
+        
+        # 提取所有块级元素（段落、标题、列表项等）
+        # 使用更宽松的模式，匹配更多 HTML 标签
+        block_pattern = r'(<(?:p|h[1-6]|li|div|blockquote|br|span)[^>]*>.*?</(?:p|h[1-6]|li|div|blockquote|span)>|<(?:p|h[1-6]|li|div|blockquote|br)[^>]*/?>)'
+        
+        server_blocks = re.findall(block_pattern, server_html, re.DOTALL)
+        client_blocks = re.findall(block_pattern, client_html, re.DOTALL)
+        
+        logger.info(f"提取块：服务器 {len(server_blocks)} 个，客户端 {len(client_blocks)} 个")
+        
+        # 提取块文本用于去重和比较
+        def get_block_text(block: str) -> str:
+            # 移除所有标签，只保留文本
+            text = re.sub(r'<[^>]+>', '', block)
+            # 移除空白字符，但保留换行信息
+            return text.strip()
+        
+        def get_block_hash(block: str) -> str:
+            """获取块的哈希值，用于精确去重"""
+            text = get_block_text(block)
+            # 使用文本内容作为唯一标识
+            return text
+        
+        # 创建块的映射（哈希 -> HTML），保留所有唯一的块
+        server_block_map = {}
+        for block in server_blocks:
+            block_hash = get_block_hash(block)
+            if block_hash:  # 只保留有文本内容的块
+                # 如果哈希相同，保留较长的 HTML（可能包含更多格式）
+                if block_hash not in server_block_map or len(block) > len(server_block_map[block_hash]):
+                    server_block_map[block_hash] = block
+        
+        client_block_map = {}
+        for block in client_blocks:
+            block_hash = get_block_hash(block)
+            if block_hash:
+                if block_hash not in client_block_map or len(block) > len(client_block_map[block_hash]):
+                    client_block_map[block_hash] = block
+        
+        # 合并：保留所有唯一的块
+        merged_blocks = []
+        seen_hashes = set()
+        
+        # 1. 添加服务器块
+        for block_hash, block in server_block_map.items():
+            if block_hash not in seen_hashes:
+                merged_blocks.append(block)
+                seen_hashes.add(block_hash)
+        
+        # 2. 添加客户端独有的块（这是关键：保留客户端新增的内容）
+        for block_hash, block in client_block_map.items():
+            if block_hash not in seen_hashes:
+                merged_blocks.append(block)
+                seen_hashes.add(block_hash)
+                logger.debug(f"添加客户端独有的块: {get_block_text(block)[:50]}")
+        
+        # 3. 如果客户端 HTML 明显更长，尝试提取更多内容
+        # 注意：只提取尚未添加的块，避免重复
+        if len(client_html) > len(server_html) * 1.1:
+            # 使用更细粒度的方式找出客户端新增的内容
+            # 提取所有文本节点进行比较
+            server_text_nodes = re.findall(r'>([^<]+)<', server_html)
+            client_text_nodes = re.findall(r'>([^<]+)<', client_html)
+            
+            # 找出客户端独有的文本节点
+            server_text_set = set(t.strip() for t in server_text_nodes if t.strip())
+            client_text_set = set(t.strip() for t in client_text_nodes if t.strip())
+            client_only_texts = client_text_set - server_text_set
+            
+            if client_only_texts:
+                logger.info(f"发现客户端独有的文本节点: {len(client_only_texts)} 个")
+                # 尝试从客户端 HTML 中提取包含这些文本的块
+                # 关键：只添加尚未在 seen_hashes 中的块
+                for text in client_only_texts:
+                    # 查找包含此文本的块
+                    for block in client_blocks:
+                        block_hash = get_block_hash(block)
+                        # 确保块有内容且尚未添加
+                        if block_hash and block_hash not in seen_hashes and text in get_block_text(block):
+                            merged_blocks.append(block)
+                            seen_hashes.add(block_hash)
+                            logger.debug(f"添加客户端独有的块（通过文本节点）: {get_block_text(block)[:50]}")
+                            break  # 每个文本节点只添加一个块，避免重复
+        
+        # 组合合并后的 HTML
+        if merged_blocks:
+            merged_html = ''.join(merged_blocks)
+            logger.info(f"✅ HTML 合并完成：服务器 {len(server_blocks)} 个块，客户端 {len(client_blocks)} 个块，合并后 {len(merged_blocks)} 个块")
+            logger.info(f"合并后内容长度: {len(merged_html)} (服务器: {len(server_html)}, 客户端: {len(client_html)})")
+            return merged_html
+        else:
+            # 如果无法提取块，使用更宽松的策略
+            logger.warning("无法提取 HTML 块，使用备用合并策略")
+            return await self._merge_html_fallback(server_html, client_html)
+
+    async def _merge_html_fallback(self, server_html: str, client_html: str) -> str:
+        """
+        HTML 合并的备用策略
+        如果无法提取块，尝试其他方法
+        """
+        import re
+        
+        # 策略1：如果一个是另一个的子集，返回超集
+        if server_html in client_html:
+            logger.info("服务器内容是客户端内容的子集，返回客户端内容")
+            return client_html
+        if client_html in server_html:
+            logger.info("客户端内容是服务器内容的子集，返回服务器内容")
+            return server_html
+        
+        # 策略2：提取所有文本节点，合并
+        server_text = re.sub(r'<[^>]+>', '', server_html)
+        client_text = re.sub(r'<[^>]+>', '', client_html)
+        
+        # 如果客户端文本更长，可能包含新内容
+        if len(client_text) > len(server_text) * 1.2:
+            logger.info("客户端文本明显更长，优先保留客户端内容")
+            return client_html
+        
+        # 策略3：简单拼接（保留服务器内容，追加客户端新增部分）
+        # 找出客户端独有的部分
+        if len(client_html) > len(server_html):
+            # 尝试找出客户端新增的部分
+            # 使用简单的字符串差异
+            common_prefix_len = 0
+            for i in range(min(len(server_html), len(client_html))):
+                if server_html[i] == client_html[i]:
+                    common_prefix_len += 1
+                else:
+                    break
+            
+            # 如果前缀很长，说明客户端在末尾添加了内容
+            if common_prefix_len > len(server_html) * 0.8:
+                client_suffix = client_html[common_prefix_len:]
+                if len(client_suffix) > 10:  # 有显著的新内容
+                    merged = server_html + client_suffix
+                    logger.info("使用后缀追加策略合并")
+                    return merged
+        
+        # 策略4：最后手段，返回较长的内容
+        logger.warning("所有合并策略失败，返回较长的内容")
+        return client_html if len(client_html) > len(server_html) else server_html
+
+    async def _merge_html_content(self, server_html: str, client_html: str) -> str:
+        """
+        合并 HTML 内容
+        策略：提取所有段落，去重后合并
+        """
+        import re
+        
+        # 提取所有段落标签
+        server_paragraphs = re.findall(r'<p[^>]*>.*?</p>', server_html, re.DOTALL)
+        client_paragraphs = re.findall(r'<p[^>]*>.*?</p>', client_html, re.DOTALL)
+        
+        # 提取段落文本用于去重
+        def get_paragraph_text(p: str) -> str:
+            return re.sub(r'<[^>]+>', '', p).strip()
+        
+        # 合并段落，去重
+        merged_paragraphs = []
+        seen_texts = set()
+        
+        # 先添加服务器段落
+        for p in server_paragraphs:
+            text = get_paragraph_text(p)
+            if text and text not in seen_texts:
+                merged_paragraphs.append(p)
+                seen_texts.add(text)
+        
+        # 再添加客户端段落（如果不存在）
+        for p in client_paragraphs:
+            text = get_paragraph_text(p)
+            if text and text not in seen_texts:
+                merged_paragraphs.append(p)
+                seen_texts.add(text)
+        
+        # 注意：不再需要额外添加，因为前面已经添加了所有唯一的段落
+        # 避免重复添加已存在的段落
+        
+        # 组合合并后的 HTML
+        if merged_paragraphs:
+            return ''.join(merged_paragraphs)
+        else:
+            # 如果无法提取段落，返回较长的内容
+            return client_html if len(client_html) > len(server_html) else server_html
+
+    async def sync_document(
+        self, 
+        document_id: str, 
+        version: int, 
+        content: str,
+        base_content: Optional[str] = None,  # 上次同步的内容（用于计算差异）
+        user_id: Optional[int] = None,
+        create_version: bool = False,
+        db_session: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """
+        同步文档到ShareDB，支持冲突检测和智能合并
+        借鉴 nexcode_server 的实现，适配 Redis 存储
+        
+        策略：
+        1. 如果服务器版本 > 客户端版本：先合并服务器内容，再应用客户端更改
+        2. 如果服务器版本 <= 客户端版本：直接更新
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        # 获取锁以保证原子操作
+        if document_id not in self.document_locks:
+            self.document_locks[document_id] = asyncio.Lock()
+
+        async with self.document_locks[document_id]:
+            try:
+                # 获取当前文档
+                document = await self.get_document(document_id)
+                
+                # 如果文档不存在，创建新文档
+                if not document:
+                    document = {
+                        "id": document_id,
+                        "content": content,
+                        "version": 1,
+                        "created_at": datetime.utcnow().isoformat(),
+                        "updated_at": datetime.utcnow().isoformat(),
+                        "last_editor_id": user_id
+                    }
+                else:
+                    # 冲突检测和智能合并
+                    server_version = document.get("version", 0) or 0
+                    server_content = document.get("content", "")
+                    
+                    # 关键改进：即使版本号相同或客户端更大，也要检查内容是否不同
+                    # 因为可能存在并发修改但版本号相同的情况
+                    content_different = server_content != content
+                    
+                    # 关键改进：如果有 base_content 且不为空，使用基于差异的合并
+                    if base_content is not None and base_content.strip() and base_content != content:
+                        logger.info(f"使用基于差异的合并: base长度={len(base_content)}, client长度={len(content)}, server长度={len(server_content)}")
+                        logger.info(f"base内容预览: {base_content[:100]}...")
+                        logger.info(f"client内容预览: {content[:100]}...")
+                        logger.info(f"server内容预览: {server_content[:100]}...")
+                        merged_content = await self._merge_with_diff(
+                            base_content=base_content,
+                            client_content=content,
+                            server_content=server_content
+                        )
+                        document["content"] = merged_content
+                        document["version"] = max(server_version, version) + 1
+                        logger.info(f"✅ 差异合并完成，新版本: {document['version']}, 合并后长度: {len(merged_content)}")
+                        logger.info(f"合并后内容预览: {merged_content[:100]}...")
+                    elif base_content is not None and not base_content.strip():
+                        # base_content 为空，可能是第一次同步，使用智能合并
+                        logger.info(f"base_content 为空，使用智能合并")
+                        merged_content = await self._smart_merge_content(
+                            server_content=server_content,
+                            client_content=content,
+                            server_version=server_version,
+                            client_version=version
+                        )
+                        document["content"] = merged_content
+                        document["version"] = max(server_version, version) + 1
+                        logger.info(f"智能合并完成，新版本: {document['version']}, 合并后长度: {len(merged_content)}")
+                    # 如果服务器版本更新，或者内容不同，都需要合并
+                    elif server_version > version or (content_different and server_version == version):
+                        if server_version > version:
+                            logger.info(f"检测到版本冲突: 服务器版本 {server_version} > 客户端版本 {version}")
+                        else:
+                            logger.info(f"检测到内容冲突: 版本相同但内容不同 (版本 {version})")
+                        
+                        logger.info(f"服务器内容长度: {len(server_content)}, 客户端内容长度: {len(content)}")
+                        
+                        # 使用三路合并策略：base (旧版本) + server (服务器修改) + client (客户端修改)
+                        # 由于我们没有保存历史版本，使用智能合并策略
+                        merged_content = await self._smart_merge_content(
+                            server_content=server_content,
+                            client_content=content,
+                            server_version=server_version,
+                            client_version=version
+                        )
+                        
+                        document["content"] = merged_content
+                        document["version"] = max(server_version, version) + 1  # 合并后版本递增
+                        logger.info(f"内容已合并，新版本: {document['version']}, 合并后长度: {len(merged_content)}")
+                    elif content_different:
+                        # 版本号相同但内容不同（可能是并发修改），也需要合并
+                        logger.info(f"检测到并发修改: 版本相同 ({version}) 但内容不同")
+                        merged_content = await self._smart_merge_content(
+                            server_content=server_content,
+                            client_content=content,
+                            server_version=server_version,
+                            client_version=version
+                        )
+                        document["content"] = merged_content
+                        document["version"] = server_version + 1
+                        logger.info(f"并发修改已合并，新版本: {document['version']}")
+                    else:
+                        # 内容和版本都相同，无需更新
+                        logger.info("内容和版本都相同，无需更新")
+                        # 但仍然更新版本号和时间戳，表示有同步操作
+                        document["version"] = max(version + 1, server_version + 1)
+                        document["content"] = content  # 保持原内容
+                    
+                    document["updated_at"] = datetime.utcnow().isoformat()
+                    if user_id:
+                        document["last_editor_id"] = user_id
+
+                # 保存到Redis
+                await self.redis_client.setex(
+                    f"doc:{document_id}",
+                    settings.SHAREDB_DOCUMENT_TTL or 86400,  # 24小时默认TTL
+                    json.dumps(document)
+                )
+
+                # 记录操作历史（可选）
+                operation_record = {
+                    "doc_id": document_id,
+                    "version": document["version"],
+                    "operation": {
+                        "type": "full_update",
+                        "content": content
+                    },
+                    "user_id": user_id or 0,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+                # 广播更新给所有连接的客户端（广播合并后的内容）
+                await self._broadcast_update(document_id, {
+                    "type": "document_synced",
+                    "document_id": document_id,
+                    "version": document["version"],
+                    "content": document["content"]  # 广播合并后的内容，不是客户端原始内容
+                })
+
+                logger.info(f"文档 {document_id} 已同步，版本: {document['version']}")
+
+                return {
+                    "success": True,
+                    "content": document["content"],  # 返回合并后的内容，不是客户端原始内容
+                    "version": document["version"],
+                    "operations": []
+                }
+            except Exception as e:
+                logger.error(f"同步文档失败 {document_id}: {e}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "content": content,
+                    "version": version,
+                    "operations": []
+                }
+
 
 # 全局ShareDB服务实例
 sharedb_service = ShareDBService()

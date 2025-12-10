@@ -4,6 +4,7 @@
 
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
+import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, text
@@ -168,15 +169,28 @@ class UserService:
                 cached_data = await redis.get(cache_key)
 
                 if cached_data:
-                    return cached_data
+                    # 从缓存中解析 JSON 数据
+                    try:
+                        # 如果缓存数据是字符串，尝试解析为字典
+                        if isinstance(cached_data, str):
+                            return json.loads(cached_data)
+                        elif isinstance(cached_data, bytes):
+                            return json.loads(cached_data.decode('utf-8'))
+                        else:
+                            # 如果已经是字典，直接返回
+                            return cached_data
+                    except (json.JSONDecodeError, TypeError) as e:
+                        # 如果解析失败，清除缓存并继续从数据库获取
+                        print(f"⚠️ 缓存数据解析失败，清除缓存: {e}")
+                        await redis.delete(cache_key)
 
                 # 转换为字典
                 user_data = user.to_dict()
                 if user.profile:
                     user_data["profile"] = user.profile.to_dict()
 
-                # 缓存用户信息
-                await redis.setex(cache_key, 3600, str(user_data))  # 1小时
+                # 缓存用户信息（使用 JSON 序列化）
+                await redis.setex(cache_key, 3600, json.dumps(user_data, default=str))  # 1小时
 
                 return user_data
 
@@ -553,6 +567,15 @@ class UserService:
 
                 user.last_login_at = datetime.now(timezone.utc)
                 await session.commit()
+                
+                # 清除用户缓存，因为最后登录时间已更新
+                try:
+                    redis = await self.get_redis()
+                    cache_key = f"user:{user_id}"
+                    await redis.delete(cache_key)
+                except Exception as e:
+                    print(f"⚠️ 清除用户缓存失败: {e}")
+                
                 return True
 
             except Exception as e:

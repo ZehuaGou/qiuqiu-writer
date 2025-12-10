@@ -19,6 +19,8 @@ import { worksApi, type Work } from '../utils/worksApi';
 import { chaptersApi, type Chapter } from '../utils/chaptersApi';
 import { sharedbClient } from '../utils/sharedbClient';
 import { syncManager } from '../utils/syncManager';
+import { localCacheManager } from '../utils/localCacheManager';
+import { useIntelligentSync } from '../utils/intelligentSync';
 import '../components/editor/NovelEditor.css';
 import './NovelEditorPage.css';
 
@@ -486,42 +488,137 @@ export default function NovelEditorPage() {
         const documentId = workId 
           ? `work_${workId}_chapter_${chapterId}` 
           : `chapter_${chapterId}`;
+        // 兼容旧格式的缓存键（没有 workId）
+        const oldDocumentId = `chapter_${chapterId}`;
         currentChapterIdRef.current = chapterId;
         
         console.log('📖 加载章节内容:', {
           workId,
           chapterId,
           documentId,
+          oldDocumentId,
         });
         
         let content: string | null = null;
         
-        // 1. 先从本地缓存获取（即时响应）
+        // 1. 先从本地缓存获取（即时响应）- 优先新格式，兼容旧格式
         try {
-          const cachedDoc = await sharedbClient.getDocument(documentId);
+          // 先尝试新格式
+          let cachedDoc = await sharedbClient.getDocument(documentId);
+          
+          // 如果新格式没有，尝试旧格式（兼容性）
+          if (!cachedDoc && documentId !== oldDocumentId) {
+            console.log('🔄 新格式缓存未找到，尝试旧格式:', oldDocumentId);
+            cachedDoc = await sharedbClient.getDocument(oldDocumentId);
+            if (cachedDoc) {
+              console.log('✅ 从旧格式缓存找到内容，将迁移到新格式');
+              // 迁移到新格式（异步，不阻塞）
+              if (workId) {
+                sharedbClient.updateDocument(documentId, cachedDoc.content || '', cachedDoc.metadata)
+                  .catch(err => console.warn('迁移缓存失败:', err));
+              }
+            }
+          }
+          
+          // 打印完整的缓存对象用于调试
+          if (cachedDoc) {
+            console.log('💾 缓存完整对象:', JSON.stringify(cachedDoc, null, 2));
+          }
           
           console.log('💾 缓存数据:', {
             documentId,
+            oldDocumentId,
             cached: !!cachedDoc,
             cachedDoc,
             contentType: cachedDoc?.content ? typeof cachedDoc.content : 'null',
             contentPreview: cachedDoc?.content 
               ? (typeof cachedDoc.content === 'string' 
                   ? cachedDoc.content.substring(0, 100) 
-                  : JSON.stringify(cachedDoc.content).substring(0, 100))
+                  : JSON.stringify(cachedDoc.content).substring(0, 200))
               : 'null',
           });
           
           if (cachedDoc) {
             // 处理不同的内容格式
             if (typeof cachedDoc.content === 'string') {
-              content = cachedDoc.content;
-              console.log('✅ 从缓存获取到字符串内容，长度:', content.length);
+              if (cachedDoc.content.trim().length > 0) {
+                content = cachedDoc.content;
+                console.log('✅ 从缓存获取到字符串内容，长度:', content.length);
+              } else {
+                console.log('⚠️ 缓存内容是空字符串，尝试从旧格式缓存获取...');
+                // 如果新格式缓存是空的，尝试从旧格式获取
+                if (documentId !== oldDocumentId) {
+                  try {
+                    const oldCachedDoc = await sharedbClient.getDocument(oldDocumentId);
+                    if (oldCachedDoc) {
+                      console.log('🔄 从旧格式缓存获取:', JSON.stringify(oldCachedDoc, null, 2));
+                      if (typeof oldCachedDoc.content === 'string' && oldCachedDoc.content.trim().length > 0) {
+                        content = oldCachedDoc.content;
+                        console.log('✅ 从旧格式缓存获取到内容，长度:', content.length);
+                        // 迁移到新格式
+                        if (workId) {
+                          sharedbClient.updateDocument(documentId, content, oldCachedDoc.metadata)
+                            .catch(err => console.warn('迁移缓存失败:', err));
+                        }
+                      } else if (oldCachedDoc.content && typeof oldCachedDoc.content === 'object') {
+                        const oldInnerContent = oldCachedDoc.content.content;
+                        if (typeof oldInnerContent === 'string' && oldInnerContent.trim().length > 0) {
+                          content = oldInnerContent;
+                          console.log('✅ 从旧格式缓存对象中提取内容，长度:', content.length);
+                          // 迁移到新格式
+                          if (workId) {
+                            sharedbClient.updateDocument(documentId, content, oldCachedDoc.metadata)
+                              .catch(err => console.warn('迁移缓存失败:', err));
+                          }
+                        }
+                      }
+                    }
+                  } catch (oldErr) {
+                    console.warn('从旧格式缓存获取失败:', oldErr);
+                  }
+                }
+              }
             } else if (cachedDoc.content && typeof cachedDoc.content === 'object') {
               // 如果内容是对象，尝试提取 content 字段
               if ('content' in cachedDoc.content) {
-                content = cachedDoc.content.content as string;
-                console.log('✅ 从缓存对象中提取内容，长度:', content?.length || 0);
+                const innerContent = cachedDoc.content.content;
+                if (typeof innerContent === 'string' && innerContent.trim().length > 0) {
+                  content = innerContent;
+                  console.log('✅ 从缓存对象中提取内容，长度:', content.length);
+                } else {
+                  console.log('⚠️ 缓存对象中的 content 字段是空字符串，尝试从旧格式获取...');
+                  // 如果新格式缓存对象中的 content 是空的，尝试从旧格式获取
+                  if (documentId !== oldDocumentId) {
+                    try {
+                      const oldCachedDoc = await sharedbClient.getDocument(oldDocumentId);
+                      if (oldCachedDoc) {
+                        console.log('🔄 从旧格式缓存获取:', JSON.stringify(oldCachedDoc, null, 2));
+                        if (typeof oldCachedDoc.content === 'string' && oldCachedDoc.content.trim().length > 0) {
+                          content = oldCachedDoc.content;
+                          console.log('✅ 从旧格式缓存获取到字符串内容，长度:', content.length);
+                          // 迁移到新格式
+                          if (workId) {
+                            sharedbClient.updateDocument(documentId, content, oldCachedDoc.metadata)
+                              .catch(err => console.warn('迁移缓存失败:', err));
+                          }
+                        } else if (oldCachedDoc.content && typeof oldCachedDoc.content === 'object') {
+                          const oldInnerContent = oldCachedDoc.content.content;
+                          if (typeof oldInnerContent === 'string' && oldInnerContent.trim().length > 0) {
+                            content = oldInnerContent;
+                            console.log('✅ 从旧格式缓存对象中提取内容，长度:', content.length);
+                            // 迁移到新格式
+                            if (workId) {
+                              sharedbClient.updateDocument(documentId, content, oldCachedDoc.metadata)
+                                .catch(err => console.warn('迁移缓存失败:', err));
+                            }
+                          }
+                        }
+                      }
+                    } catch (oldErr) {
+                      console.warn('从旧格式缓存获取失败:', oldErr);
+                    }
+                  }
+                }
               } else {
                 // 尝试序列化为字符串
                 content = JSON.stringify(cachedDoc.content);
@@ -529,7 +626,7 @@ export default function NovelEditorPage() {
               }
             }
           } else {
-            console.log('❌ 缓存中没有找到文档:', documentId);
+            console.log('❌ 缓存中没有找到文档（新格式和旧格式都未找到）');
           }
         } catch (cacheErr) {
           console.warn('⚠️ 从缓存加载失败，将从服务器获取:', cacheErr);
@@ -550,35 +647,103 @@ export default function NovelEditorPage() {
                 : 'not object',
             });
             
+            // 打印完整的文档对象用于调试
+            console.log('📦 ShareDB 完整文档对象:', JSON.stringify(docResult, null, 2));
+            
             if (docResult.content) {
+              console.log('📦 ShareDB 文档结构:', {
+                isString: typeof docResult.content === 'string',
+                isObject: typeof docResult.content === 'object',
+                keys: typeof docResult.content === 'object' ? Object.keys(docResult.content) : 'N/A',
+                contentValue: typeof docResult.content === 'object' && 'content' in docResult.content
+                  ? (typeof docResult.content.content === 'string' 
+                      ? docResult.content.content.substring(0, 200) 
+                      : JSON.stringify(docResult.content.content).substring(0, 200))
+                  : 'N/A',
+              });
+              
               // 处理不同的内容格式
               if (typeof docResult.content === 'string') {
+                // 直接是字符串内容
                 content = docResult.content;
                 console.log('✅ 获取到字符串内容，长度:', content.length);
               } else if (docResult.content && typeof docResult.content === 'object') {
-                // ShareDB 文档通常是对象格式，包含 content 字段
+                // ShareDB 文档对象格式：{ id, content, title, metadata, ... }
+                // 实际内容在 content 字段中
+                console.log('🔍 检查文档对象的 content 字段:', {
+                  hasContentKey: 'content' in docResult.content,
+                  contentValue: docResult.content.content,
+                  contentType: typeof docResult.content.content,
+                  contentLength: typeof docResult.content.content === 'string' 
+                    ? docResult.content.content.length 
+                    : 'not string',
+                });
+                
                 if ('content' in docResult.content) {
                   const innerContent = docResult.content.content;
+                  
                   if (typeof innerContent === 'string') {
-                    content = innerContent;
-                    console.log('✅ 从对象中提取字符串内容，长度:', content.length);
+                    // 字符串内容
+                    if (innerContent.trim().length > 0) {
+                      content = innerContent;
+                      console.log('✅ 从 ShareDB 文档对象中提取字符串内容，长度:', content.length);
+                    } else {
+                      console.warn('⚠️ ShareDB 中 content 字段是空字符串，可能内容未保存');
+                      // 即使 ShareDB 为空，也设置空内容，让用户可以编辑
+                      content = '';
+                    }
+                  } else if (innerContent === null || innerContent === undefined) {
+                    console.warn('⚠️ content 字段是 null 或 undefined');
+                    content = null;
+                  } else if (innerContent && typeof innerContent === 'object') {
+                    // 如果 content 还是对象，可能是 TipTap 格式或其他格式
+                    console.log('📝 content 是对象，结构:', {
+                      keys: Object.keys(innerContent),
+                      type: (innerContent as any).type,
+                    });
+                    
+                    if ('type' in innerContent && innerContent.type === 'doc') {
+                      // TipTap 文档格式，需要转换为 HTML
+                      console.log('📝 检测到 TipTap 格式，需要转换');
+                      // 这里可以添加 TipTap 到 HTML 的转换逻辑
+                      // 暂时序列化
+                      content = JSON.stringify(innerContent);
+                    } else {
+                      // 尝试查找可能的文本内容
+                      const textContent = (innerContent as any).text || 
+                                        (innerContent as any).html ||
+                                        (innerContent as any).body;
+                      if (textContent && typeof textContent === 'string') {
+                        content = textContent;
+                        console.log('✅ 从对象中提取文本内容，长度:', content.length);
+                      } else {
+                        content = JSON.stringify(innerContent);
+                        console.log('⚠️ content 是对象，已序列化，长度:', content.length);
+                      }
+                    }
                   } else {
-                    // 如果是 HTML 对象，尝试提取
-                    content = JSON.stringify(innerContent);
-                    console.log('⚠️ 内容是对象，已序列化，长度:', content.length);
+                    console.warn('⚠️ content 字段格式未知:', typeof innerContent, innerContent);
+                    content = null;
                   }
                 } else {
                   // 尝试查找可能的 content 字段
-                  const possibleContent = (docResult.content as any).content || 
-                                         (docResult.content as any).html ||
-                                         (docResult.content as any).text;
-                  if (possibleContent && typeof possibleContent === 'string') {
+                  console.log('🔍 尝试查找其他可能的内容字段...');
+                  const possibleContent = (docResult.content as any).html ||
+                                         (docResult.content as any).text ||
+                                         (docResult.content as any).body ||
+                                         (docResult.content as any).data;
+                  if (possibleContent && typeof possibleContent === 'string' && possibleContent.trim().length > 0) {
                     content = possibleContent;
-                    console.log('✅ 找到内容字段，长度:', content.length);
+                    console.log('✅ 找到其他内容字段，长度:', content.length);
                   } else {
-                    // 最后尝试序列化整个对象
-                    content = JSON.stringify(docResult.content);
-                    console.log('⚠️ 无法提取内容，已序列化整个对象，长度:', content.length);
+                    // 打印所有键值对用于调试
+                    console.warn('⚠️ 无法提取内容，文档对象的所有键值:', 
+                      Object.keys(docResult.content).reduce((acc, key) => {
+                        acc[key] = typeof (docResult.content as any)[key];
+                        return acc;
+                      }, {} as Record<string, string>)
+                    );
+                    content = null; // 不设置无效内容
                   }
                 }
               }
@@ -637,18 +802,21 @@ export default function NovelEditorPage() {
           }
         }
         
-        // 3. 设置编辑器内容
+        // 3. 设置编辑器内容（即使为空也设置，让用户可以编辑）
         console.log('✏️ 设置编辑器内容:', {
           hasContent: !!content,
           contentLength: content?.length || 0,
           contentPreview: content?.substring(0, 100) || 'null',
         });
         
-        if (content && content.trim()) {
-          editor.commands.setContent(content);
-          console.log('✅ 编辑器内容已设置');
+        // 即使内容为空，也设置编辑器（允许用户开始编辑）
+        if (content !== null) {
+          // content 可能是空字符串，这是正常的（新章节）
+          editor.commands.setContent(content || '<p></p>');
+          console.log('✅ 编辑器内容已设置，长度:', content?.length || 0);
         } else {
-          console.warn('⚠️ 内容为空，设置空编辑器');
+          // 如果 content 是 null（获取失败），设置空编辑器
+          console.warn('⚠️ 内容获取失败，设置空编辑器');
           editor.commands.setContent('<p></p>');
         }
       } catch (err) {
@@ -661,9 +829,140 @@ export default function NovelEditorPage() {
     loadChapterContent();
   }, [selectedChapter, editor]);
 
-  // 自动保存章节内容（本地优先策略）
+  // 手动保存函数（用于调试和手动触发）
+  // 智能同步 Hook - 使用 useIntelligentSync 替代原有的同步逻辑
+  // 注意：这个 Hook 需要在 handleManualSave 之前定义，以便在手动保存时使用
+  const getCurrentContent = () => {
+    if (!editor || !selectedChapter || !workId) return '';
+    return editor.getHTML();
+  };
+
+  const updateContent = async (newContent: string) => {
+    if (!editor || !selectedChapter || !workId) return;
+    
+    // 更新编辑器内容（仅在内容真正不同时）
+    const currentContent = editor.getHTML();
+    if (currentContent !== newContent) {
+      editor.commands.setContent(newContent);
+      console.log('✅ [智能同步] 已更新编辑器内容');
+    }
+  };
+
+  // 只在有章节选中时启用智能同步
+  const documentId = selectedChapter && workId 
+    ? `work_${workId}_chapter_${parseInt(selectedChapter)}`
+    : '';
+
+  const {
+    performSync,
+    forceSync,
+    stop: stopSync,
+    getStatus: getSyncStatus,
+  } = useIntelligentSync(
+    documentId,
+    getCurrentContent,
+    updateContent,
+    {
+      syncDebounceDelay: 1000,      // 同步防抖延迟 1 秒
+      pollInterval: 10000,          // 每 10 秒轮询一次
+      userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
+      syncCheckInterval: 3000,      // 每 3 秒检查一次是否需要同步
+      enablePolling: !!documentId,   // 只在有文档ID时启用轮询
+      onSyncSuccess: (content, version) => {
+        console.log('✅ [智能同步] 同步成功:', { version, contentLength: content.length });
+        // 更新同步状态
+        setSyncStatus(syncManager.getStatus());
+      },
+      onSyncError: (error) => {
+        console.error('❌ [智能同步] 同步失败:', error);
+        setSyncStatus(syncManager.getStatus());
+      },
+      onCollaborativeUpdate: (hasUpdates) => {
+        if (hasUpdates) {
+          console.log('👥 [智能同步] 检测到协作更新');
+          // 可以在这里显示通知
+        }
+      },
+      onContentChange: (synced) => {
+        console.log('📝 [智能同步] 内容变化，已同步:', synced);
+        setSyncStatus(syncManager.getStatus());
+      },
+    }
+  );
+
+  const handleManualSave = async () => {
+    if (!editor || !currentChapterIdRef.current || !workId) {
+      console.warn('⚠️ 无法保存：编辑器、章节ID或作品ID缺失', {
+        hasEditor: !!editor,
+        chapterId: currentChapterIdRef.current,
+        workId,
+      });
+      return;
+    }
+
+    try {
+      const chapterId = currentChapterIdRef.current;
+      const content = editor.getHTML();
+      const documentId = `work_${workId}_chapter_${chapterId}`;
+      
+      console.log('💾 [手动保存] 开始保存:', {
+        workId,
+        chapterId,
+        documentId,
+        contentLength: content.length,
+        contentPreview: content.substring(0, 100),
+      });
+      
+      // 1. 立即保存到本地缓存
+      await sharedbClient.updateDocument(documentId, content, {
+        work_id: Number(workId),
+        chapter_id: chapterId,
+        updated_at: new Date().toISOString(),
+      });
+      
+      console.log('✅ [手动保存] 已保存到本地缓存');
+      
+      // 2. 使用智能同步强制同步到服务器
+      if (documentId && forceSync) {
+        console.log('🔄 [手动保存] 触发智能同步');
+        await forceSync();
+        console.log('✅ [手动保存] 智能同步完成');
+      } else {
+        // 降级到原有的同步方式
+        await syncManager.syncDocument(documentId);
+        console.log('✅ [手动保存] 使用传统同步方式完成');
+      }
+      
+      // 验证是否保存成功
+      const saved = await sharedbClient.getDocument(documentId);
+      if (saved && saved.content === content) {
+        console.log('✅ [手动保存] 验证成功，内容已保存');
+      } else {
+        console.error('❌ [手动保存] 验证失败，内容未正确保存');
+      }
+    } catch (err) {
+      console.error('❌ [手动保存] 保存失败:', err);
+    }
+  };
+
+  // 自动保存章节内容（本地优先策略 + 智能同步）
   useEffect(() => {
-    if (!editor || !currentChapterIdRef.current) return;
+    if (!editor || !selectedChapter || !workId) {
+      console.log('⚠️ 自动保存未启动:', {
+        hasEditor: !!editor,
+        selectedChapter,
+        workId,
+      });
+      return;
+    }
+
+    const chapterId = parseInt(selectedChapter);
+    if (isNaN(chapterId)) {
+      console.warn('⚠️ 自动保存未启动：章节ID无效', selectedChapter);
+      return;
+    }
+
+    console.log('✅ 自动保存已启动，章节ID:', chapterId);
 
     const handleUpdate = () => {
       if (saveTimeoutRef.current) {
@@ -671,17 +970,22 @@ export default function NovelEditorPage() {
       }
 
       saveTimeoutRef.current = setTimeout(async () => {
-        const chapterId = currentChapterIdRef.current;
-        if (!chapterId) return;
+        // 再次检查，确保章节没有切换
+        if (selectedChapter !== String(chapterId) || !workId) {
+          console.warn('⚠️ 自动保存跳过：章节已切换或作品ID缺失', {
+            currentSelected: selectedChapter,
+            expectedChapter: chapterId,
+            workId,
+          });
+          return;
+        }
 
         try {
           const content = editor.getHTML();
           // 使用 workId 和 chapterId 生成唯一的缓存键
-          const documentId = workId 
-            ? `work_${workId}_chapter_${chapterId}` 
-            : `chapter_${chapterId}`;
+          const documentId = `work_${workId}_chapter_${chapterId}`;
           
-          console.log('💾 自动保存章节内容:', {
+          console.log('💾 [自动保存] 开始保存:', {
             workId,
             chapterId,
             documentId,
@@ -691,34 +995,53 @@ export default function NovelEditorPage() {
           
           // 1. 立即保存到本地缓存（用户操作即时响应）
           await sharedbClient.updateDocument(documentId, content, {
-            work_id: workId ? Number(workId) : undefined,
+            work_id: Number(workId),
             chapter_id: chapterId,
             updated_at: new Date().toISOString(),
           });
           
-          console.log('✅ 章节内容已保存到本地缓存:', documentId);
+          console.log('✅ [自动保存] 已保存到本地缓存:', documentId);
           
-          // 2. 异步同步到服务器（不阻塞用户操作）
-          syncManager.syncDocument(documentId).then(() => {
-            console.log('✅ 已同步到服务器:', documentId);
-          }).catch((err) => {
-            console.error('❌ 同步到服务器失败（将在网络恢复后自动重试）:', err);
-          });
+          // 验证保存
+          const saved = await localCacheManager.get(documentId);
+          if (saved) {
+            console.log('✅ [自动保存] 验证成功，缓存中存在');
+            // 进一步验证内容是否正确保存
+            const savedDoc = saved as any;
+            if (savedDoc && savedDoc.content === content) {
+              console.log('✅ [自动保存] 内容验证成功，内容匹配');
+            } else {
+              console.warn('⚠️ [自动保存] 内容验证失败，内容不匹配', {
+                savedContentLength: savedDoc?.content?.length || 0,
+                expectedContentLength: content.length,
+              });
+            }
+          } else {
+            console.error('❌ [自动保存] 验证失败，缓存中不存在');
+          }
+          
+          // 2. 使用智能同步（会自动处理防抖和冲突检测）
+          // 智能同步会在用户停止编辑后自动触发，这里只是确保内容已保存到本地
+          console.log('✅ [自动保存] 内容已保存，智能同步将在适当时机自动触发');
         } catch (err) {
-          console.error('❌ 保存到本地缓存失败:', err);
+          console.error('❌ [自动保存] 保存到本地缓存失败:', err);
         }
-      }, 2000); // 2秒后保存
+      }, 2000); // 2秒后保存到本地
     };
 
     editor.on('update', handleUpdate);
+    console.log('✅ 编辑器 update 事件监听器已注册，章节ID:', chapterId);
 
     return () => {
       editor.off('update', handleUpdate);
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
+      // 停止智能同步
+      stopSync();
+      console.log('🔄 自动保存监听器已清理，章节ID:', chapterId);
     };
-  }, [editor]);
+  }, [editor, workId, selectedChapter, stopSync]);
 
   // 打开章节弹框
   const handleOpenChapterModal = (
@@ -1194,6 +1517,14 @@ export default function NovelEditorPage() {
                     title="章节设置"
                   >
                     <Settings size={18} />
+                  </button>
+                  <button 
+                    className="chapter-settings-btn"
+                    onClick={handleManualSave}
+                    title="手动保存（调试用）"
+                    style={{ marginLeft: '8px' }}
+                  >
+                    💾
                   </button>
                   <div className="setting-item">
                     <span>智能补全</span>

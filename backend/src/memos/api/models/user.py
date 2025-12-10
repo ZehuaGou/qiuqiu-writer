@@ -62,6 +62,17 @@ class User(Base):
 
     def to_dict(self, include_sensitive: bool = False) -> Dict[str, Any]:
         """转换为字典"""
+        # 安全地转换日期字段
+        def safe_isoformat(dt):
+            if dt is None:
+                return None
+            if isinstance(dt, str):
+                # 如果已经是字符串，直接返回
+                return dt
+            if hasattr(dt, 'isoformat'):
+                return dt.isoformat()
+            return str(dt)
+        
         data = {
             "id": self.id,
             "username": self.username,
@@ -71,9 +82,9 @@ class User(Base):
             "bio": self.bio,
             "status": self.status,
             "preferences": self.preferences or {},
-            "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_login_at": safe_isoformat(self.last_login_at),
+            "created_at": safe_isoformat(self.created_at),
+            "updated_at": safe_isoformat(self.updated_at),
         }
 
         if include_sensitive:
@@ -109,20 +120,31 @@ class UserProfile(Base):
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
+        # 安全地转换日期字段
+        def safe_isoformat(dt):
+            if dt is None:
+                return None
+            if isinstance(dt, str):
+                # 如果已经是字符串，直接返回
+                return dt
+            if hasattr(dt, 'isoformat'):
+                return dt.isoformat()
+            return str(dt)
+        
         return {
             "id": self.id,
             "user_id": self.user_id,
             "display_name": self.display_name,
             "real_name": self.real_name,
             "gender": self.gender,
-            "birthday": self.birthday.isoformat() if self.birthday else None,
+            "birthday": safe_isoformat(self.birthday),
             "location": self.location,
             "website": self.website,
             "social_links": self.social_links or [],
             "writing_stats": self.writing_stats or {},
             "preferences": self.preferences or {},
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": safe_isoformat(self.created_at),
+            "updated_at": safe_isoformat(self.updated_at),
         }
 
 
