@@ -27,6 +27,17 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getAuthHeaders(): HeadersInit {
+    const token = localStorage.getItem('access_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -35,13 +46,16 @@ class ApiClient {
     const response = await fetch(url, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
         ...options.headers,
       },
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.detail || errorData.message || `API request failed: ${response.statusText}`
+      );
     }
 
     return response.json();

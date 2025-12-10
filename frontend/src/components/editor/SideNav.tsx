@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, ChevronRight, Plus, Settings, ArrowUpDown } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Plus, Settings, ArrowUpDown, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import './SideNav.css';
 
@@ -9,6 +9,7 @@ export interface ChapterFullData {
   volumeId: string;
   volumeTitle: string;
   title: string;
+  chapter_number?: number;  // 章节号
   characters: string[];
   locations: string[];
   outline: string;
@@ -19,6 +20,7 @@ interface Chapter {
   id: string;
   volumeId: string;
   title: string;
+  chapter_number?: number;  // 章节号
   characters?: string[];
   locations?: string[];
   outline?: string;
@@ -48,6 +50,7 @@ interface SideNavProps {
   selectedChapter?: string | null;
   onChapterSelect?: (chapterId: string | null) => void;
   onOpenChapterModal?: (mode: 'create' | 'edit', volumeId: string, volumeTitle: string, chapterData?: ChapterFullData) => void;
+  onChapterDelete?: (chapterId: string) => void;  // 删除章节回调
   drafts?: Draft[];
   onDraftsChange?: (drafts: Draft[]) => void;
   volumes?: Volume[];
@@ -57,7 +60,7 @@ interface SideNavProps {
 // 导出 Chapter 和 Volume 类型供外部使用
 export type { Chapter, Volume };
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, drafts: externalDrafts, onDraftsChange, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onChapterDelete, drafts: externalDrafts, onDraftsChange, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [draftsExpanded, setDraftsExpanded] = useState(false);
   const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
@@ -134,11 +137,20 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
         volumeId: volume.id,
         volumeTitle,
         title: chapter.title,
+        chapter_number: chapter.chapter_number,  // 传递章节号
         characters: chapter.characters || [],
         locations: chapter.locations || [],
         outline: chapter.outline || '',
         detailOutline: chapter.detailOutline || '',
       });
+    }
+  };
+
+  // 删除章节
+  const handleDeleteChapter = (chapter: Chapter, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm(`确定要删除章节"${chapter.title}"吗？此操作不可恢复。`)) {
+      onChapterDelete?.(chapter.id);
     }
   };
 
@@ -272,14 +284,28 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                             }
                           }}
                         >
-                          <span>{chapter.title}</span>
-                          <button
-                            className="nav-chapter-edit-btn"
-                            onClick={(e) => handleEditChapter(chapter, volume.title, e)}
-                            title="编辑章节设置"
-                          >
-                            <Settings size={12} />
-                          </button>
+                          <span>
+                            {chapter.chapter_number !== undefined 
+                              ? `第${chapter.chapter_number}章 ${chapter.title}`
+                              : chapter.title
+                            }
+                          </span>
+                          <div className="nav-chapter-actions">
+                            <button
+                              className="nav-chapter-edit-btn"
+                              onClick={(e) => handleEditChapter(chapter, volume.title, e)}
+                              title="编辑章节设置"
+                            >
+                              <Settings size={12} />
+                            </button>
+                            <button
+                              className="nav-chapter-delete-btn"
+                              onClick={(e) => handleDeleteChapter(chapter, e)}
+                              title="删除章节"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}

@@ -19,9 +19,32 @@ class ChapterService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def get_max_chapter_number(
+        self,
+        work_id: int,
+        volume_number: Optional[int] = None
+    ) -> int:
+        """获取指定作品（或卷）的最大章节号"""
+        conditions = [Chapter.work_id == work_id]
+        if volume_number is not None:
+            conditions.append(Chapter.volume_number == volume_number)
+        
+        stmt = select(func.max(Chapter.chapter_number)).where(and_(*conditions))
+        result = await self.db.execute(stmt)
+        max_number = result.scalar()
+        return max_number if max_number is not None else 0
+
     async def create_chapter(self, **kwargs) -> Chapter:
         """创建章节"""
-        chapter = Chapter(**kwargs)
+        # 过滤掉 Chapter 模型不支持的字段（如 content，内容存储在 ShareDB 中）
+        chapter_fields = {
+            'work_id', 'title', 'chapter_number', 'volume_number', 'status',
+            'word_count', 'estimated_reading_time', 'content_hash', 'tags',
+            'summary', 'notes', 'chapter_metadata', 'sort_order'
+        }
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k in chapter_fields}
+        
+        chapter = Chapter(**filtered_kwargs)
 
         self.db.add(chapter)
         await self.db.commit()

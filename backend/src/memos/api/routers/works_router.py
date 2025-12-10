@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/v1/works", tags=["作品管理"])
 @router.post("/", response_model=WorkResponse)
 async def create_work(
     work_data: WorkCreate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -42,8 +43,8 @@ async def create_work(
         target_type="work",
         target_id=work.id,
         details={"title": work.title, "work_type": work.work_type},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return work.to_dict()
@@ -90,15 +91,41 @@ async def list_works(
         sort_order=sort_order
     )
 
+    pages = (total + size - 1) // size if total > 0 else 0
+
+    # 转换为符合 WorkListItem schema 的格式
+    works_data = []
+    for work in works:
+        work_dict = work.to_dict(include_collaborators=include_collaborators)
+        # 确保 created_at 和 updated_at 是 datetime 对象（不是字符串）
+        works_data.append({
+            "id": work_dict["id"],
+            "title": work_dict["title"],
+            "subtitle": work_dict.get("subtitle"),
+            "description": work_dict.get("description"),
+            "work_type": work_dict["work_type"],
+            "status": work_dict["status"],
+            "cover_image_url": work_dict.get("cover_image_url"),
+            "tags": work_dict.get("tags", []),
+            "category": work_dict.get("category"),
+            "genre": work_dict.get("genre"),
+            "word_count": work_dict.get("word_count", 0),
+            "chapter_count": work_dict.get("chapter_count", 0),
+            "reading_time": work_dict.get("reading_time", 0),
+            "is_public": work_dict.get("is_public", False),
+            "is_collaborative": work_dict.get("is_collaborative", False),
+            "created_at": work.created_at,  # 使用原始的 datetime 对象
+            "updated_at": work.updated_at,  # 使用原始的 datetime 对象
+        })
+
     return {
-        "works": [
-            work.to_dict(include_collaborators=include_collaborators)
-            for work in works
-        ],
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": (total + size - 1) // size
+        "works": works_data,
+        "pagination": {
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": pages
+        }
     }
 
 
@@ -137,12 +164,40 @@ async def get_public_works(
         sort_order=sort_order
     )
 
+    pages = (total + size - 1) // size if total > 0 else 0
+
+    # 转换为符合 WorkListItem schema 的格式
+    works_data = []
+    for work in works:
+        work_dict = work.to_dict()
+        works_data.append({
+            "id": work_dict["id"],
+            "title": work_dict["title"],
+            "subtitle": work_dict.get("subtitle"),
+            "description": work_dict.get("description"),
+            "work_type": work_dict["work_type"],
+            "status": work_dict["status"],
+            "cover_image_url": work_dict.get("cover_image_url"),
+            "tags": work_dict.get("tags", []),
+            "category": work_dict.get("category"),
+            "genre": work_dict.get("genre"),
+            "word_count": work_dict.get("word_count", 0),
+            "chapter_count": work_dict.get("chapter_count", 0),
+            "reading_time": work_dict.get("reading_time", 0),
+            "is_public": work_dict.get("is_public", False),
+            "is_collaborative": work_dict.get("is_collaborative", False),
+            "created_at": work.created_at,  # 使用原始的 datetime 对象
+            "updated_at": work.updated_at,  # 使用原始的 datetime 对象
+        })
+
     return {
-        "works": [work.to_dict() for work in works],
-        "total": total,
-        "page": page,
-        "size": size,
-        "pages": (total + size - 1) // size
+        "works": works_data,
+        "pagination": {
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": pages
+        }
     }
 
 
@@ -177,8 +232,7 @@ async def get_work(
         )
 
     return work.to_dict(
-        include_collaborators=include_collaborators,
-        include_chapters=include_chapters
+        include_collaborators=include_collaborators
     )
 
 
@@ -186,6 +240,7 @@ async def get_work(
 async def update_work(
     work_id: int,
     work_update: WorkUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -225,8 +280,8 @@ async def update_work(
         target_type="work",
         target_id=work_id,
         details=work_update.dict(exclude_unset=True),
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return updated_work.to_dict()
@@ -235,6 +290,7 @@ async def update_work(
 @router.delete("/{work_id}")
 async def delete_work(
     work_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -268,8 +324,8 @@ async def delete_work(
         target_type="work",
         target_id=work_id,
         details={"title": work.title},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return {"message": "作品删除成功"}
@@ -278,6 +334,7 @@ async def delete_work(
 @router.post("/{work_id}/publish")
 async def publish_work(
     work_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -314,8 +371,8 @@ async def publish_work(
         target_type="work",
         target_id=work_id,
         details={"title": work.title},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return published_work.to_dict()
@@ -324,6 +381,7 @@ async def publish_work(
 @router.post("/{work_id}/archive")
 async def archive_work(
     work_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -360,8 +418,8 @@ async def archive_work(
         target_type="work",
         target_id=work_id,
         details={"title": work.title},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return archived_work.to_dict()
@@ -397,6 +455,7 @@ async def get_work_collaborators(
 async def add_collaborator(
     work_id: int,
     collaborator_data: WorkCollaboratorCreate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -444,8 +503,8 @@ async def add_collaborator(
             "collaborator_user_id": target_user.id,
             "permission": collaborator_data.permission
         },
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return collaborator.to_dict()
@@ -456,6 +515,7 @@ async def update_collaborator(
     work_id: int,
     user_id: int,
     collaborator_update: WorkCollaboratorUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -495,8 +555,8 @@ async def update_collaborator(
             "collaborator_user_id": user_id,
             **collaborator_update.dict(exclude_unset=True)
         },
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return collaborator.to_dict()
@@ -506,6 +566,7 @@ async def update_collaborator(
 async def remove_collaborator(
     work_id: int,
     user_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -538,8 +599,8 @@ async def remove_collaborator(
         target_type="work",
         target_id=work_id,
         details={"collaborator_user_id": user_id},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return {"message": "协作者移除成功"}

@@ -61,22 +61,11 @@ export default function ChapterSettingsModal({
   const [isGeneratingDetail, setIsGeneratingDetail] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'outline'>('basic');
 
-  // 模拟的可用角色数据
-  const mockCharacters: Character[] = availableCharacters.length > 0 ? availableCharacters : [
-    { id: '1', name: '林晓风' },
-    { id: '2', name: '苏雨晴' },
-    { id: '3', name: '陈浩然' },
-    { id: '4', name: '王雪琳' },
-    { id: '5', name: '张明远' },
-  ];
-
-  // 模拟的可用地点数据
-  const mockLocations: Location[] = availableLocations.length > 0 ? availableLocations : [
-    { id: '1', name: '古城遗址' },
-    { id: '2', name: '学院广场' },
-    { id: '3', name: '密林深处' },
-    { id: '4', name: '王府大殿' },
-  ];
+  // 使用传入的角色数据，如果没有则使用空数组
+  const charactersToShow: Character[] = availableCharacters.length > 0 ? availableCharacters : [];
+  
+  // 使用传入的地点数据，如果没有则使用空数组
+  const locationsToShow: Location[] = availableLocations.length > 0 ? availableLocations : [];
 
   // 初始化数据
   useEffect(() => {
@@ -239,61 +228,68 @@ export default function ChapterSettingsModal({
                 />
               </div>
 
-              {/* 出场人物 */}
-              <div className="form-group">
-                <label className="form-label">
-                  <Users size={16} />
-                  出场人物
-                </label>
-                <div className="character-grid">
-                  {mockCharacters.map(char => (
-                    <button
-                      key={char.id}
-                      className={`character-chip ${selectedCharacters.includes(char.id) ? 'selected' : ''}`}
-                      onClick={() => handleCharacterToggle(char.id)}
-                    >
-                      <span className="character-avatar">{char.name[0]}</span>
-                      <span>{char.name}</span>
-                    </button>
-                  ))}
+              {/* 出场人物 - 只在有角色设定时显示 */}
+              {charactersToShow.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label">
+                    <Users size={16} />
+                    出场人物
+                  </label>
+                  <div className="character-grid">
+                    {charactersToShow.map(char => (
+                      <button
+                        key={char.id}
+                        className={`character-chip ${selectedCharacters.includes(char.id) ? 'selected' : ''}`}
+                        onClick={() => handleCharacterToggle(char.id)}
+                      >
+                        <span className="character-avatar">{char.name[0]}</span>
+                        <span>{char.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* 剧情地点 */}
-              <div className="form-group">
-                <label className="form-label">
-                  <MapPin size={16} />
-                  剧情地点
-                </label>
-                <div className="location-input-row">
-                  <input
-                    type="text"
-                    className="form-input location-input"
-                    value={newLocation}
-                    onChange={(e) => setNewLocation(e.target.value)}
-                    placeholder="输入地点名称"
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddLocation()}
-                  />
-                  <button className="add-location-btn" onClick={handleAddLocation}>
-                    <Plus size={16} />
-                    添加
-                  </button>
-                </div>
-                {/* 预设地点 */}
-                <div className="preset-locations">
-                  <span className="preset-label">快速选择：</span>
-                  {mockLocations.map(loc => (
-                    <button
-                      key={loc.id}
-                      className={`preset-location-chip ${locations.includes(loc.name) ? 'selected' : ''}`}
-                      onClick={() => handleSelectPresetLocation(loc.name)}
-                    >
-                      {loc.name}
+              {/* 剧情地点 - 只在有地点设定时显示 */}
+              {locationsToShow.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label">
+                    <MapPin size={16} />
+                    剧情地点
+                  </label>
+                  <div className="location-input-row">
+                    <input
+                      type="text"
+                      className="form-input location-input"
+                      value={newLocation}
+                      onChange={(e) => setNewLocation(e.target.value)}
+                      placeholder="输入地点名称"
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddLocation()}
+                    />
+                    <button className="add-location-btn" onClick={handleAddLocation}>
+                      <Plus size={16} />
+                      添加
                     </button>
-                  ))}
+                  </div>
+                  {/* 预设地点 */}
+                  <div className="preset-locations">
+                    <span className="preset-label">快速选择：</span>
+                    {locationsToShow.map(loc => (
+                      <button
+                        key={loc.id}
+                        className={`preset-location-chip ${locations.includes(loc.name) ? 'selected' : ''}`}
+                        onClick={() => handleSelectPresetLocation(loc.name)}
+                      >
+                        {loc.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {/* 已选地点 */}
-                {locations.length > 0 && (
+              )}
+              
+              {/* 已选地点 */}
+              {locations.length > 0 && (
+                <div className="form-group">
                   <div className="selected-locations">
                     {locations.map(loc => (
                       <span key={loc} className="location-tag">
@@ -308,8 +304,8 @@ export default function ChapterSettingsModal({
                       </span>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 

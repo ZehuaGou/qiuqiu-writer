@@ -28,7 +28,7 @@ from typing import Optional, List, Dict, Any
 class ChapterCreate(BaseModel):
     work_id: int
     title: str
-    chapter_number: int
+    chapter_number: Optional[int] = None  # 如果未提供，后端自动计算
     volume_number: Optional[int] = 1
     content: Optional[str] = None
 
@@ -49,8 +49,11 @@ class ChapterResponse(BaseModel):
     updated_at: str
 
 class ChapterListResponse(BaseModel):
-    items: List[ChapterResponse]
+    chapters: List[ChapterResponse]
     total: int
+    page: int
+    size: int
+    pages: int
 
 class ChapterVersionCreate(BaseModel):
     content: str
@@ -71,6 +74,7 @@ sharedb_service = ShareDBService()
 @router.post("/", response_model=ChapterResponse)
 async def create_chapter(
     chapter_data: ChapterCreate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -89,9 +93,20 @@ async def create_chapter(
             detail="没有编辑该作品的权限"
         )
 
+    # 如果未提供章节号，自动计算
+    chapter_dict = chapter_data.dict()
+    if chapter_dict.get('chapter_number') is None:
+        # 获取该作品（或该卷）的最大章节号
+        volume_number = chapter_dict.get('volume_number')
+        max_chapter_number = await chapter_service.get_max_chapter_number(
+            work_id=chapter_data.work_id,
+            volume_number=volume_number
+        )
+        chapter_dict['chapter_number'] = max_chapter_number + 1
+
     # 创建章节记录
     chapter = await chapter_service.create_chapter(
-        **chapter_data.dict()
+        **chapter_dict
     )
 
     # 在ShareDB中创建文档
@@ -99,7 +114,7 @@ async def create_chapter(
         document_id=f"chapter_{chapter.id}",
         initial_content={
             "title": chapter.title,
-            "content": chapter.content or "",
+            "content": chapter_data.content or "",
             "metadata": {
                 "work_id": chapter.work_id,
                 "chapter_number": chapter.chapter_number,
@@ -120,8 +135,8 @@ async def create_chapter(
             "work_id": chapter.work_id,
             "chapter_number": chapter.chapter_number
         },
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return chapter.to_dict()
@@ -219,6 +234,7 @@ async def get_chapter(
 async def update_chapter(
     chapter_id: int,
     chapter_update: ChapterUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -269,8 +285,8 @@ async def update_chapter(
         target_type="chapter",
         target_id=chapter_id,
         details=chapter_update.dict(exclude_unset=True),
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return updated_chapter.to_dict()
@@ -279,6 +295,7 @@ async def update_chapter(
 @router.delete("/{chapter_id}")
 async def delete_chapter(
     chapter_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -318,8 +335,8 @@ async def delete_chapter(
         target_type="chapter",
         target_id=chapter_id,
         details={"title": chapter.title, "work_id": chapter.work_id},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return {"message": "章节删除成功"}
@@ -369,6 +386,7 @@ async def get_chapter_versions(
 async def create_chapter_version(
     chapter_id: int,
     version_data: ChapterVersionCreate,
+    request: Request,
     db: AsyncSession = Depends(get_async_db),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -421,8 +439,8 @@ async def create_chapter_version(
             "chapter_id": chapter_id,
             "version_number": version.version_number
         },
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return version.to_dict()

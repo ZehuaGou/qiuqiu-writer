@@ -4,7 +4,7 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, or_, desc, asc, func
+from sqlalchemy import and_, or_, desc, asc, func, outerjoin
 from sqlalchemy.orm import selectinload
 from sqlalchemy.future import select
 
@@ -78,7 +78,7 @@ class WorkService:
 
         # 获取总数
         count_stmt = select(func.count(func.distinct(Work.id))).select_from(
-            Work.outerjoin(WorkCollaborator)
+            outerjoin(Work, WorkCollaborator, Work.id == WorkCollaborator.work_id)
         ).where(and_(*conditions))
 
         total_result = await self.db.execute(count_stmt)
@@ -88,7 +88,9 @@ class WorkService:
         stmt = select(Work).options(
             selectinload(Work.collaborators),
             selectinload(Work.chapters)
-        ).outerjoin(WorkCollaborator).where(and_(*conditions))
+        ).select_from(
+            outerjoin(Work, WorkCollaborator, Work.id == WorkCollaborator.work_id)
+        ).where(and_(*conditions))
 
         # 排序
         sort_column = getattr(Work, sort_by, Work.created_at)

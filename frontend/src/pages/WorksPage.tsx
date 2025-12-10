@@ -1,62 +1,56 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Grid, List, Plus, BookOpen, Upload, Video, FileText, MoreVertical, ChevronDown, Download, Link2, Trash2, ChevronRight } from 'lucide-react';
+import { worksApi, type Work } from '../utils/worksApi';
 import './WorksPage.css';
 
 type WorkType = 'all' | 'short' | 'long' | 'script' | 'video';
 type ViewMode = 'grid' | 'list';
 
-interface Work {
-  id: string;
-  type: 'long' | 'short' | 'script' | 'video';
-  title: string;
-  description?: string;
-  date: string;
-  coverImage?: string;
-}
-
-const mockWorks: Work[] = [
-  {
-    id: '1',
-    type: 'long',
-    title: '回响之声',
-    description: '苏逸飞猛地从噩梦中挣扎起身,旧神那不可名状的轮廓和触手撕裂血肉的触感仿佛还残留在身上。他环顾四周,发现自己不在冰冷的末日废墟...',
-    date: '2025-11-29 10:57:30',
-  },
-  {
-    id: '2',
-    type: 'long',
-    title: '昆虫之主',
-    date: '2025-11-28 20:24:49',
-  },
-  {
-    id: '3',
-    type: 'long',
-    title: '未命名',
-    date: '2025-11-25 22:20:26',
-  },
-  {
-    id: '4',
-    type: 'video',
-    title: '第一章',
-    date: '2025-11-25 22:20:31',
-    coverImage: 'placeholder',
-  },
-];
-
 export default function WorksPage() {
   const navigate = useNavigate();
   const [selectedType, setSelectedType] = useState<WorkType>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [currentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [openSubMenu, setOpenSubMenu] = useState<string | null>(null);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
+  
+  const [works, setWorks] = useState<Work[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+
+  // 加载作品列表
+  useEffect(() => {
+    loadWorks();
+  }, [currentPage, itemsPerPage, selectedType]);
+
+  const loadWorks = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await worksApi.listWorks({
+        page: currentPage,
+        size: itemsPerPage,
+        work_type: selectedType === 'all' ? undefined : selectedType,
+      });
+      setWorks(response.works);
+      setTotal(response.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载作品失败');
+      console.error('Error loading works:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredWorks = selectedType === 'all' 
-    ? mockWorks 
-    : mockWorks.filter(work => work.type === selectedType);
+    ? works 
+    : works.filter(work => work.work_type === selectedType);
 
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -100,35 +94,99 @@ export default function WorksPage() {
           setOpenSubMenu(null);
         }
       });
+      
+      // 关闭创建作品菜单
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
+        setShowCreateMenu(false);
+      }
     };
 
-    if (openMenuId) {
+    if (openMenuId || showCreateMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openMenuId]);
+  }, [openMenuId, showCreateMenu]);
 
   // 处理菜单项点击
-  const handleMenuAction = (action: string, workId: string, format?: string) => {
-    console.log(`Action: ${action}, Work ID: ${workId}, Format: ${format || 'N/A'}`);
+  const handleMenuAction = async (action: string, workId: string, format?: string) => {
     setOpenMenuId(null);
     setOpenSubMenu(null);
-    // 这里可以添加实际的操作逻辑
+    
+    try {
+      switch (action) {
+        case 'delete':
+          if (confirm('确定要删除这个作品吗？')) {
+            await worksApi.deleteWork(Number(workId));
+            await loadWorks();
+          }
+          break;
+        case 'export':
+          // TODO: 实现导出功能
+          console.log(`导出作品 ${workId} 为 ${format} 格式`);
+          break;
+        case 'copy-link':
+          // TODO: 实现复制链接功能
+          console.log(`复制作品 ${workId} 的链接`);
+          break;
+        default:
+          console.log(`Action: ${action}, Work ID: ${workId}, Format: ${format || 'N/A'}`);
+      }
+    } catch (err) {
+      console.error('操作失败:', err);
+      alert(err instanceof Error ? err.message : '操作失败');
+    }
+  };
+
+  // 处理创建作品
+  const handleCreateWork = async (type: 'long' | 'short') => {
+    setShowCreateMenu(false);
+    try {
+      const newWork = await worksApi.createWork({
+        title: '未命名作品',
+        work_type: type,
+        is_public: false,
+      });
+      navigate(`/novel/editor?workId=${newWork.id}`);
+    } catch (err) {
+      console.error('创建作品失败:', err);
+      alert(err instanceof Error ? err.message : '创建作品失败');
+    }
   };
 
   return (
     <div className="works-page">
       <div className="works-header">
         <h1 className="works-title">我的作品</h1>
-        <div className="works-actions">
-          <button className="action-btn primary">
-            <Plus size={16} />
-            <span>创建作品</span>
-            <ChevronDown size={14} />
-          </button>
+          <div className="works-actions">
+          <div className="action-btn-wrapper" ref={createMenuRef}>
+            <button 
+              className="action-btn primary"
+              onClick={() => setShowCreateMenu(!showCreateMenu)}
+            >
+              <Plus size={16} />
+              <span>创建作品</span>
+              <ChevronDown size={14} />
+            </button>
+            {showCreateMenu && (
+              <div className="create-work-menu">
+                <button 
+                  className="create-menu-item"
+                  onClick={() => handleCreateWork('long')}
+                >
+                  创建长篇
+                </button>
+                <button 
+                  className="create-menu-item"
+                  onClick={() => handleCreateWork('short')}
+                >
+                  创建短篇
+                </button>
+              </div>
+            )}
+          </div>
           <button className="action-btn">
             <BookOpen size={16} />
             <span>拆书</span>
@@ -166,143 +224,169 @@ export default function WorksPage() {
         ))}
       </div>
 
-      <div className={`works-content ${viewMode}`}>
-        {filteredWorks.map((work) => (
-          <div 
-            key={work.id} 
-            className="work-card"
-            onClick={() => navigate('/novel/editor')}
-            style={{ cursor: 'pointer' }}
-          >
-            {work.coverImage ? (
-              <div className="work-cover">
-                <div className="cover-placeholder">
-                  <span className="frog-icon">🐸</span>
-                </div>
-              </div>
-            ) : (
-              <div className="work-preview">
-                <span className="work-type-tag" style={{ backgroundColor: getTypeColor(work.type) }}>
-                  {getTypeLabel(work.type)}
-                </span>
-                <h3 className="work-card-title">{work.title}</h3>
-                {work.description && (
-                  <p className="work-description">{work.description}</p>
-                )}
-                <p className="work-date">{work.date}</p>
-              </div>
-            )}
-            <div className="work-actions" onClick={(e) => e.stopPropagation()}>
-              {work.type !== 'video' && (
-                <>
-                  <button className="work-action-btn">
-                    <Video size={14} />
-                    <span>生成视频</span>
-                  </button>
-                  <button className="work-action-btn">
-                    <FileText size={14} />
-                    <span>转为剧本</span>
-                  </button>
-                </>
-              )}
-              <div className="menu-wrapper" ref={(el) => { menuRefs.current[work.id] = el; }}>
-                <button 
-                  className="work-action-btn icon-only"
-                  onClick={(e) => handleMenuToggle(work.id, e)}
-                >
-                  <MoreVertical size={16} />
-                </button>
-                {openMenuId === work.id && (
-                  <div className="context-menu">
-                    <button
-                      className="menu-item"
-                      onMouseEnter={handleSubMenuToggle}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSubMenuToggle(e);
-                      }}
-                    >
-                      <Download size={16} />
-                      <span>导出作品</span>
-                      <ChevronRight size={14} />
-                      {openSubMenu === 'export' && (
-                        <div className="sub-menu">
-                          <button
-                            className="sub-menu-item"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMenuAction('export', work.id, 'text');
-                            }}
-                          >
-                            Text
-                          </button>
-                          <button
-                            className="sub-menu-item"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMenuAction('export', work.id, 'word');
-                            }}
-                          >
-                            Word
-                          </button>
-                          <button
-                            className="sub-menu-item"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMenuAction('export', work.id, 'pdf');
-                            }}
-                          >
-                            Pdf
-                          </button>
-                        </div>
-                      )}
-                    </button>
-                    <button
-                      className="menu-item"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMenuAction('copy-link', work.id);
-                      }}
-                    >
-                      <Link2 size={16} />
-                      <span>复制链接</span>
-                    </button>
-                    <button
-                      className="menu-item danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMenuAction('delete', work.id);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                      <span>删除作品</span>
-                    </button>
+      {loading && <div className="works-loading">加载中...</div>}
+      {error && <div className="works-error">错误: {error}</div>}
+      {!loading && !error && (
+        <div className={`works-content ${viewMode}`}>
+          {filteredWorks.length === 0 ? (
+            <div className="works-empty">
+              <p>暂无作品</p>
+              <button className="action-btn primary" onClick={() => handleCreateWork('long')}>
+                <Plus size={16} />
+                <span>创建第一个作品</span>
+              </button>
+            </div>
+          ) : (
+            filteredWorks.map((work) => (
+              <div 
+                key={work.id} 
+                className="work-card"
+                onClick={() => navigate(`/novel/editor?workId=${work.id}`)}
+                style={{ cursor: 'pointer' }}
+              >
+                {work.cover_image ? (
+                  <div className="work-cover">
+                    <img src={work.cover_image} alt={work.title} />
+                  </div>
+                ) : (
+                  <div className="work-preview">
+                    <span className="work-type-tag" style={{ backgroundColor: getTypeColor(work.work_type) }}>
+                      {getTypeLabel(work.work_type)}
+                    </span>
+                    <h3 className="work-card-title">{work.title}</h3>
+                    {work.description && (
+                      <p className="work-description">{work.description}</p>
+                    )}
+                    <p className="work-date">{new Date(work.created_at).toLocaleString('zh-CN')}</p>
                   </div>
                 )}
+                <div className="work-actions" onClick={(e) => e.stopPropagation()}>
+                  {work.work_type !== 'video' && (
+                    <>
+                      <button className="work-action-btn">
+                        <Video size={14} />
+                        <span>生成视频</span>
+                      </button>
+                      <button className="work-action-btn">
+                        <FileText size={14} />
+                        <span>转为剧本</span>
+                      </button>
+                    </>
+                  )}
+                  <div className="menu-wrapper" ref={(el) => { menuRefs.current[String(work.id)] = el; }}>
+                    <button 
+                      className="work-action-btn icon-only"
+                      onClick={(e) => handleMenuToggle(String(work.id), e)}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    {openMenuId === String(work.id) && (
+                      <div className="context-menu">
+                        <button
+                          className="menu-item"
+                          onMouseEnter={handleSubMenuToggle}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSubMenuToggle(e);
+                          }}
+                        >
+                          <Download size={16} />
+                          <span>导出作品</span>
+                          <ChevronRight size={14} />
+                          {openSubMenu === 'export' && (
+                            <div className="sub-menu">
+                              <button
+                                className="sub-menu-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMenuAction('export', String(work.id), 'text');
+                                }}
+                              >
+                                Text
+                              </button>
+                              <button
+                                className="sub-menu-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMenuAction('export', String(work.id), 'word');
+                                }}
+                              >
+                                Word
+                              </button>
+                              <button
+                                className="sub-menu-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMenuAction('export', String(work.id), 'pdf');
+                                }}
+                              >
+                                Pdf
+                              </button>
+                            </div>
+                          )}
+                        </button>
+                        <button
+                          className="menu-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMenuAction('copy-link', String(work.id));
+                          }}
+                        >
+                          <Link2 size={16} />
+                          <span>复制链接</span>
+                        </button>
+                        <button
+                          className="menu-item danger"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMenuAction('delete', String(work.id));
+                          }}
+                        >
+                          <Trash2 size={16} />
+                          <span>删除作品</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            ))
+          )}
+        </div>
+      )}
 
-      <div className="works-pagination">
-        <button className="pagination-btn" disabled={currentPage === 1}>
-          &lt;
-        </button>
-        <button className="pagination-btn active">{currentPage}</button>
-        <button className="pagination-btn" disabled={filteredWorks.length < itemsPerPage}>
-          &gt;
-        </button>
-        <select
-          className="pagination-select"
-          value={itemsPerPage}
-          onChange={(e) => setItemsPerPage(Number(e.target.value))}
-        >
-          <option value={10}>10条/页</option>
-          <option value={20}>20条/页</option>
-          <option value={50}>50条/页</option>
-        </select>
-      </div>
+      {total > 0 && (
+        <div className="works-pagination">
+          <button 
+            className="pagination-btn" 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+          >
+            &lt;
+          </button>
+          <button className="pagination-btn active">{currentPage}</button>
+          <button 
+            className="pagination-btn" 
+            disabled={currentPage * itemsPerPage >= total}
+            onClick={() => setCurrentPage(prev => prev + 1)}
+          >
+            &gt;
+          </button>
+          <select
+            className="pagination-select"
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+          >
+            <option value={10}>10条/页</option>
+            <option value={20}>20条/页</option>
+            <option value={50}>50条/页</option>
+          </select>
+          <span className="pagination-info">共 {total} 条</span>
+        </div>
+      )}
     </div>
   );
 }

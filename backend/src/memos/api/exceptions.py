@@ -14,13 +14,25 @@ class APIExceptionHandler:
     @staticmethod
     async def validation_error_handler(request: Request, exc: RequestValidationError):
         """Handle request validation errors."""
-        logger.error(f"Validation error: {exc.errors()}")
+        errors = exc.errors()
+        logger.error(f"Validation error: {errors}")
+        # 确保所有错误都可以被 JSON 序列化
+        serializable_errors = []
+        for error in errors:
+            serializable_error = {
+                "loc": list(error.get("loc", [])),
+                "msg": str(error.get("msg", "")),
+                "type": str(error.get("type", "")),
+            }
+            if "ctx" in error:
+                serializable_error["ctx"] = {k: str(v) for k, v in error["ctx"].items()}
+            serializable_errors.append(serializable_error)
         return JSONResponse(
             status_code=422,
             content={
                 "code": 422,
                 "message": "Parameter validation error",
-                "detail": exc.errors(),
+                "detail": serializable_errors,
                 "data": None,
             },
         )

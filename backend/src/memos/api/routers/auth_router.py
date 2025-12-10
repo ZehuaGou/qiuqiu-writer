@@ -76,7 +76,6 @@ async def register(
             detail="创建用户失败"
         )
 
-
     user_id = user.get("id")
     
     # 生成令牌
@@ -130,109 +129,114 @@ async def login(
     user_service = UserService()
 
     # 获取用户（支持用户名或邮箱登录）
-    # 登录时需要获取 password_hash，所以直接查询数据库
-    from memos.api.models.user import User
-    from sqlalchemy import select
-    
+    # 登录时需要包含敏感信息（密码哈希）用于验证
     if "@" in request.username_or_email:
-        stmt = select(User).filter(User.email == request.username_or_email)
+        user = await user_service.get_user_by_email(
+            request.username_or_email, 
+            include_sensitive=True
+        )
     else:
-        stmt = select(User).filter(User.username == request.username_or_email)
-    
-    result = await db.execute(stmt)
-    user_model = result.scalar_one_or_none()
-    
-    if not user_model:
-        print(f"❌ 登录失败: 用户不存在 - {request.username_or_email}")
+        user = await user_service.get_user_by_username(
+            request.username_or_email,
+            include_sensitive=True
+        )
+
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误"
         )
 
-    # 验证密码（直接从模型获取 password_hash）
-    password_hash = user_model.password_hash or ""
-    password_valid = verify_password(request.password, password_hash)
-    
-    if not password_valid:
-        print(f"❌ 登录失败: 密码验证失败")
-        print(f"  用户名: {request.username_or_email}")
-        print(f"  密码哈希存在: {bool(password_hash)}")
-        print(f"  密码哈希长度: {len(password_hash) if password_hash else 0}")
-        print(f"  密码哈希前缀: {password_hash[:30] if password_hash and len(password_hash) > 30 else password_hash}")
+    # 验证密码
+    if not verify_password(request.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误"
         )
-    
-    print(f"✅ 登录成功: {request.username_or_email}")
-    
-    # 转换为字典格式（用于后续处理）
-    user = user_model.to_dict()
 
     # 检查用户状态
-    if user.get("status") != "active":
+    if user["status"] != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="用户账户已被禁用"
         )
 
-    user_id = user.get("id")
-    
     # 更新最后登录时间
-    await user_service.update_last_login(user_id)
+    await user_service.update_last_login(user["id"])
 
     # 生成令牌
     access_token = create_access_token(
-        subject=user_id,
+        subject=user["id"],
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     refresh_token = create_refresh_token(
-        subject=user_id,
+        subject=user["id"],
         expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
     )
 
     # 存储会话到Redis
-    from memos.api.core.redis import get_redis
-    redis = await get_redis()
+    try:
+        from memos.api.core.redis import get_redis
+        redis = await get_redis()
 
-    # 获取设备信息
+        # 获取设备信息
+        device_info = request.device_info or {}
+        device_info.update({
+            "user_agent": http_request.headers.get("user-agent"),
+            "ip_address": http_request.client.host if http_request.client else None,
+        })
+
+        session_data = {
+            "user_id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "status": user["status"],
+            "device_info": device_info,
+            "last_activity": str(user.get("last_login_at")),
+        }
+
+        await redis.setex(
+            f"session:{user['id']}",
+            settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            str(session_data)
+        )
+    except Exception as e:
+        # Redis 不可用时不影响登录流程
+        logger.warning(f"Redis session storage failed: {e}")
+
+    # 记录审计日志
     device_info = request.device_info or {}
     device_info.update({
         "user_agent": http_request.headers.get("user-agent"),
         "ip_address": http_request.client.host if http_request.client else None,
     })
-
-    session_data = {
-        "user_id": user_id,
-        "username": user.get("username"),
-        "email": user.get("email"),
-        "status": user.get("status"),
-        "device_info": device_info,
-        "last_activity": str(user.get("last_login_at", "")),
-    }
-
-    await redis.setex(
-        f"session:{user_id}",
-        settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        str(session_data)
-    )
-
-    # 记录审计日志
+    
     await user_service.create_audit_log(
-        user_id=user_id,
+        user_id=user["id"],
         action="login",
         target_type="user",
-        target_id=user_id,
+        target_id=user["id"],
         details=device_info,
         ip_address=http_request.client.host if http_request.client else None,
         user_agent=http_request.headers.get("user-agent")
     )
 
+    # 构建用户信息响应（排除敏感信息）
+    user_info = {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "display_name": user.get("display_name"),
+        "status": user["status"],
+        "created_at": user.get("created_at"),
+        "updated_at": user.get("updated_at"),
+    }
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        user=user,
+        user=user_info,
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
@@ -264,36 +268,55 @@ async def refresh_token(
         )
 
     # 检查会话是否存在
-    from memos.api.core.redis import get_redis
-    redis = await get_redis()
-    session_exists = await redis.exists(f"session:{user_id}")
+    try:
+        from memos.api.core.redis import get_redis
+        redis = await get_redis()
+        session_exists = await redis.exists(f"session:{user_id}")
 
-    if not session_exists:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="会话已过期，请重新登录"
+        if not session_exists:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="会话已过期，请重新登录"
+            )
+
+        # 生成新的访问令牌
+        access_token = create_access_token(
+            subject=user["id"],
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
 
-    # 生成新的访问令牌
-    access_token = create_access_token(
-        subject=user_id,
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-
-    # 更新会话
-    session_data = await redis.get(f"session:{user_id}")
-    if session_data:
-        await redis.setex(
-            f"session:{user_id}",
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            session_data
+        # 更新会话
+        session_data = await redis.get(f"session:{user_id}")
+        if session_data:
+            await redis.setex(
+                f"session:{user_id}",
+                settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                session_data
+            )
+    except Exception as e:
+        # Redis 不可用时仍允许刷新 token
+        logger.warning(f"Redis session check failed: {e}")
+        access_token = create_access_token(
+            subject=user["id"],
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
+
+    # 构建用户信息响应
+    user_info = {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "display_name": user.get("display_name"),
+        "status": user["status"],
+        "created_at": user.get("created_at"),
+        "updated_at": user.get("updated_at"),
+    }
 
     return RefreshTokenResponse(
         access_token=access_token,
         refresh_token=request.refresh_token,
         token_type="bearer",
-        user=user,
+        user=user_info,
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
@@ -302,8 +325,7 @@ async def refresh_token(
 async def logout(
     request: LogoutRequest,
     http_request: Request,
-    current_user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_db)
+    current_user_id: int = Depends(security)
 ) -> AuthResponse:
     """
     用户登出
@@ -320,13 +342,12 @@ async def logout(
         await blacklist_token(request.refresh_token)
 
     # 记录审计日志
-    user_service = UserService()
+    user_service = UserService(http_request.state.db)
     await user_service.create_audit_log(
         user_id=current_user_id,
         action="logout",
         target_type="user",
         target_id=current_user_id,
-        details={},
         ip_address=http_request.client.host if http_request.client else None,
         user_agent=http_request.headers.get("user-agent")
     )

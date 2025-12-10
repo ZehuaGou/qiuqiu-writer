@@ -67,6 +67,49 @@
   background: #059669;
 }
 
+/* 创建作品下拉菜单 */
+.action-btn-wrapper {
+  position: relative;
+}
+
+.create-work-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 140px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 1000;
+  animation: slideDown 0.2s ease;
+  border: 1px solid #e5e7eb;
+}
+
+.create-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.create-menu-item:hover {
+  background: #f0fdf4;
+  color: #10b981;
+}
+
+.create-menu-item:first-child {
+  margin-bottom: 2px;
+}
+
 .view-toggle {
   display: flex;
   gap: 4px;

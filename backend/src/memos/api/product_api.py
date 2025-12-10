@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from memos.api.exceptions import APIExceptionHandler
 from memos.api.middleware.request_context import RequestContextMiddleware
@@ -17,9 +18,34 @@ app = FastAPI(
     version="1.0.1",
 )
 
+# 配置CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 生产环境应该限制具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.add_middleware(RequestContextMiddleware, source="product_api")
+
 # Include routers
 app.include_router(product_router)
+
+# 注册作品接口和章节接口
+try:
+    from memos.api.routers import (
+        get_chapters_router,
+        get_works_router,
+    )
+    
+    app.include_router(get_chapters_router())
+    logger.info("✅ Chapters router registered successfully")
+    
+    app.include_router(get_works_router())
+    logger.info("✅ Works router registered successfully")
+except Exception as e:
+    logger.warning(f"⚠️  Failed to register chapters/works routers: {e}", exc_info=True)
 
 # Exception handlers
 app.exception_handler(ValueError)(APIExceptionHandler.value_error_handler)
