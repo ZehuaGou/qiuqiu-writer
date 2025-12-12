@@ -71,7 +71,7 @@ class AnalyzeChapterByFileRequest(BaseModel):
     file_name: str = Field(
         ...,
         min_length=1,
-        description="文件名，用于查找或创建作品",
+        description="文件名（用于查找或创建作品）",
         json_schema_extra={"example": "我的小说.txt"},
     )
     content: str = Field(
@@ -87,14 +87,15 @@ class AnalyzeChapterByFileRequest(BaseModel):
         json_schema_extra={"example": 1},
     )
     volume_number: int = Field(
-        default=1,
-        ge=0,
-        description="卷号（可选，默认为1，0表示未分卷）",
+        ...,
+        ge=1,
+        description="卷号",
         json_schema_extra={"example": 1},
     )
     prompt: str | None = Field(
         None,
         description="自定义分析提示词（可选，如果不提供则使用默认提示词）",
+        json_schema_extra={"example": "请详细分析这个章节的情节发展"},
     )
     settings: AnalysisSettings | None = Field(
         default_factory=AnalysisSettings,

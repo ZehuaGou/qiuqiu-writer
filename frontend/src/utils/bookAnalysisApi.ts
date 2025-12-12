@@ -123,11 +123,18 @@ export async function analyzeChapterContent(
   try {
     console.log('📡 调用后端 AI 分析接口...');
     
+    // 获取认证token
+    const token = localStorage.getItem('access_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/ai/analyze-chapter`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
       body: JSON.stringify({
         content,
         // prompt 由后端从数据库获取，不在这里传递
@@ -314,13 +321,18 @@ export async function analyzeBookEnhanced(
   try {
     console.log('📡 调用后端增强拆书分析接口...');
     
+    // 获取认证token
+    const token = localStorage.getItem('access_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/ai/analyze-book?auto_create_work=${autoCreateWork}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // 如果需要认证，添加token
-        // 'Authorization': `Bearer ${token}`,
-      },
+      headers: headers,
       body: JSON.stringify({
         content,
         settings: settings || {},
@@ -462,15 +474,20 @@ export async function analyzeChaptersIncremental(
   try {
     console.log('📡 调用后端逐章渐进式分析接口...');
     
+    // 获取认证token
+    const token = localStorage.getItem('access_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(
       `${API_BASE_URL}/ai/analyze-chapters-incremental?work_id=${workId}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 如果需要认证，添加token
-          // 'Authorization': `Bearer ${token}`,
-        },
+        headers: headers,
         body: JSON.stringify({
           content,
           settings: settings || {},
@@ -588,6 +605,236 @@ export async function analyzeChaptersIncremental(
     }
 
     console.log('✅ 逐章渐进式分析完成');
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '分析请求失败';
+    console.error('❌ 分析失败:', errorMessage);
+    onProgress?.({ error: errorMessage });
+    throw new Error(errorMessage);
+  }
+}
+
+/**
+ * 基于文件名的单章分析接口
+ * 根据文件名分析单章并插入到作品（如果作品不存在则创建）
+ * 
+ * @param fileName 文件名，用于查找或创建作品
+ * @param content 章节内容
+ * @param chapterNumber 章节号
+ * @param volumeNumber 卷号（可选，默认为1）
+ * @param onProgress 进度回调函数
+ * @param settings 分析设置
+ * @returns Promise<{ work_id: number; work_title: string; chapter_id: number; work_created: boolean }>
+ */
+export async function analyzeChapterByFile(
+  fileName: string,
+  content: string,
+  chapterNumber: number,
+  volumeNumber: number = 1,
+  onProgress?: (progress: AnalysisProgress & {
+    workCreated?: boolean;
+    workId?: number;
+    workTitle?: string;
+    chapterId?: number;
+  }) => void,
+  settings?: AnalysisSettings
+): Promise<{
+  work_id: number;
+  work_title: string;
+  chapter_id: number;
+  chapter_number: number;
+  volume_number: number;
+  title: string;
+  outline?: any;
+  detailed_outline?: any;
+  work_created: boolean;
+}> {
+  try {
+    console.log('📡 调用后端基于文件名的章节分析接口...');
+    
+    // 获取认证token
+    const token = localStorage.getItem('access_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/ai/analyze-chapter-by-file`, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        file_name: fileName,
+        content: content,
+        chapter_number: chapterNumber,
+        volume_number: volumeNumber,
+        settings: settings || {},
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 调用失败: ${response.status} ${response.statusText}`);
+    }
+
+    // 处理流式响应 (SSE)
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
+
+    const decoder = new TextDecoder();
+    let result = '';
+    let buffer = '';
+    let workResult: {
+      work_id?: number;
+      work_title?: string;
+      chapter_id?: number;
+      work_created?: boolean;
+    } = {};
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // 解码数据块
+      buffer += decoder.decode(value, { stream: true });
+      
+      // 按行分割
+      const lines = buffer.split('\n');
+      
+      // 保留最后一个不完整的行
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        // 处理 SSE 格式: "data: {...}"
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          
+          if (!data) continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const msgType = parsed.type;
+
+            switch (msgType) {
+              case 'start':
+                console.log('✅', parsed.message);
+                if (parsed.metadata && onProgress) {
+                  onProgress({ metadata: parsed.metadata });
+                }
+                break;
+              
+              case 'chunk':
+                const chunkContent = parsed.content || '';
+                if (chunkContent) {
+                  result += chunkContent;
+                  onProgress?.({ text: chunkContent });
+                }
+                break;
+              
+              case 'done':
+                console.log('✅', parsed.message);
+                // 从 done 消息的 data 中更新 workResult
+                if (parsed.data) {
+                  if (parsed.data.work_id) {
+                    workResult.work_id = parsed.data.work_id;
+                  }
+                  if (parsed.data.work_title) {
+                    workResult.work_title = parsed.data.work_title;
+                  }
+                  if (parsed.data.chapter_id) {
+                    workResult.chapter_id = parsed.data.chapter_id;
+                  }
+                }
+                if (parsed.metadata && onProgress) {
+                  onProgress({ metadata: parsed.metadata });
+                }
+                break;
+              
+              case 'work_created':
+                console.log('✅ 作品创建成功:', parsed);
+                workResult.work_id = parsed.work_id;
+                workResult.work_title = parsed.work_title;
+                workResult.work_created = true;
+                onProgress?.({
+                  text: `作品创建成功: ${parsed.work_title}`,
+                  workCreated: true,
+                  workId: parsed.work_id,
+                  workTitle: parsed.work_title,
+                });
+                break;
+              
+              case 'work_found':
+                console.log('✅ 找到已存在作品:', parsed);
+                workResult.work_id = parsed.work_id;
+                workResult.work_title = parsed.work_title;
+                workResult.work_created = false;
+                onProgress?.({
+                  text: `找到已存在作品: ${parsed.work_title}`,
+                  workCreated: false,
+                  workId: parsed.work_id,
+                  workTitle: parsed.work_title,
+                });
+                break;
+              
+              case 'chapter_inserted':
+                console.log('✅ 章节插入成功:', parsed);
+                workResult.work_id = parsed.work_id || workResult.work_id;
+                workResult.work_title = parsed.work_title || workResult.work_title;
+                workResult.chapter_id = parsed.chapter_id;
+                onProgress?.({
+                  text: `章节插入成功: ${parsed.title}`,
+                  workId: parsed.work_id,
+                  workTitle: parsed.work_title,
+                  chapterId: parsed.chapter_id,
+                });
+                break;
+              
+              case 'chapter_skipped':
+                console.log('⚠️ 章节已存在，跳过创建:', parsed);
+                workResult.work_id = parsed.work_id || workResult.work_id;
+                workResult.work_title = parsed.work_title || workResult.work_title;
+                workResult.chapter_id = parsed.chapter_id;
+                onProgress?.({
+                  text: `章节 ${parsed.chapter_number} 已存在，跳过创建`,
+                  workId: parsed.work_id,
+                  workTitle: parsed.work_title,
+                  chapterId: parsed.chapter_id,
+                });
+                break;
+              
+              case 'error':
+                throw new Error(parsed.message || '分析过程中出错');
+              
+              default:
+                console.warn('未知的消息类型:', msgType, parsed);
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== '分析过程中出错') {
+              console.warn('解析 SSE 消息失败:', e, 'Line:', data);
+            } else {
+              throw e;
+            }
+          }
+        }
+      }
+    }
+
+    if (!workResult.work_id || !workResult.chapter_id) {
+      throw new Error('未收到完整的分析结果（缺少作品ID或章节ID）');
+    }
+
+    console.log('✅ 基于文件名的章节分析完成');
+    return {
+      work_id: workResult.work_id!,
+      work_title: workResult.work_title || fileName,
+      chapter_id: workResult.chapter_id!,
+      chapter_number: chapterNumber,
+      volume_number: volumeNumber,
+      title: '',
+      work_created: workResult.work_created || false,
+    };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';

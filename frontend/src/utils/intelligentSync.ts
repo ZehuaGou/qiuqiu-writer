@@ -55,7 +55,7 @@ export function useIntelligentSync(
 ): IntelligentSyncResult {
   const {
     syncDebounceDelay = 1000,
-    pollInterval = 10000,
+    pollInterval = 5000,
     userInputWindow = 5000,
     syncCheckInterval = 3000,
     enablePolling = true,
@@ -65,9 +65,9 @@ export function useIntelligentSync(
     onContentChange,
   } = options;
 
-  const syncTimer = useRef<NodeJS.Timeout>();
-  const pollTimer = useRef<NodeJS.Timeout>();
-  const syncCheckTimer = useRef<NodeJS.Timeout>();
+  const syncTimer = useRef<number | undefined>(undefined);
+  const pollTimer = useRef<number | undefined>(undefined);
+  const syncCheckTimer = useRef<number | undefined>(undefined);
   const lastSyncedContent = useRef<string>('');
   const lastSyncedVersion = useRef<number>(0);
   const syncInProgress = useRef<boolean>(false);
@@ -187,22 +187,41 @@ export function useIntelligentSync(
    * 轮询检查更新
    */
   const pollForUpdates = useCallback(async () => {
+    if (!documentId) {
+      console.log('[IntelligentSync] 文档ID为空，跳过轮询');
+      return;
+    }
+
     if (syncInProgress.current) {
       console.log('[IntelligentSync] 同步进行中，跳过轮询');
       return;
     }
 
     try {
+      console.log('[IntelligentSync] 开始轮询，文档ID:', documentId);
       // 获取服务器最新状态
       const serverDoc = await sharedbClient.getDocument(documentId);
       
       if (!serverDoc) {
-        console.log('[IntelligentSync] 服务器文档不存在');
+        console.log('[IntelligentSync] 服务器文档不存在:', documentId);
         return;
       }
 
+      console.log('[IntelligentSync] 获取到服务器文档:', {
+        documentId,
+        version: serverDoc.version,
+        contentLength: typeof serverDoc.content === 'string' ? serverDoc.content.length : JSON.stringify(serverDoc.content).length
+      });
+
       const serverVersion = serverDoc.version || 0;
       const currentVersion = documentStateRef.current?.version || lastSyncedVersion.current;
+
+      console.log('[IntelligentSync] 版本比较:', {
+        serverVersion,
+        currentVersion,
+        documentStateVersion: documentStateRef.current?.version,
+        lastSyncedVersion: lastSyncedVersion.current
+      });
 
       // 只有版本真正更新时才处理
       if (serverVersion > currentVersion) {
@@ -212,13 +231,23 @@ export function useIntelligentSync(
           return;
         }
         
-        console.log('[IntelligentSync] 检测到新版本:', serverVersion);
+        console.log('[IntelligentSync] 检测到新版本，立即更新缓存:', serverVersion);
+
+        const serverContent = typeof serverDoc.content === 'string' 
+          ? serverDoc.content 
+          : JSON.stringify(serverDoc.content);
+        
+        // 关键修复：立即更新 sharedbClient 的缓存
+        sharedbClient.currentVersion.set(documentId, serverVersion);
+        sharedbClient.currentContent.set(documentId, serverContent);
+        console.log('✅ [IntelligentSync] 已更新 sharedbClient 缓存:', {
+          version: serverVersion,
+          contentLength: serverContent.length
+        });
 
         documentStateRef.current = {
           version: serverVersion,
-          content: typeof serverDoc.content === 'string' 
-            ? serverDoc.content 
-            : JSON.stringify(serverDoc.content)
+          content: serverContent
         };
 
         // 检查用户是否正在编辑
@@ -226,7 +255,7 @@ export function useIntelligentSync(
         const timeSinceLastInput = now - lastUserInputTime.current;
         const userIsEditing = timeSinceLastInput < userInputWindow;
 
-        const serverContent = documentStateRef.current.content;
+        // serverContent 已经在上面定义了
 
         if (serverContent !== lastSyncedContent.current) {
           if (!userIsEditing) {
@@ -245,6 +274,12 @@ export function useIntelligentSync(
         }
 
         onContentChange?.(true);
+      } else {
+        console.log('[IntelligentSync] 轮询完成，版本无变化:', {
+          serverVersion,
+          currentVersion,
+          serverContentLength: typeof serverDoc.content === 'string' ? serverDoc.content.length : JSON.stringify(serverDoc.content).length
+        });
       }
     } catch (error) {
       console.error('[IntelligentSync] 轮询失败:', error);
@@ -335,75 +370,67 @@ export function useIntelligentSync(
     };
   }, [getCurrentContent]);
 
-  // 订阅文档的 WebSocket 更新
-  useEffect(() => {
-    if (!documentId || !enablePolling) return;
+  // 移除 WebSocket 订阅，只使用轮询
+  // 初始化轮询（主要更新方式）
+  // 关键修复：使用 useRef 存储最新的 pollForUpdates，避免依赖项变化导致 useEffect 重新运行
+  const pollForUpdatesRef = useRef(pollForUpdates);
+  pollForUpdatesRef.current = pollForUpdates;
 
-    console.log('[IntelligentSync] 订阅文档 WebSocket 更新:', documentId);
+  useEffect(() => {
+    // 关键修复：同时检查 enablePolling 和 documentId
+    // 如果 documentId 为空，不启动轮询
+    if (!enablePolling) {
+      console.log('[IntelligentSync] 轮询被禁用');
+      return;
+    }
+
+    if (!documentId || documentId.trim() === '') {
+      console.log('[IntelligentSync] 文档ID为空，跳过轮询:', documentId);
+      return;
+    }
+
+    // 关键修复：清理之前的定时器，避免重复创建
+    if (pollTimer.current) {
+      console.log('[IntelligentSync] 清理旧的轮询定时器');
+      clearInterval(pollTimer.current);
+      pollTimer.current = undefined;
+    }
+
+    console.log('[IntelligentSync] 🚀 启动轮询，间隔:', pollInterval, 'ms, 文档ID:', documentId);
     
-    // 订阅文档
-    sharedbClient.subscribe(documentId);
-    
-    // 监听文档更新
-    const unsubscribe = sharedbClient.onDocumentUpdate(documentId, (content, version) => {
-      console.log('[IntelligentSync] 收到 WebSocket 文档更新:', { version, contentLength: content.length });
-      
-      // 关键：检查版本是否已应用，避免重复应用
-      if (appliedVersions.current.has(version)) {
-        console.log('⚠️ [IntelligentSync] WebSocket 版本已应用，跳过:', version);
+    // 延迟执行第一次轮询，避免与章节加载冲突
+    const firstPollDelay = setTimeout(() => {
+      console.log('[IntelligentSync] 执行第一次轮询...');
+      pollForUpdatesRef.current().catch(error => {
+        console.error('[IntelligentSync] 第一次轮询失败:', error);
+      });
+    }, 2000); // 延迟2秒，让章节加载完成
+
+    // 设置固定间隔轮询（轮询是主要更新方式）
+    pollTimer.current = setInterval(() => {
+      if (!documentId || documentId.trim() === '') {
+        console.log('[IntelligentSync] 文档ID为空，停止轮询');
+        if (pollTimer.current) {
+          clearInterval(pollTimer.current);
+          pollTimer.current = undefined;
+        }
         return;
       }
-      
-      // 检查用户是否正在编辑
-      const now = Date.now();
-      const timeSinceLastInput = now - lastUserInputTime.current;
-      const userIsEditing = timeSinceLastInput < userInputWindow;
-      
-      if (!userIsEditing) {
-        // 用户没有在编辑，直接更新
-        updateContent(content);
-        lastSyncedContent.current = content;
-        lastSyncedVersion.current = version;
-        appliedVersions.current.add(version); // 标记版本已应用
-        lastSyncTime.current = new Date();
-        console.log('[IntelligentSync] 已应用 WebSocket 更新');
-      } else {
-        // 用户正在编辑，标记有协作更新
-        console.log('[IntelligentSync] 用户正在编辑，延迟应用 WebSocket 更新');
-        onCollaborativeUpdate?.(true);
-        appliedVersions.current.add(version); // 标记版本已应用，避免重复
-      }
-      
-      onContentChange?.(true);
-    });
+      console.log('[IntelligentSync] 🔄 轮询检查远程更新...', documentId);
+      pollForUpdatesRef.current().catch(error => {
+        console.error('[IntelligentSync] 轮询失败:', error);
+      });
+    }, pollInterval); // 使用正常的轮询间隔
 
     return () => {
-      unsubscribe();
-      sharedbClient.unsubscribe();
-    };
-  }, [documentId, enablePolling, updateContent, userInputWindow, onCollaborativeUpdate, onContentChange]);
-
-  // 初始化轮询（作为 WebSocket 的备用方案）
-  useEffect(() => {
-    if (!enablePolling) return;
-
-    console.log('[IntelligentSync] 启动轮询（备用方案），间隔:', pollInterval, 'ms');
-    
-    // 立即执行一次
-    pollForUpdates();
-
-    // 设置固定间隔轮询（间隔可以更长，因为 WebSocket 是主要方式）
-    pollTimer.current = setInterval(() => {
-      console.log('[IntelligentSync] 轮询检查远程更新（备用）...');
-      pollForUpdates();
-    }, pollInterval * 2); // 轮询间隔加倍，因为 WebSocket 是主要方式
-
-    return () => {
+      console.log('[IntelligentSync] 🛑 清理轮询定时器和延迟任务');
+      clearTimeout(firstPollDelay);
       if (pollTimer.current) {
         clearInterval(pollTimer.current);
+        pollTimer.current = undefined;
       }
     };
-  }, [enablePolling, pollInterval, pollForUpdates]);
+  }, [enablePolling, pollInterval, documentId]); // 移除 pollForUpdates 依赖，使用 ref
 
   // 启动同步检查
   useEffect(() => {

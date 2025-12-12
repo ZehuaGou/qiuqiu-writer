@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Info, Coins, Settings, Undo2, Redo2, Type, Bold, Underline, ToggleLeft, ToggleRight, RefreshCw, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Info, Coins, Settings, Undo2, Redo2, Type, Bold, Underline, ToggleLeft, ToggleRight, ChevronDown } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
@@ -112,6 +112,10 @@ export default function NovelEditorPage() {
   const currentChapterIdRef = useRef<number | null>(null);
 
   // 从WorkInfoManager缓存中提取角色数据
+  // 关键修复：使用 useRef 存储上一次的结果，避免重复计算
+  const lastCharacterCacheRef = useRef<string>('');
+  const lastAllChaptersRef = useRef<Chapter[]>([]);
+  
   useEffect(() => {
     const loadCharactersFromCache = () => {
       try {
@@ -222,10 +226,10 @@ export default function NovelEditorPage() {
                       // 如果出现在"说"、"道"、"想"等动词前，更可能是人名
                       if (/\b(说|道|想|看|听|问|答|喊|叫|称|叫|唤)\b/.test(context)) {
                         extractedNames.add(name);
-                      }
                     }
                   }
                 }
+              }
               }
               
               // 转换为角色对象
@@ -248,6 +252,24 @@ export default function NovelEditorPage() {
             }
             
             const allUniqueCharacters = Array.from(characterMap.values());
+            
+            // 关键修复：检查缓存和章节是否变化，避免重复计算和更新
+            const currentCacheKey = JSON.stringify({
+              cache: cached,
+              chaptersCount: allChapters.length,
+              chaptersIds: allChapters.map(c => c.id).sort().join(',')
+            });
+            
+            // 如果缓存和章节都没有变化，跳过更新
+            if (currentCacheKey === lastCharacterCacheRef.current && 
+                JSON.stringify(allChapters.map(c => c.id).sort()) === JSON.stringify(lastAllChaptersRef.current.map(c => c.id).sort())) {
+              return; // 跳过重复计算
+            }
+            
+            // 更新缓存引用
+            lastCharacterCacheRef.current = currentCacheKey;
+            lastAllChaptersRef.current = [...allChapters];
+            
             setAvailableCharacters(allUniqueCharacters);
             
             console.log('📋 合并后的角色列表:', {
@@ -350,7 +372,8 @@ export default function NovelEditorPage() {
     window.addEventListener('storage', handleStorageChange);
     
     // 定期检查缓存变化（因为同窗口内的localStorage变化不会触发storage事件）
-    const interval = setInterval(loadCharactersFromCache, 1000);
+    // 关键修复：增加检查间隔到5秒，减少频繁执行
+    const interval = setInterval(loadCharactersFromCache, 5000);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -361,7 +384,8 @@ export default function NovelEditorPage() {
   // 初始化 ShareDB 连接和同步管理器
   useEffect(() => {
     // 连接 ShareDB
-    sharedbClient.connect().catch(console.error);
+    // 移除 WebSocket 连接，只使用轮询
+    // sharedbClient.connect().catch(console.error);
 
     // 监听同步状态
     const unsubscribe = syncManager.onStatusChange((status) => {
@@ -392,7 +416,8 @@ export default function NovelEditorPage() {
 
     return () => {
       unsubscribe();
-      sharedbClient.disconnect();
+      // 移除 WebSocket 断开连接
+      // sharedbClient.disconnect();
     };
   }, [workId]);
 
@@ -542,13 +567,13 @@ export default function NovelEditorPage() {
           });
         } else {
           // 长篇作品：按原有卷号分组
-          allChapters.forEach((chapter) => {
-            const volNum = chapter.volume_number || 0;
-            if (!volumesMap.has(volNum)) {
-              volumesMap.set(volNum, []);
-            }
-            volumesMap.get(volNum)!.push(chapter);
-          });
+        allChapters.forEach((chapter) => {
+          const volNum = chapter.volume_number || 0;
+          if (!volumesMap.has(volNum)) {
+            volumesMap.set(volNum, []);
+          }
+          volumesMap.get(volNum)!.push(chapter);
+        });
         }
 
         // 转换为编辑页面需要的格式
@@ -952,6 +977,38 @@ export default function NovelEditorPage() {
           console.warn('⚠️ 内容获取失败，设置空编辑器');
           editor.commands.setContent('<p></p>');
         }
+
+        // 关键修复：章节切换后延迟从服务器拉取最新更新
+        // 延迟执行，避免与轮询冲突，减少频繁请求
+        // 轮询会在10秒后自动检查更新，这里延迟5秒，给轮询留出时间
+        setTimeout(async () => {
+          try {
+            console.log('🔄 [自动拉取] 章节切换后自动从服务器拉取最新更新:', documentId);
+            const serverDoc = await sharedbClient.forcePullFromServer(documentId);
+            
+            if (serverDoc && serverDoc.content) {
+              const serverContent = typeof serverDoc.content === 'string' 
+                ? serverDoc.content 
+                : JSON.stringify(serverDoc.content);
+              
+              // 如果服务器内容与当前编辑器内容不同，更新编辑器
+              const currentContent = editor.getHTML();
+              if (serverContent !== currentContent) {
+                console.log('✅ [自动拉取] 检测到服务器有新内容，更新编辑器:', {
+                  serverVersion: serverDoc.version,
+                  serverContentLength: serverContent.length,
+                  currentContentLength: currentContent.length
+                });
+                editor.commands.setContent(serverContent);
+              } else {
+                console.log('✅ [自动拉取] 服务器内容与当前内容一致，无需更新');
+              }
+            }
+          } catch (pullErr) {
+            // 拉取失败不影响编辑器使用，只记录错误
+            console.warn('⚠️ [自动拉取] 从服务器拉取更新失败（不影响使用）:', pullErr);
+          }
+        }, 5000); // 延迟5秒，避免与轮询冲突
       } catch (err) {
         console.error('加载章节内容失败:', err);
         // 即使所有方法都失败，也显示空内容，保证编辑器可用
@@ -1000,7 +1057,7 @@ export default function NovelEditorPage() {
       pollInterval: 10000,          // 每 10 秒轮询一次
       userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
       syncCheckInterval: 3000,      // 每 3 秒检查一次是否需要同步
-      enablePolling: !!documentId,   // 只在有文档ID时启用轮询
+      enablePolling: true,          // 始终启用轮询（内部会根据 documentId 判断）
       onSyncSuccess: (content, version) => {
         console.log('✅ [智能同步] 同步成功:', { version, contentLength: content.length });
         // 更新同步状态
@@ -1023,107 +1080,6 @@ export default function NovelEditorPage() {
     }
   );
 
-  const handleManualSave = async () => {
-    if (!editor || !currentChapterIdRef.current || !workId) {
-      console.warn('⚠️ 无法保存：编辑器、章节ID或作品ID缺失', {
-        hasEditor: !!editor,
-        chapterId: currentChapterIdRef.current,
-        workId,
-      });
-      return;
-    }
-
-    try {
-      const chapterId = currentChapterIdRef.current;
-      const content = editor.getHTML();
-      const documentId = `work_${workId}_chapter_${chapterId}`;
-      
-      console.log('💾 [手动保存] 开始保存:', {
-        workId,
-        chapterId,
-        documentId,
-        contentLength: content.length,
-        contentPreview: content.substring(0, 100),
-      });
-      
-      // 1. 立即保存到本地缓存
-      await sharedbClient.updateDocument(documentId, content, {
-        work_id: Number(workId),
-        chapter_id: chapterId,
-        updated_at: new Date().toISOString(),
-      });
-      
-      console.log('✅ [手动保存] 已保存到本地缓存');
-      
-      // 2. 使用智能同步强制同步到服务器
-      if (documentId && forceSync) {
-        console.log('🔄 [手动保存] 触发智能同步');
-        await forceSync();
-        console.log('✅ [手动保存] 智能同步完成');
-      } else {
-        // 降级到原有的同步方式
-        await syncManager.syncDocument(documentId);
-        console.log('✅ [手动保存] 使用传统同步方式完成');
-      }
-      
-      // 验证是否保存成功
-      const saved = await sharedbClient.getDocument(documentId);
-      if (saved && saved.content === content) {
-        console.log('✅ [手动保存] 验证成功，内容已保存');
-      } else {
-        console.error('❌ [手动保存] 验证失败，内容未正确保存');
-      }
-    } catch (err) {
-      console.error('❌ [手动保存] 保存失败:', err);
-    }
-  };
-
-  /**
-   * 强制从服务器拉取最新内容
-   */
-  const handleForcePull = async () => {
-    if (!editor || !currentChapterIdRef.current || !workId) {
-      console.warn('⚠️ 无法拉取：编辑器、章节ID或作品ID缺失');
-      return;
-    }
-
-    try {
-      const chapterId = currentChapterIdRef.current;
-      const documentId = `work_${workId}_chapter_${chapterId}`;
-      
-      console.log('🔄 [强制拉取] 开始从服务器拉取最新内容:', {
-        workId,
-        chapterId,
-        documentId,
-      });
-      
-      // 从服务器强制拉取最新内容
-      const serverDoc = await sharedbClient.forcePullFromServer(documentId);
-      
-      if (serverDoc && serverDoc.content) {
-        const serverContent = typeof serverDoc.content === 'string' 
-          ? serverDoc.content 
-          : JSON.stringify(serverDoc.content);
-        
-        // 更新编辑器内容
-        editor.commands.setContent(serverContent);
-        
-        console.log('✅ [强制拉取] 成功拉取并更新编辑器内容:', {
-          version: serverDoc.version,
-          contentLength: serverContent.length
-        });
-        
-        // 可以显示成功提示
-        // alert('已从服务器拉取最新内容');
-      } else {
-        console.warn('⚠️ [强制拉取] 服务器上没有找到文档');
-        // alert('服务器上没有找到文档');
-      }
-    } catch (err) {
-      console.error('❌ [强制拉取] 拉取失败:', err);
-      // alert('拉取失败: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  };
 
   // 自动保存章节内容（本地优先策略 + 智能同步）
   useEffect(() => {
@@ -1252,6 +1208,7 @@ export default function NovelEditorPage() {
 
     try {
       // 如果是草稿，只更新本地状态
+      // TODO 这里也应该是线上同步的
       if (data.volumeId === 'draft') {
         const chapterId = data.id || `draft-${Date.now()}`;
         setChaptersData(prev => ({
@@ -1347,10 +1304,10 @@ export default function NovelEditorPage() {
             : 0;
         } else {
           // 长篇作品：计算该卷的最大章节号
-          const volumeChapters = allChapters.filter(c => (c.volume_number || 0) === volNum);
+        const volumeChapters = allChapters.filter(c => (c.volume_number || 0) === volNum);
           maxChapterNumber = volumeChapters.length > 0
-            ? Math.max(...volumeChapters.map(c => c.chapter_number || 0))
-            : 0;
+          ? Math.max(...volumeChapters.map(c => c.chapter_number || 0))
+          : 0;
         }
         
         const newChapter = await chaptersApi.createChapter({
@@ -1711,15 +1668,15 @@ export default function NovelEditorPage() {
                   <div className="toolbar-group">
                     {/* 标题下拉菜单 */}
                     <div className="toolbar-dropdown" ref={headingMenuRef}>
-                      <button
-                        className="toolbar-btn"
+                    <button
+                      className="toolbar-btn"
                         onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
                         title="标题样式"
-                      >
-                        <Type size={16} />
+                    >
+                      <Type size={16} />
                         <span>标题</span>
                         <ChevronDown size={14} style={{ marginLeft: '4px' }} />
-                      </button>
+                    </button>
                       {headingMenuOpen && (
                         <div className="toolbar-dropdown-menu">
                           <button
@@ -1816,17 +1773,6 @@ export default function NovelEditorPage() {
                       title="下划线"
                     >
                       <Underline size={16} />
-                    </button>
-                  </div>
-                  <div className="toolbar-divider" />
-                  <div className="toolbar-group">
-                    <button
-                      className="toolbar-btn"
-                      onClick={handleForcePull}
-                      title="强制从服务器拉取最新内容"
-                    >
-                      <RefreshCw size={16} />
-                      <span>拉取更新</span>
                     </button>
                   </div>
                 </div>

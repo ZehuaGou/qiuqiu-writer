@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, FileText, Settings, Download, Loader2, Play, AlertCircle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { analyzeChapterContent, testAPIConnection } from '../utils/bookAnalysisApi';
+import { analyzeChapterByFile, testAPIConnection } from '../utils/bookAnalysisApi';
 import './BookSplitterPage.css';
 
 interface Chapter {
@@ -41,6 +41,8 @@ export default function BookSplitterPage() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [apiStatus, setApiStatus] = useState<'unknown' | 'checking' | 'connected' | 'error'>('unknown');
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [workId, setWorkId] = useState<number | null>(null);
+  const [workTitle, setWorkTitle] = useState<string>('');
 
   // 检查AI服务连接
   useEffect(() => {
@@ -73,6 +75,8 @@ export default function BookSplitterPage() {
       setSplitStatus('idle');
       setAnalysisStatus('idle');
       setErrorMessage('');
+      setWorkId(null);
+      setWorkTitle('');
     }
   };
 
@@ -278,9 +282,13 @@ export default function BookSplitterPage() {
             }
           }));
 
-          // 调用真实的AI分析接口（每章单独分析）
-          const analysisResult = await analyzeChapterContent(
+          // 调用基于文件名的章节分析接口（会自动创建作品并插入章节）
+          const fileName = selectedFile?.name || 'unknown.txt';
+          const analysisResult = await analyzeChapterByFile(
+            fileName,
             chapter.content,
+            chapter.number,
+            1, // volume_number 默认为1
             (progress) => {
               // 实时更新分析内容
               if (progress.text) {
@@ -296,6 +304,16 @@ export default function BookSplitterPage() {
               if (progress.metadata) {
                 metadata = { ...metadata, ...progress.metadata };
               }
+              // 处理作品创建和章节插入消息
+              if (progress.workCreated && progress.workId && progress.workTitle) {
+                setWorkId(progress.workId);
+                setWorkTitle(progress.workTitle);
+                console.log(`✅ 作品已创建: ${progress.workTitle} (ID: ${progress.workId})`);
+              }
+              if (progress.workId && progress.workTitle && !workId) {
+                setWorkId(progress.workId);
+                setWorkTitle(progress.workTitle);
+              }
               if (progress.error) {
                 console.error(`分析 ${chapter.title} 时出错:`, progress.error);
                 throw new Error(progress.error);
@@ -308,8 +326,13 @@ export default function BookSplitterPage() {
             }
           );
           
-          // 标记为完成，使用累积的内容（而不是替换）
-          // 因为流式更新已经累积了所有内容，analysisResult 作为最终验证
+          // 更新作品信息（如果还没有设置）
+          if (analysisResult.work_id && !workId) {
+            setWorkId(analysisResult.work_id);
+            setWorkTitle(analysisResult.work_title);
+          }
+          
+          // 标记为完成，使用累积的内容
           setAnalysisResults(prev => {
             const currentResult = prev[chapter.id];
             const accumulatedContent = currentResult?.content || '';
@@ -317,32 +340,35 @@ export default function BookSplitterPage() {
             // 移除初始的"正在分析..."提示
             const cleanAccumulated = accumulatedContent.replace(/^正在分析.*?\.\.\.\n\n/, '');
             
-            // 使用累积的内容（流式更新已经包含了所有内容）
-            // 如果返回的analysisResult更长，说明可能有遗漏，使用更长的
-            const contentToUse = cleanAccumulated.length >= analysisResult.length 
-              ? cleanAccumulated 
-              : analysisResult;
-            
             console.log(`📊 [${chapter.title}] 内容统计:`);
             console.log(`   - 累积内容长度: ${cleanAccumulated.length} 字符`);
-            console.log(`   - 返回结果长度: ${analysisResult.length} 字符`);
-            console.log(`   - 最终使用长度: ${contentToUse.length} 字符`);
-            console.log(`   - 内容预览: ${contentToUse.substring(0, 200)}...`);
+            console.log(`   - 作品ID: ${analysisResult.work_id}`);
+            console.log(`   - 章节ID: ${analysisResult.chapter_id}`);
+            console.log(`   - 作品是否新创建: ${analysisResult.work_created}`);
             
             return {
               ...prev,
               [chapter.id]: {
                 fileName: chapter.title,
-                content: contentToUse,
+                content: cleanAccumulated || '分析完成（内容已保存到作品）',
                 isComplete: true,
                 hasError: false,
                 timestamp: Date.now(),
-                metadata: metadata
+                metadata: {
+                  ...metadata,
+                  work_id: analysisResult.work_id,
+                  chapter_id: analysisResult.chapter_id,
+                  work_created: analysisResult.work_created,
+                }
               }
             };
           });
           
-          console.log(`✅ [${i + 1}/${selectedChaptersData.length}] 分析完成: ${chapter.title}`, metadata);
+          console.log(`✅ [${i + 1}/${selectedChaptersData.length}] 分析完成并已插入作品: ${chapter.title}`, {
+            work_id: analysisResult.work_id,
+            chapter_id: analysisResult.chapter_id,
+            work_created: analysisResult.work_created,
+          });
           
         } catch (error) {
           console.error(`❌ 分析 ${chapter.title} 失败:`, error);
@@ -439,7 +465,14 @@ export default function BookSplitterPage() {
           <ArrowLeft size={20} />
           返回
         </button>
+        <div>
         <h1>拆书分析工具</h1>
+          {workId && workTitle && (
+            <div className="work-info" style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
+              作品: {workTitle} (ID: {workId})
+            </div>
+          )}
+        </div>
         <div className="header-actions">
           {apiStatus === 'connected' && (
             <div className="api-status connected" title="AI服务已连接">
