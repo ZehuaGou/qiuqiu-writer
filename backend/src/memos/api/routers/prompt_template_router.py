@@ -2,10 +2,11 @@
 Prompt模板管理API路由
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import and_
 from pydantic import BaseModel
 
 from memos.api.core.database import get_async_db
@@ -29,6 +30,11 @@ class PromptTemplateCreate(BaseModel):
     is_default: bool = False
     variables: Optional[dict] = None
     metadata: Optional[dict] = None
+    # 组件相关字段
+    component_id: Optional[str] = None  # 组件ID
+    component_type: Optional[str] = None  # 组件类型
+    prompt_category: Optional[str] = None  # generate或validate
+    work_id: Optional[int] = None  # 关联的作品ID
 
 
 class PromptTemplateUpdate(BaseModel):
@@ -41,6 +47,11 @@ class PromptTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     variables: Optional[dict] = None
     metadata: Optional[dict] = None
+    # 组件相关字段
+    component_id: Optional[str] = None
+    component_type: Optional[str] = None
+    prompt_category: Optional[str] = None
+    work_id: Optional[int] = None
 
 
 class PromptTemplateResponse(BaseModel):
@@ -57,6 +68,10 @@ class PromptTemplateResponse(BaseModel):
     metadata: dict
     usage_count: int
     creator_id: Optional[int]
+    component_id: Optional[str] = None
+    component_type: Optional[str] = None
+    prompt_category: Optional[str] = None
+    work_id: Optional[int] = None
     created_at: str
     updated_at: str
 
@@ -93,6 +108,10 @@ async def create_prompt_template(
             is_default=template_data.is_default,
             variables=template_data.variables or {},
             template_metadata=template_data.metadata or {},
+            component_id=template_data.component_id,
+            component_type=template_data.component_type,
+            prompt_category=template_data.prompt_category,
+            work_id=template_data.work_id,
             creator_id=current_user_id,
         )
         
@@ -127,7 +146,6 @@ async def list_prompt_templates(
             conditions.append(PromptTemplate.is_active == is_active)
         
         if conditions:
-            from sqlalchemy import and_
             stmt = stmt.where(and_(*conditions))
         
         stmt = stmt.order_by(PromptTemplate.created_at.desc())
@@ -276,4 +294,198 @@ async def get_default_prompt_template(
     except Exception as e:
         logger.error(f"获取默认Prompt模板失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取默认模板失败: {str(e)}")
+
+
+# ============ 组件Prompt相关API ============
+
+@router.get("/component/{component_id}", response_model=Dict[str, Any])
+async def get_component_prompts(
+    component_id: str,
+    work_id: Optional[int] = Query(None, description="作品ID（可选，用于获取作品级别的组件prompt）"),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """获取组件的生成和验证prompt"""
+    try:
+        conditions = [
+            PromptTemplate.component_id == component_id,
+            PromptTemplate.is_active == True
+        ]
+        
+        if work_id:
+            # 优先获取作品级别的prompt
+            conditions.append(PromptTemplate.work_id == work_id)
+        else:
+            # 获取全局的组件prompt（work_id为NULL）
+            conditions.append(PromptTemplate.work_id.is_(None))
+        
+        stmt = select(PromptTemplate).where(and_(*conditions))
+        result = await db.execute(stmt)
+        templates = result.scalars().all()
+        
+        # 组织返回数据
+        prompts = {
+            "component_id": component_id,
+            "work_id": work_id,
+            "generate": None,
+            "validate": None,
+        }
+        
+        for template in templates:
+            if template.prompt_category == "generate":
+                prompts["generate"] = PromptTemplateResponse(**template.to_dict())
+            elif template.prompt_category == "validate":
+                prompts["validate"] = PromptTemplateResponse(**template.to_dict())
+        
+        return prompts
+        
+    except Exception as e:
+        logger.error(f"获取组件prompt失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取组件prompt失败: {str(e)}")
+
+
+class ComponentPromptCreate(BaseModel):
+    """创建组件prompt请求"""
+    component_type: str
+    work_id: Optional[int] = None
+    generate_prompt: Optional[str] = None
+    validate_prompt: Optional[str] = None
+
+
+@router.post("/component/{component_id}", response_model=Dict[str, PromptTemplateResponse])
+async def create_component_prompts(
+    component_id: str,
+    prompt_data: ComponentPromptCreate,
+    db: AsyncSession = Depends(get_async_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """创建或更新组件的生成和验证prompt"""
+    try:
+        result = {}
+        
+        # 处理生成prompt
+        if prompt_data.generate_prompt:
+            # 检查是否已存在
+            stmt = select(PromptTemplate).where(
+                and_(
+                    PromptTemplate.component_id == component_id,
+                    PromptTemplate.prompt_category == "generate",
+                    PromptTemplate.work_id == (prompt_data.work_id if prompt_data.work_id else None)
+                )
+            )
+            existing = await db.execute(stmt)
+            template = existing.scalar_one_or_none()
+            
+            if template:
+                # 更新
+                template.prompt_content = prompt_data.generate_prompt
+                template.component_type = prompt_data.component_type
+                await db.commit()
+                await db.refresh(template)
+                result["generate"] = PromptTemplateResponse(**template.to_dict())
+            else:
+                # 创建
+                template = PromptTemplate(
+                    name=f"{component_id} - 生成prompt",
+                    description=f"组件 {component_id} 的生成prompt",
+                    template_type="component_generate",
+                    prompt_content=prompt_data.generate_prompt,
+                    component_id=component_id,
+                    component_type=prompt_data.component_type,
+                    prompt_category="generate",
+                    work_id=prompt_data.work_id,
+                    creator_id=current_user_id,
+                )
+                db.add(template)
+                await db.commit()
+                await db.refresh(template)
+                result["generate"] = PromptTemplateResponse(**template.to_dict())
+        
+        # 处理验证prompt
+        if prompt_data.validate_prompt:
+            # 检查是否已存在
+            stmt = select(PromptTemplate).where(
+                and_(
+                    PromptTemplate.component_id == component_id,
+                    PromptTemplate.prompt_category == "validate",
+                    PromptTemplate.work_id == (prompt_data.work_id if prompt_data.work_id else None)
+                )
+            )
+            existing = await db.execute(stmt)
+            template = existing.scalar_one_or_none()
+            
+            if template:
+                # 更新
+                template.prompt_content = prompt_data.validate_prompt
+                template.component_type = prompt_data.component_type
+                await db.commit()
+                await db.refresh(template)
+                result["validate"] = PromptTemplateResponse(**template.to_dict())
+            else:
+                # 创建
+                template = PromptTemplate(
+                    name=f"{component_id} - 验证prompt",
+                    description=f"组件 {component_id} 的验证prompt",
+                    template_type="component_validate",
+                    prompt_content=prompt_data.validate_prompt,
+                    component_id=component_id,
+                    component_type=prompt_data.component_type,
+                    prompt_category="validate",
+                    work_id=prompt_data.work_id,
+                    creator_id=current_user_id,
+                )
+                db.add(template)
+                await db.commit()
+                await db.refresh(template)
+                result["validate"] = PromptTemplateResponse(**template.to_dict())
+        
+        return result
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"创建组件prompt失败: {e}")
+        raise HTTPException(status_code=500, detail=f"创建组件prompt失败: {str(e)}")
+
+
+@router.get("/work/{work_id}/components", response_model=Dict[str, Any])
+async def get_work_component_prompts(
+    work_id: int,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """获取作品所有组件的prompt"""
+    try:
+        stmt = select(PromptTemplate).where(
+            and_(
+                PromptTemplate.work_id == work_id,
+                PromptTemplate.component_id.isnot(None),
+                PromptTemplate.is_active == True
+            )
+        )
+        result = await db.execute(stmt)
+        templates = result.scalars().all()
+        
+        # 按组件ID组织
+        component_prompts = {}
+        for template in templates:
+            comp_id = template.component_id
+            if comp_id not in component_prompts:
+                component_prompts[comp_id] = {
+                    "component_id": comp_id,
+                    "component_type": template.component_type,
+                    "generate": None,
+                    "validate": None,
+                }
+            
+            if template.prompt_category == "generate":
+                component_prompts[comp_id]["generate"] = PromptTemplateResponse(**template.to_dict())
+            elif template.prompt_category == "validate":
+                component_prompts[comp_id]["validate"] = PromptTemplateResponse(**template.to_dict())
+        
+        return {
+            "work_id": work_id,
+            "components": component_prompts
+        }
+        
+    except Exception as e:
+        logger.error(f"获取作品组件prompt失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取作品组件prompt失败: {str(e)}")
 

@@ -17,6 +17,7 @@ import WorkInfoManager from '../components/editor/WorkInfoManager';
 import ThemeSelector from '../components/ThemeSelector';
 import { worksApi, type Work } from '../utils/worksApi';
 import { chaptersApi, type Chapter } from '../utils/chaptersApi';
+import { charactersApi, type Character } from '../utils/charactersApi';
 import { sharedbClient } from '../utils/sharedbClient';
 import { syncManager } from '../utils/syncManager';
 import { localCacheManager } from '../utils/localCacheManager';
@@ -111,156 +112,65 @@ export default function NovelEditorPage() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentChapterIdRef = useRef<number | null>(null);
 
-  // 从WorkInfoManager缓存中提取角色数据
+  // 从API获取角色数据
   useEffect(() => {
-    const loadCharactersFromCache = () => {
+    if (!workId) {
+      setHasCharacterModule(false);
+      setAvailableCharacters([]);
+      return;
+    }
+
+    const loadCharactersFromAPI = async () => {
       try {
-        const CACHE_KEY = 'wawawriter_workinfo_cache';
+        const response = await charactersApi.listCharacters(Number(workId));
+        const characters = response.characters || [];
+        
+        // 转换为前端需要的格式
+        const formattedCharacters = characters.map((char: Character) => ({
+          id: String(char.id),
+          name: char.name || '',
+          avatar: char.avatar_url || undefined,
+          gender: char.gender || undefined,
+          description: char.description || '',
+          type: char.is_main_character ? '主要角色' : '次要角色',
+          source: 'api',
+        }));
+        
+        setAvailableCharacters(formattedCharacters);
+        setHasCharacterModule(formattedCharacters.length > 0);
+        
+        console.log('📋 从API获取角色列表:', {
+          total: formattedCharacters.length,
+          characters: formattedCharacters,
+        });
+      } catch (err) {
+        console.error('从API加载角色数据失败:', err);
+        setHasCharacterModule(false);
+        setAvailableCharacters([]);
+      }
+    };
+
+    loadCharactersFromAPI();
+  }, [workId]);
+
+  // 从WorkInfoManager缓存中提取地点数据（基于workId）
+  useEffect(() => {
+    if (!workId) {
+      setHasLocationModule(false);
+      setAvailableLocations([]);
+      return;
+    }
+
+    const loadLocationsFromCache = () => {
+      try {
+        // 使用 workId 特定的缓存键，确保每个作品的数据是独立的
+        const CACHE_KEY = `wawawriter_workinfo_cache_${workId}`;
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
           const data = JSON.parse(cached);
           const modules = data.modules || [];
           
           // 查找角色设定模块
-          const characterModule = modules.find((m: any) => m.id === 'characters');
-          if (characterModule) {
-            setHasCharacterModule(true);
-            
-            // 查找角色数据（可能在char-table或character-card组件中）
-            // 只从character-card组件收集角色数据
-            const findAllCharacterData = (components: any[]): any[] => {
-              const allCharacters: any[] = [];
-              
-              for (const comp of components) {
-                // 只检查character-card组件（不再检查table组件）
-                if (comp.type === 'character-card' && comp.value) {
-                  // 角色卡片数据格式：数组，每个对象有name字段
-                  const cardChars = (comp.value as any[]).map((char) => ({
-                    id: char.name || String(Date.now() + Math.random()),
-                    name: char.name || '',
-                    avatar: char.avatar || undefined,
-                    gender: char.gender || undefined,
-                    description: char.description || '',
-                    type: char.type || undefined,
-                    source: 'character-card',
-                  })).filter(c => c.name);
-                  allCharacters.push(...cardChars);
-                }
-                
-                // 检查tabs组件（角色设定可能在tabs中）
-                if (comp.type === 'tabs' && comp.config?.tabs) {
-                  for (const tab of comp.config.tabs) {
-                    if (tab.components) {
-                      const found = findAllCharacterData(tab.components);
-                      allCharacters.push(...found);
-                    }
-                  }
-                }
-              }
-              
-              return allCharacters;
-            };
-            
-            // 收集所有角色数据
-            const allCharacterData = findAllCharacterData(characterModule.components || []);
-            
-            // 去重：使用name作为唯一标识，保留最完整的数据
-            const characterMap = new Map<string, any>();
-            for (const char of allCharacterData) {
-              const existing = characterMap.get(char.name);
-              if (!existing) {
-                characterMap.set(char.name, char);
-              } else {
-                // 合并数据，保留更完整的信息
-                const merged = {
-                  ...existing,
-                  ...char,
-                  // 如果新数据有更多字段，则合并
-                  avatar: char.avatar || existing.avatar,
-                  gender: char.gender || existing.gender,
-                  description: char.description || existing.description,
-                  type: char.type || existing.type,
-                };
-                characterMap.set(char.name, merged);
-              }
-            }
-            
-            const uniqueCharacters = Array.from(characterMap.values());
-            
-            // 从章节内容中识别角色名称
-            const extractCharactersFromChapters = (): any[] => {
-              const extractedNames = new Set<string>();
-              
-              // 遍历所有章节内容
-              for (const chapter of allChapters) {
-                if (chapter.content) {
-                  // 简单的角色名称识别：查找常见的中文姓名模式
-                  // 匹配2-4个中文字符的姓名（排除常见非人名词汇）
-                  const namePattern = /[（(]?([\u4e00-\u9fa5]{2,4})[）)]?/g;
-                  const excludeWords = new Set([
-                    '章节', '内容', '正文', '开始', '结束', '时间', '地点', '人物',
-                    '主角', '配角', '反派', '角色', '人物', '主角', '配角',
-                    '第一', '第二', '第三', '第四', '第五', '第六', '第七', '第八', '第九', '第十',
-                    '今天', '明天', '昨天', '上午', '下午', '晚上', '中午', '凌晨',
-                    '这里', '那里', '哪里', '什么', '怎么', '为什么', '如何',
-                    '但是', '然而', '不过', '虽然', '因为', '所以', '如果', '那么',
-                    '可以', '应该', '必须', '需要', '想要', '希望', '觉得', '认为',
-                    '看到', '听到', '感到', '想到', '知道', '了解', '明白', '理解',
-                    '说话', '说道', '说道', '说道', '说道', '说道', '说道',
-                  ]);
-                  
-                  let match;
-                  while ((match = namePattern.exec(chapter.content)) !== null) {
-                    const name = match[1];
-                    // 排除常见非人名词汇
-                    if (!excludeWords.has(name) && name.length >= 2) {
-                      // 检查是否在引号或对话中（更可能是人名）
-                      const context = chapter.content.substring(
-                        Math.max(0, match.index - 10),
-                        Math.min(chapter.content.length, match.index + match[0].length + 10)
-                      );
-                      // 如果出现在"说"、"道"、"想"等动词前，更可能是人名
-                      if (/\b(说|道|想|看|听|问|答|喊|叫|称|叫|唤)\b/.test(context)) {
-                        extractedNames.add(name);
-                      }
-                    }
-                  }
-                }
-              }
-              
-              // 转换为角色对象
-              return Array.from(extractedNames).map(name => ({
-                id: `extracted_${name}`,
-                name: name,
-                source: 'extracted',
-                description: '从章节内容中识别',
-              }));
-            };
-            
-            // 合并从章节中提取的角色
-            const extractedCharacters = extractCharactersFromChapters();
-            for (const char of extractedCharacters) {
-              const existing = characterMap.get(char.name);
-              if (!existing) {
-                // 如果角色表中没有，则添加
-                characterMap.set(char.name, char);
-              }
-            }
-            
-            const allUniqueCharacters = Array.from(characterMap.values());
-            setAvailableCharacters(allUniqueCharacters);
-            
-            console.log('📋 合并后的角色列表:', {
-              total: allUniqueCharacters.length,
-              fromTable: uniqueCharacters.filter(c => c.source === 'char-table').length,
-              fromCard: uniqueCharacters.filter(c => c.source === 'character-card').length,
-              extracted: extractedCharacters.length,
-            });
-          } else {
-            setHasCharacterModule(false);
-            setAvailableCharacters([]);
-          }
-          
           // 查找地点数据（可能在world模块的card-list组件中，或者有"地点"关键词的组件）
           const findLocationData = (components: any[]): any[] => {
             for (const comp of components) {
@@ -323,34 +233,31 @@ export default function NovelEditorPage() {
             }
           }
         } else {
-          setHasCharacterModule(false);
-          setAvailableCharacters([]);
           setHasLocationModule(false);
           setAvailableLocations([]);
         }
       } catch (err) {
-        console.error('加载角色和地点数据失败:', err);
-        setHasCharacterModule(false);
-        setAvailableCharacters([]);
+        console.error('加载地点数据失败:', err);
         setHasLocationModule(false);
         setAvailableLocations([]);
       }
     };
 
     // 初始加载
-    loadCharactersFromCache();
+    loadLocationsFromCache();
 
     // 监听localStorage变化（当WorkInfoManager更新时）
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'wawawriter_workinfo_cache') {
-        loadCharactersFromCache();
+      const workSpecificKey = `wawawriter_workinfo_cache_${workId}`;
+      if (e.key === workSpecificKey) {
+        loadLocationsFromCache();
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     
     // 定期检查缓存变化（因为同窗口内的localStorage变化不会触发storage事件）
-    const interval = setInterval(loadCharactersFromCache, 1000);
+    const interval = setInterval(loadLocationsFromCache, 1000);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -1670,7 +1577,7 @@ export default function NovelEditorPage() {
         {/* 主编辑区 */}
         <div className="novel-editor-main">
           {/* 根据导航项显示不同内容 */}
-          {activeNav === 'work-info' && selectedChapter === null && <WorkInfoManager />}
+          {activeNav === 'work-info' && selectedChapter === null && <WorkInfoManager workId={workId} />}
           {activeNav === 'tags' && <TagsManager />}
           {activeNav === 'outline' && <ChapterOutline />}
           {activeNav === 'map' && <MapView />}

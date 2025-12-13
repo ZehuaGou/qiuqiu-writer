@@ -83,7 +83,14 @@ interface TemplateConfig {
 
 // ============ 缓存管理 ============
 
-const CACHE_KEY = 'wawawriter_workinfo_cache';
+// 获取基于 workId 的缓存键
+const getCacheKey = (workId: string | null): string => {
+  if (workId) {
+    return `wawawriter_workinfo_cache_${workId}`;
+  }
+  // 如果没有 workId，使用旧的全局缓存键（向后兼容）
+  return 'wawawriter_workinfo_cache';
+};
 
 interface CacheData {
   templateId: string;
@@ -91,9 +98,10 @@ interface CacheData {
   lastModified: number;
 }
 
-// 从 localStorage 读取缓存
-const loadFromCache = (): CacheData | null => {
+// 从 localStorage 读取缓存（基于 workId）
+const loadFromCache = (workId: string | null): CacheData | null => {
   try {
+    const CACHE_KEY = getCacheKey(workId);
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
       return JSON.parse(cached);
@@ -104,9 +112,10 @@ const loadFromCache = (): CacheData | null => {
   return null;
 };
 
-// 保存到 localStorage 缓存
-const saveToCache = (data: CacheData) => {
+// 保存到 localStorage 缓存（基于 workId）
+const saveToCache = (data: CacheData, workId: string | null) => {
   try {
+    const CACHE_KEY = getCacheKey(workId);
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
   } catch (e) {
     console.warn('Failed to save cache:', e);
@@ -565,10 +574,14 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
 
 // ============ 主组件 ============
 
-export default function WorkInfoManager() {
-  // 初始化时尝试从缓存加载
+interface WorkInfoManagerProps {
+  workId?: string | null;
+}
+
+export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
+  // 初始化时尝试从缓存加载（基于 workId）
   const [template, setTemplate] = useState<TemplateConfig>(() => {
-    const cached = loadFromCache();
+    const cached = loadFromCache(workId || null);
     if (cached) {
       // 找到对应的模板并用缓存数据覆盖
       const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
@@ -646,20 +659,35 @@ export default function WorkInfoManager() {
 
   const activeModule = template.modules[activeModuleIndex];
 
-  // 自动保存到缓存（防抖）
+  // 当 workId 变化时，重新加载对应的缓存数据
+  useEffect(() => {
+    const cached = loadFromCache(workId || null);
+    if (cached) {
+      const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
+      setTemplate({
+        ...baseTemplate,
+        modules: cached.modules
+      });
+    } else {
+      // 如果没有缓存，使用默认模板
+      setTemplate(JSON.parse(JSON.stringify(presetTemplates[0])));
+    }
+  }, [workId]);
+
+  // 自动保存到缓存（防抖，基于 workId）
   useEffect(() => {
     const timer = setTimeout(() => {
       saveToCache({
         templateId: template.id,
         modules: template.modules,
         lastModified: Date.now()
-      });
+      }, workId || null);
       setHasUnsavedChanges(false);
     }, 1000); // 1秒后自动保存
 
     setHasUnsavedChanges(true);
     return () => clearTimeout(timer);
-  }, [template]);
+  }, [template, workId]);
 
 
   // 更新组件值
