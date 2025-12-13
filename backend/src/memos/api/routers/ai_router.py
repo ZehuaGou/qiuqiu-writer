@@ -31,6 +31,24 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/ai", tags=["AI Analysis"])
 
 
+# 辅助函数：确保返回的是 AsyncSession 对象，而不是生成器
+async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSession:
+    """
+    确保返回的是 AsyncSession 对象，而不是生成器
+    FastAPI 的 Depends 应该已经处理了生成器，但为了安全起见，我们再次检查
+    """
+    # FastAPI 的 Depends 应该已经处理了生成器，直接返回
+    # 但如果仍然是生成器，尝试获取会话对象
+    if hasattr(db, '__aiter__') and not hasattr(db, 'execute'):
+        # 如果是生成器，尝试获取会话对象
+        try:
+            db = await db.__anext__()
+        except StopAsyncIteration:
+            raise ValueError("无法从生成器获取数据库会话")
+    
+    return db
+
+
 @router.post(
     "/analyze-chapter",
     summary="章节分析接口",
@@ -45,7 +63,7 @@ router = APIRouter(prefix="/ai", tags=["AI Analysis"])
 )
 async def analyze_chapter(
     request: AnalyzeChapterRequest,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
 ):
     """
     对章节内容进行AI分析
@@ -73,15 +91,31 @@ async def analyze_chapter(
         settings = request.settings or AnalyzeChapterRequest.model_fields["settings"].default_factory()
 
         # 如果没有提供prompt，从数据库获取默认模板
-        prompt = request.prompt
-        if not prompt:
+        system_prompt = None
+        user_prompt = None
+        
+        if not request.prompt:
             book_analysis_service = BookAnalysisService(db)
             prompt_template = await book_analysis_service.get_default_prompt_template("chapter_analysis")
             if prompt_template:
-                prompt = prompt_template.format_prompt(content=request.content)
+                # 从模板的 metadata 中提取 system_prompt 和 user_prompt
+                template_metadata = prompt_template.template_metadata or {}
+                system_prompt = template_metadata.get("system_prompt")
+                user_prompt = template_metadata.get("user_prompt")
+                
+                # 如果 metadata 中没有，则使用 prompt_content 作为 user_prompt
+                if not user_prompt:
+                    user_prompt = prompt_template.format_prompt(content=request.content)
+                else:
+                    # 如果 user_prompt 中有 {content} 变量，需要替换
+                    user_prompt = user_prompt.replace("{content}", request.content)
             else:
                 # 使用AI服务的默认prompt
-                prompt = ai_service.get_default_prompt().format(content=request.content)
+                default_prompt = ai_service.get_default_prompt()
+                user_prompt = default_prompt.replace("{content}", request.content)
+        else:
+            # 如果提供了 prompt，将其作为 user_prompt
+            user_prompt = request.prompt.replace("{content}", request.content) if "{content}" in request.prompt else request.prompt
 
         logger.info(
             f"Received chapter analysis request: "
@@ -98,7 +132,8 @@ async def analyze_chapter(
                 full_response = ""
                 async for message in ai_service.analyze_chapter_stream(
                     content=request.content,
-                    prompt=prompt,
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
                     model=settings.model,
                     temperature=settings.temperature,
                     max_tokens=settings.max_tokens,
@@ -173,7 +208,7 @@ async def analyze_chapter(
 async def analyze_chapters_incremental(
     request: AnalyzeChapterRequest,
     work_id: int = Query(..., description="目标作品ID"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -259,6 +294,7 @@ async def analyze_chapters_incremental(
                     async for message in ai_service.analyze_chapter_stream(
                         content=accumulated_content,
                         prompt=full_prompt,
+                        system_prompt=None,  # 使用默认 system_prompt
                         model=settings.model,
                         temperature=settings.temperature,
                         max_tokens=settings.max_tokens * 2,
@@ -438,7 +474,7 @@ async def get_default_prompt():
 async def analyze_book(
     request: AnalyzeChapterRequest,
     auto_create_work: bool = False,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -497,6 +533,7 @@ async def analyze_book(
                 async for message in ai_service.analyze_chapter_stream(
                     content=request.content,
                     prompt=enhanced_prompt,
+                    system_prompt=None,  # 使用默认 system_prompt
                     model=settings.model,
                     temperature=settings.temperature,
                     max_tokens=settings.max_tokens * 2,  # 增强分析需要更多tokens
@@ -582,7 +619,7 @@ async def analyze_book(
 )
 async def analyze_chapter_by_file(
     request: AnalyzeChapterByFileRequest,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -683,8 +720,12 @@ async def analyze_chapter_by_file(
                     if result.get("skipped"):
                         skip_msg = json.dumps({
                             "type": "chapter_skipped",
+                            "work_id": result["work_id"],
+                            "work_title": result["work_title"],
                             "chapter_id": result["chapter_id"],
                             "chapter_number": result["chapter_number"],
+                            "volume_number": result.get("volume_number"),
+                            "title": result.get("title"),
                             "message": f"章节 {result['chapter_number']} 已存在，跳过创建"
                         })
                         yield f"data: {skip_msg}\n\n"

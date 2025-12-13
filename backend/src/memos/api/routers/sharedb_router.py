@@ -14,6 +14,23 @@ from memos.api.core.database import get_async_db
 from memos.api.core.security import get_current_user_id
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# 辅助函数：确保返回的是 AsyncSession 对象，而不是生成器
+async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSession:
+    """
+    确保返回的是 AsyncSession 对象，而不是生成器
+    FastAPI 的 Depends 应该已经处理了生成器，但为了安全起见，我们再次检查
+    """
+    # FastAPI 的 Depends 应该已经处理了生成器，直接返回
+    # 但如果仍然是生成器，尝试获取会话对象
+    if hasattr(db, '__aiter__') and not hasattr(db, 'execute'):
+        # 如果是生成器，尝试获取会话对象
+        try:
+            db = await db.__anext__()
+        except StopAsyncIteration:
+            raise ValueError("无法从生成器获取数据库会话")
+    
+    return db
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/sharedb", tags=["ShareDB"])
@@ -22,9 +39,10 @@ router = APIRouter(prefix="/v1/sharedb", tags=["ShareDB"])
 class DocumentSyncRequest(BaseModel):
     """文档同步请求"""
     doc_id: str
-    version: int
-    content: str
-    base_content: Optional[str] = None  # 上次同步的内容（用于计算差异）
+    version: int  # 客户端当前版本号
+    content: str  # 客户端当前内容
+    base_version: Optional[int] = None  # 基于哪个版本做的更改（用于合并）
+    base_content: Optional[str] = None  # 上次同步的内容（用于计算差异，如果base_version不存在则使用）
     create_version: bool = False  # 是否创建版本快照
 
 
@@ -78,7 +96,7 @@ async def get_document(doc_id: str):
 async def sync_document(
     request: DocumentSyncRequest,
     current_user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """
     同步文档，智能版本控制
@@ -90,6 +108,7 @@ async def sync_document(
             document_id=request.doc_id,
             version=request.version,
             content=request.content,
+            base_version=request.base_version,  # 传递基础版本号
             base_content=request.base_content,  # 传递基础内容用于差异计算
             user_id=current_user_id,
             create_version=request.create_version,

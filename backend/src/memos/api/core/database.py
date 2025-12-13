@@ -60,21 +60,13 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """
     获取异步数据库会话（别名，用于兼容性）
 
     这是 get_async_session 的别名，用于保持与旧代码的兼容性
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    return get_async_session()
 
 
 def get_sync_session():
@@ -96,8 +88,7 @@ async def init_db():
         # 导入所有模型以确保它们被注册
         from memos.api.models import (
             user, work, chapter, template,
-            characters, location, prompt_template,
-            writing, system, document
+            characters, writing, system, document
         )
 
         # 创建所有表

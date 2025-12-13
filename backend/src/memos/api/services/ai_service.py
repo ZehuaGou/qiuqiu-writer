@@ -14,29 +14,69 @@ from memos.log import get_logger
 
 
 logger = get_logger(__name__)
-
-
-# 默认章节分析提示词
-DEFAULT_ANALYSIS_PROMPT = """# 角色
+DEFAULT_SYSTEM_PROMPT = """
+# 角色
 你是一位经验丰富的小说编辑和文学分析专家，擅长深度解读故事内容，帮助读者更好地理解和思考小说情节。
 
 # 任务
-请对以下章节内容进行全面、深入的分析。分析应包括但不限于：
-1. **章节概要**：简要总结本章节的主要内容
-2. **关键情节**：列出本章节的重要情节点和转折
-3. **人物分析**：分析主要人物的行为、动机和性格特点
-4. **主题思想**：探讨本章节传达的主题和深层含义
-5. **写作技巧**：评价作者使用的叙事技巧和表现手法
-6. **悬念与伏笔**：指出章节中的悬念设置和可能的伏笔
-7. **问题思考**：提出3-5个引导深度思考的问题
+请对以下章节内容进行全面、深入的分析。
 
-# 输出格式
-请以Markdown表格或结构化文本的形式输出分析结果，确保内容清晰、有条理。
+"""
 
-# 章节内容
+# 默认章节分析提示词
+DEFAULT_ANALYSIS_PROMPT = """
+ 章节内容
 {content}
 
-# 分析结果
+# 任务
+基于上述章节内容，你必须仔细阅读并深入理解这些章节，然后以严格的JSON格式分析和提取章节信息。
+
+# 关键要求
+1. **必须只输出有效的JSON格式**，不要使用Markdown代码块，不要添加任何解释性文字，JSON前后不要有任何其他文字
+2. **所有字符串字段必须填写** - 如果信息不可用，使用空字符串 ""，字符串字段永远不要使用 null
+3. **所有数组字段必须是数组** - 如果没有项目，使用空数组 []，永远不要使用 null
+4. 章节号必须是整数（数字），不能是字符串
+5. 为内容中的每一章提取 chapter_number、title、outline 和 detailed_outline
+
+# 字段详细要求
+
+## "chapters" 数组 - 必需
+每个章节对象必须包含所有四个必需字段：
+[
+  {{
+    "chapter_number": "整数（必需）- 章节号必须是整数，不能是字符串。从内容中提取（例如：'第1章' -> 1, 'Chapter 2' -> 2），如果找不到则使用 0",
+    "title": "字符串（必需）- 从内容中提取的章节标题，如果找不到则使用空字符串 ''",
+    "outline": "字符串（必需）- 章节大纲，必须是文本描述格式（纯文本字符串）大纲是章节的概要信息，用自然语言描述章节的核心功能、关键情节点、画面感、氛围和结尾钩子等概括性内容。应该是一段连贯的文本描述，清晰简洁地概括章节的整体结构和主要信息。如果找不到则使用空字符串 ''",
+    "detailed_outline": "字符串（必需）- 章节细纲，必须是文本描述格式（纯文本字符串）。细纲是章节的具体情节信息，用自然语言详细描述每个小节的具体内容、情节发展、人物行动、对话要点等细节。应该是一段或多段详细的文本描述，深入描述章节的具体情节展开。如果找不到则使用空字符串 ''"
+  }}
+]
+
+# 重要说明
+- **大纲（outline）**：是章节的概要信息，用自然语言文本描述章节的核心功能、关键情节点、画面感、氛围和结尾钩子等概括性内容，用于快速了解章节的整体结构和主要信息。必须是纯文本格式。
+- **细纲（detailed_outline）**：是章节的具体情节信息，用自然语言文本详细描述每个小节的具体内容、情节发展、人物行动、对话要点等细节，用于深入了解章节的具体情节展开。必须是纯文本格式。
+
+# 输出格式 - 严格JSON格式
+你必须只输出以下JSON结构，不要添加任何其他文字，不要使用Markdown代码块，不要添加解释：
+
+{{
+  "chapters": [
+    {{
+      "chapter_number": 0,
+      "title": "",
+      "outline": "",
+      "detailed_outline": ""
+    }}
+  ]
+}}
+
+# 最终提醒
+- 只输出上述JSON对象，只包含 "chapters" 数组
+- 每个章节必须包含 chapter_number（整数）、title（字符串）、outline（文本）、detailed_outline（文本）
+- 用适当的值或空字符串填充所有字段
+- JSON前后不要有任何文字
+- 不要使用Markdown代码块标记（```json 或 ```）
+- 不要添加解释或注释
+- 直接以 {{ 开始，以 }} 结束
 """
 
 
@@ -74,6 +114,10 @@ class AIService:
         """获取默认的章节分析提示词"""
         return DEFAULT_ANALYSIS_PROMPT
 
+    def get_default_system_prompt(self) -> str:
+        """获取默认的系统提示词"""
+        return DEFAULT_SYSTEM_PROMPT
+
     def get_available_models(self) -> list[str]:
         """获取可用的AI模型列表"""
         return self.available_models
@@ -86,16 +130,18 @@ class AIService:
         self,
         content: str,
         prompt: str | None = None,
+        system_prompt: str | None = None,
         model: str = "gpt-3.5-turbo",
         temperature: float = 0.7,
-        max_tokens: int = 4000,
+        max_tokens: int = 20000,
     ) -> AsyncGenerator[str, None]:
         """
         流式分析章节内容
 
         Args:
             content: 章节内容
-            prompt: 自定义提示词（可选）
+            prompt: 自定义用户提示词（可选，用于替换 {content} 变量）
+            system_prompt: 自定义系统提示词（可选，描述AI的身份和角色）
             model: AI模型名称
             temperature: 生成温度
             max_tokens: 最大token数
@@ -126,14 +172,19 @@ class AIService:
             })
             yield f"data: {start_msg}\n\n"
 
-            # 构建提示词
-            analysis_prompt = prompt or self.get_default_prompt()
-            full_prompt = analysis_prompt.format(content=content)
+            # 获取系统提示词（从外部获取或使用默认值）
+            system_content = system_prompt or self.get_default_system_prompt()
+            
+            # 构建用户提示词（从外部获取或使用默认值）
+            user_prompt = prompt or self.get_default_prompt()
+            # 使用 replace 而不是 format，避免 JSON 模板中的大括号冲突
+            user_content = user_prompt.replace("{content}", content)
 
             logger.info(
                 f"Starting chapter analysis with model: {model}, "
                 f"temperature: {temperature}, max_tokens: {max_tokens}"
             )
+            logger.debug(f"System prompt length: {len(system_content)}, User prompt length: {len(user_content)}")
 
             # 调用OpenAI API进行流式生成
             response = await self.client.chat.completions.create(
@@ -141,9 +192,9 @@ class AIService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "你是一位专业的小说编辑和文学分析专家。",
+                        "content": system_content,
                     },
-                    {"role": "user", "content": full_prompt},
+                    {"role": "user", "content": user_content},
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,

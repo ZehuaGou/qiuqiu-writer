@@ -5,7 +5,6 @@ ShareDB服务 - 处理实时协作编辑
 import asyncio
 import json
 import uuid
-import hashlib
 from typing import Dict, Any, List, Optional, Set
 from datetime import datetime
 import logging
@@ -46,13 +45,20 @@ class ShareDBService:
         if not self._initialized:
             await self.initialize()
 
+        # 确保content是字符串格式
+        content = initial_content.get("content", "")
+        if isinstance(content, dict):
+            content = json.dumps(content, ensure_ascii=False)
+        elif not isinstance(content, str):
+            content = str(content)
+
         document = {
             "id": document_id,
-            "content": initial_content.get("content", ""),
+            "content": content,
             "title": initial_content.get("title", ""),
             "metadata": initial_content.get("metadata", {}),
             "operations": [],
-            "version": 0,
+            "version": 1,  # 初始版本为1
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         }
@@ -64,7 +70,7 @@ class ShareDBService:
             json.dumps(document)
         )
 
-        logger.info(f"创建ShareDB文档: {document_id}")
+        logger.info(f"创建ShareDB文档: {document_id}, 内容长度: {len(content)}")
         return document
 
     async def get_document(self, document_id: str) -> Optional[Dict[str, Any]]:
@@ -325,70 +331,6 @@ class ShareDBService:
 
         return result
 
-    def _calculate_diff_operations(self, old_content: str, new_content: str) -> List[Dict[str, Any]]:
-        """
-        计算两个内容之间的差异，生成操作列表
-        使用 difflib 计算差异，生成 insert_text/delete_text/replace_text 操作
-        """
-        import difflib
-        
-        if not old_content:
-            # 如果旧内容为空，所有新内容都是插入
-            return [{
-                "type": "insert_text",
-                "position": 0,
-                "text": new_content
-            }]
-        
-        if not new_content:
-            # 如果新内容为空，所有旧内容都是删除
-            return [{
-                "type": "delete_text",
-                "position": 0,
-                "length": len(old_content)
-            }]
-        
-        # 使用 difflib 计算差异
-        differ = difflib.SequenceMatcher(None, old_content, new_content)
-        operations = []
-        current_pos = 0
-        
-        for tag, i1, i2, j1, j2 in differ.get_opcodes():
-            if tag == 'equal':
-                # 相同部分，跳过
-                current_pos += (i2 - i1)
-            elif tag == 'delete':
-                # 删除操作
-                operations.append({
-                    "type": "delete_text",
-                    "position": current_pos,
-                    "length": i2 - i1
-                })
-                # 删除后位置不变
-            elif tag == 'insert':
-                # 插入操作
-                operations.append({
-                    "type": "insert_text",
-                    "position": current_pos,
-                    "text": new_content[j1:j2]
-                })
-                current_pos += (j2 - j1)
-            elif tag == 'replace':
-                # 替换操作（删除+插入）
-                operations.append({
-                    "type": "delete_text",
-                    "position": current_pos,
-                    "length": i2 - i1
-                })
-                operations.append({
-                    "type": "insert_text",
-                    "position": current_pos,
-                    "text": new_content[j1:j2]
-                })
-                current_pos += (j2 - j1) - (i2 - i1)
-        
-        return operations
-
     async def _broadcast_update(self, document_id: str, message: Dict[str, Any]):
         """广播文档更新给所有连接的客户端"""
         if document_id not in self.active_connections:
@@ -523,31 +465,132 @@ class ShareDBService:
         added_texts = client_texts - base_texts
         
         logger.info(f"客户端删除: {len(deleted_texts)} 个块，新增: {len(added_texts)} 个块")
+        if deleted_texts:
+            logger.info(f"删除的块文本预览: {list(deleted_texts)[:3]}")
+        if added_texts:
+            logger.info(f"新增的块文本预览: {list(added_texts)[:3]}")
         
-        # 策略：以服务器内容为基础
-        # 1. 删除客户端删除的内容（如果服务器中有）
-        # 2. 添加客户端新增的内容
+        # 关键修复：改进合并逻辑，保持文本位置
+        # 策略：基于 base_content 的结构，在正确位置插入新增块
+        # 1. 构建 base_content 的块索引（文本 -> 位置）
+        # 2. 构建 client_content 的块索引（文本 -> 位置）
+        # 3. 找出新增块在 client_content 中的位置
+        # 4. 在服务器内容的相应位置插入新增块
+        
+        # 构建 base_content 的块位置索引
+        base_block_positions = {}
+        for idx, block in enumerate(base_blocks):
+            block_text = get_block_text(block)
+            if block_text:
+                if block_text not in base_block_positions:
+                    base_block_positions[block_text] = idx
+        
+        # 构建 client_content 的块位置索引
+        client_block_positions = {}
+        for idx, block in enumerate(client_blocks):
+            block_text = get_block_text(block)
+            if block_text:
+                if block_text not in client_block_positions:
+                    client_block_positions[block_text] = idx
+        
+        # 找出新增块在 client_content 中的位置
+        added_blocks_with_position = []
+        for block in client_blocks:
+            block_text = get_block_text(block)
+            if block_text and block_text in added_texts:
+                position = client_block_positions.get(block_text, len(client_blocks))
+                added_blocks_with_position.append((position, block, block_text))
+        
+        # 按位置排序新增块
+        added_blocks_with_position.sort(key=lambda x: x[0])
+        
+        # 构建服务器块的映射（文本 -> 块）
+        server_text_to_block = {get_block_text(block): block for block in server_blocks if get_block_text(block)}
+        
+        # 构建合并后的块列表
         merged_blocks = []
         seen_texts = set()
         
-        # 先添加服务器中未被客户端删除的块
-        for block in server_blocks:
-            block_text = get_block_text(block)
-            if block_text and block_text not in deleted_texts:
-                if block_text not in seen_texts:
-                    merged_blocks.append(block)
-                    seen_texts.add(block_text)
+        # 策略：按照 base_content 的顺序处理服务器块，在适当位置插入新增块
+        # 1. 遍历 base_blocks，确定每个块的位置
+        # 2. 对于 base 中的块，如果在 server 中存在且未被删除，添加到合并结果
+        # 3. 对于新增的块，根据它在 client 中的位置，插入到相应位置
         
-        # 添加客户端新增的块
-        for text in added_texts:
-            if text in client_text_to_block and text not in seen_texts:
-                merged_blocks.append(client_text_to_block[text])
-                seen_texts.add(text)
-                logger.debug(f"添加客户端新增的块: {text[:50]}")
+        # 先处理服务器块（按照 base 的顺序）
+        base_block_to_server_block = {}
+        for base_block in base_blocks:
+            base_block_text = get_block_text(base_block)
+            if base_block_text and base_block_text in server_text_to_block:
+                base_block_to_server_block[base_block_text] = server_text_to_block[base_block_text]
+        
+        # 按照 base_content 的顺序构建合并结果
+        added_index = 0
+        for base_idx, base_block in enumerate(base_blocks):
+            base_block_text = get_block_text(base_block)
+            
+            # 检查是否有新增块应该插入在这个位置之前
+            while added_index < len(added_blocks_with_position):
+                added_pos, added_block, added_text = added_blocks_with_position[added_index]
+                # 如果新增块在 client 中的位置小于等于当前 base 块的位置，插入它
+                if added_pos <= base_idx:
+                    if added_text not in seen_texts:
+                        merged_blocks.append(added_block)
+                        seen_texts.add(added_text)
+                        logger.debug(f"在位置 {base_idx} 之前插入新增块: {added_text[:50]}")
+                    added_index += 1
+                else:
+                    break
+            
+            # 处理当前 base 块
+            if not base_block_text:
+                # 空块也保留（可能是格式标记）
+                merged_blocks.append(base_block)
+                continue
+            
+            # 检查是否被删除
+            if base_block_text in deleted_texts:
+                logger.debug(f"跳过删除的块: {base_block_text[:50]}")
+                continue
+            
+            # 如果服务器中有对应的块，使用服务器块；否则使用 base 块
+            if base_block_text in base_block_to_server_block:
+                server_block = base_block_to_server_block[base_block_text]
+                if base_block_text not in seen_texts:
+                    merged_blocks.append(server_block)
+                    seen_texts.add(base_block_text)
+            elif base_block_text not in seen_texts:
+                # 如果服务器中没有，但 base 中有，保留 base 块
+                merged_blocks.append(base_block)
+                seen_texts.add(base_block_text)
+        
+        # 添加剩余的新增块（在最后）
+        while added_index < len(added_blocks_with_position):
+            added_pos, added_block, added_text = added_blocks_with_position[added_index]
+            if added_text not in seen_texts:
+                merged_blocks.append(added_block)
+                seen_texts.add(added_text)
+                logger.debug(f"在末尾添加新增块: {added_text[:50]}")
+            added_index += 1
+        
+        # 添加服务器中独有的块（不在 base 中，也不在 client 中）
+        for server_block in server_blocks:
+            server_block_text = get_block_text(server_block)
+            if server_block_text and server_block_text not in seen_texts:
+                # 检查是否在 base 或 client 中
+                if server_block_text not in base_texts and server_block_text not in client_texts:
+                    merged_blocks.append(server_block)
+                    seen_texts.add(server_block_text)
+                    logger.debug(f"添加服务器独有的块: {server_block_text[:50]}")
         
         merged_html = ''.join(merged_blocks)
         logger.info(f"✅ 差异合并完成：合并后 {len(merged_blocks)} 个块，长度 {len(merged_html)}")
-        return merged_html if merged_html else client_content
+        
+        # 如果合并后为空，返回客户端内容（保留删除操作）
+        if not merged_html or merged_html.strip() == '':
+            logger.warning("合并后内容为空，返回客户端内容（保留删除操作）")
+            return client_content
+        
+        return merged_html
     
     async def _merge_text_with_diff(
         self,
@@ -644,8 +687,16 @@ class ShareDBService:
         
         # 验证合并结果：合并后的内容应该包含大部分原始内容
         if len(merged) < min(len(server_content), len(client_content)) * 0.5:
-            logger.warning("合并结果异常，内容可能丢失，使用较长的版本")
-            return client_content if len(client_content) > len(server_content) else server_content
+            logger.warning("合并结果异常，内容可能丢失，使用备用策略")
+            # 备用策略：如果一个是另一个的子集，返回超集
+            if server_content in client_content:
+                return client_content
+            elif client_content in server_content:
+                return server_content
+            else:
+                # 如果无法判断，返回服务器内容（已知的最新版本）
+                logger.warning("无法智能合并，返回服务器内容")
+                return server_content
         
         return merged
 
@@ -702,11 +753,29 @@ class ShareDBService:
         # 验证：合并后的内容应该包含大部分原始内容
         if len(merged) < max(len(server_text), len(client_text)) * 0.7:
             logger.warning("合并结果异常，使用备用策略")
-            # 备用策略：简单拼接
-            if server_text not in client_text and client_text not in server_text:
-                merged = server_text + '\n' + client_text
+            # 备用策略：尝试智能拼接
+            # 如果一个是另一个的子集，返回超集
+            if server_text in client_text:
+                merged = client_text
+            elif client_text in server_text:
+                merged = server_text
+            # 否则，尝试拼接（避免重复）
+            elif server_text not in client_text and client_text not in server_text:
+                # 找出共同后缀，避免重复拼接
+                common_suffix = ''
+                min_len = min(len(server_text), len(client_text))
+                for i in range(1, min_len + 1):
+                    if server_text[-i:] == client_text[:i]:
+                        common_suffix = server_text[-i:]
+                        break
+                if common_suffix:
+                    merged = server_text + client_text[len(common_suffix):]
+                else:
+                    merged = server_text + '\n' + client_text
             else:
-                merged = client_text if len(client_text) > len(server_text) else server_text
+                # 如果无法判断，返回服务器内容（因为它是已知的最新版本）
+                logger.warning("无法智能合并，返回服务器内容")
+                merged = server_text
         
         logger.info(f"文本合并完成: 服务器 {len(server_lines)} 行，客户端 {len(client_lines)} 行，合并后 {len(merged_lines)} 行")
         return merged
@@ -913,9 +982,44 @@ class ShareDBService:
                     logger.info("使用后缀追加策略合并")
                     return merged
         
-        # 策略4：最后手段，返回较长的内容
-        logger.warning("所有合并策略失败，返回较长的内容")
-        return client_html if len(client_html) > len(server_html) else server_html
+        # 策略4：最后手段，尝试智能合并
+        logger.warning("所有合并策略失败，尝试智能合并")
+        # 不要简单地返回较长的内容，而是尝试合并
+        # 如果服务器内容包含客户端内容，返回服务器内容
+        # 如果客户端内容包含服务器内容，返回客户端内容
+        # 否则，尝试拼接
+        if server_html in client_html:
+            return client_html
+        elif client_html in server_html:
+            return server_html
+        else:
+            # 尝试拼接，但确保不重复
+            # 找出共同前缀和后缀
+            common_prefix = ''
+            common_suffix = ''
+            min_len = min(len(server_html), len(client_html))
+            for i in range(min_len):
+                if server_html[i] == client_html[i]:
+                    common_prefix += server_html[i]
+                else:
+                    break
+            for i in range(1, min_len + 1):
+                if server_html[-i] == client_html[-i]:
+                    common_suffix = server_html[-i] + common_suffix
+                else:
+                    break
+            # 如果共同部分足够大，尝试合并
+            if len(common_prefix) > min_len * 0.5 or len(common_suffix) > min_len * 0.5:
+                # 使用服务器内容作为基础，添加客户端独有的部分
+                if len(common_prefix) > len(common_suffix):
+                    client_unique = client_html[len(common_prefix):]
+                    return server_html + client_unique
+                else:
+                    client_unique = client_html[:-len(common_suffix)] if len(common_suffix) > 0 else client_html
+                    return client_unique + server_html
+            # 最后手段：返回服务器内容（因为它是已知的最新版本）
+            logger.warning("无法智能合并，返回服务器内容")
+            return server_html
 
     async def _merge_html_content(self, server_html: str, client_html: str) -> str:
         """
@@ -957,75 +1061,215 @@ class ShareDBService:
         if merged_paragraphs:
             return ''.join(merged_paragraphs)
         else:
-            # 如果无法提取段落，返回较长的内容
-            return client_html if len(client_html) > len(server_html) else server_html
+            # 如果无法提取段落，尝试其他策略
+            # 如果一个是另一个的子集，返回超集
+            if server_html in client_html:
+                return client_html
+            elif client_html in server_html:
+                return server_html
+            else:
+                # 如果无法判断，返回服务器内容（已知的最新版本）
+                logger.warning("无法提取段落，返回服务器内容")
+                return server_html
 
     async def sync_document(
         self, 
         document_id: str, 
         version: int, 
         content: str,
+        base_version: Optional[int] = None,  # 基于哪个版本做的更改
         base_content: Optional[str] = None,  # 上次同步的内容（用于计算差异）
         user_id: Optional[int] = None,
         create_version: bool = False,
         db_session: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
-        同步文档到ShareDB，支持冲突检测和智能合并
-        借鉴 nexcode_server 的实现，适配 Redis 存储
+        同步文档到ShareDB，支持多端同步和冲突合并
         
-        策略：
-        1. 如果服务器版本 > 客户端版本：先合并服务器内容，再应用客户端更改
-        2. 如果服务器版本 <= 客户端版本：直接更新
+        核心逻辑：
+        1. 在锁内获取服务器最新版本（确保原子性）
+        2. 基于 base_version 获取 base_content（三路合并的基础）
+        3. 执行三路合并：base_content + server_content + client_content
+        4. 版本号严格递增：new_version = server_version + 1
+        5. 保存到Redis并创建版本历史记录
+        
+        这样确保：
+        - 两个客户端同时同步时，都会基于相同的 server_version 进行合并
+        - 合并后的版本号 = server_version + 1，保证严格递增
+        - 所有客户端最终都会获得相同的版本号
         """
         if not self._initialized:
             await self.initialize()
 
-        # 获取锁以保证原子操作
+        # 获取锁以保证原子操作（关键：确保多端同步时串行执行）
         if document_id not in self.document_locks:
             self.document_locks[document_id] = asyncio.Lock()
 
         async with self.document_locks[document_id]:
             try:
-                # 获取当前文档
+                # ========== 步骤1: 在锁内获取服务器最新版本（关键：确保原子性）==========
                 document = await self.get_document(document_id)
                 
-                # 如果文档不存在，创建新文档
+                # ========== 步骤2: 处理文档不存在的情况 ==========
                 if not document:
+                    # 创建新文档
+                    new_version = 1
                     document = {
                         "id": document_id,
                         "content": content,
-                        "version": 1,
+                        "version": new_version,
                         "created_at": datetime.utcnow().isoformat(),
                         "updated_at": datetime.utcnow().isoformat(),
                         "last_editor_id": user_id
                     }
+                    merge_strategy = "create"
+                    logger.info(f"📝 [同步] 创建新文档: {document_id}, 版本: {new_version}")
                 else:
+                    # ========== 步骤3: 处理文档已存在的情况，执行合并 ==========
                     # 冲突检测和智能合并
-                    original_server_version = document.get("version", 0) or 0
-                    server_version = original_server_version  # 保存原始服务器版本用于记录
+                    # 关键：获取服务器最新版本（在锁内获取，确保是最新的）
+                    server_version = document.get("version", 0) or 0
                     server_content = document.get("content", "")
+                    merge_strategy = None  # 初始化合并策略变量
+                    
+                    logger.info(f"📊 [版本管理] 同步请求: base_version={base_version}, client_version={version}, server_version={server_version}")
+                    
+                    # 关键改进：优先使用 base_version 获取 base_content
+                    # 如果提供了 base_version，尝试从历史记录获取对应版本的内容
+                    actual_base_content = base_content
+                    if base_version is not None and base_version > 0:
+                        # 尝试从数据库获取历史版本内容
+                        if db_session is not None:
+                            try:
+                                from memos.api.models.document import DocumentSyncHistory
+                                from sqlalchemy import select
+                                from sqlalchemy.ext.asyncio import AsyncSession
+                                
+                                # FastAPI 的 Depends 应该已经解析了生成器
+                                # 但如果 db_session 仍然是生成器，我们需要处理它
+                                session = db_session
+                                
+                                # 检查是否是 AsyncSession 对象（有 execute 方法）
+                                if not hasattr(session, 'execute'):
+                                    # 可能是生成器，尝试获取会话对象
+                                    if hasattr(session, '__aiter__'):
+                                        logger.warning("db_session 是生成器，尝试获取会话对象")
+                                        try:
+                                            # 尝试获取生成器的第一个值
+                                            session = await session.__anext__()
+                                        except StopAsyncIteration:
+                                            logger.error("无法从生成器获取会话对象，跳过历史记录查询")
+                                            # 不抛出异常，而是使用提供的 base_content
+                                            session = None
+                                    else:
+                                        logger.error(f"db_session 类型错误: {type(session)}，跳过历史记录查询")
+                                        session = None
+                                
+                                # 如果无法获取会话，使用服务器内容作为 base_content
+                                if session is None:
+                                    logger.warning("无法获取数据库会话，使用服务器内容作为 base_content 进行融合")
+                                    actual_base_content = server_content
+                                else:
+                                    stmt = select(DocumentSyncHistory).where(
+                                        DocumentSyncHistory.document_id == document_id,
+                                        DocumentSyncHistory.version == base_version
+                                    ).order_by(DocumentSyncHistory.created_at.desc())
+                                    
+                                    result = await session.execute(stmt)
+                                    history_record = result.scalar_one_or_none()
+
+                                    if history_record and history_record.content:
+                                        actual_base_content = history_record.content
+                                        logger.info(f"从历史记录获取 base_content (版本 {base_version})")
+                                    elif base_version == server_version:
+                                        # 如果 base_version 等于服务器版本，使用服务器内容
+                                        actual_base_content = server_content
+                                        logger.info(f"base_version 等于服务器版本，使用服务器内容作为 base_content")
+                                    else:
+                                        # 关键改进：如果没有历史版本，使用服务器内容作为 base_content
+                                        # 这样可以确保即使没有历史记录，也能进行正确的差异合并
+                                        logger.info(f"无法获取版本 {base_version} 的历史记录，使用服务器内容作为 base_content 进行融合")
+                                        actual_base_content = server_content
+                            except Exception as e:
+                                error_str = str(e)
+                                # 关键改进：如果查询失败（如表不存在），尝试创建表
+                                if "does not exist" in error_str or "UndefinedTableError" in error_str:
+                                    logger.warning(f"历史记录表不存在: {e}，尝试创建表")
+                                    # 尝试创建表
+                                    try:
+                                        if session is not None:
+                                            # 回滚失败的事务
+                                            try:
+                                                await session.rollback()
+                                            except Exception:
+                                                pass
+                                            
+                                            # 创建表
+                                            from memos.api.core.database import Base, engine
+                                            from memos.api.models.document import DocumentSyncHistory
+                                            
+                                            # 使用独立的连接来创建表，避免事务问题
+                                            async with engine.begin() as conn:
+                                                await conn.run_sync(Base.metadata.create_all)
+                                            logger.info("✅ 已创建 document_sync_history 表")
+                                            
+                                            # 表创建后，使用服务器内容作为 base_content
+                                            actual_base_content = server_content
+                                            logger.info("使用服务器内容作为 base_content 进行融合")
+                                        else:
+                                            actual_base_content = server_content
+                                            logger.warning("无数据库会话，无法创建表，使用服务器内容作为 base_content")
+                                    except Exception as create_table_error:
+                                        logger.warning(f"创建表失败: {create_table_error}，使用服务器内容作为 base_content")
+                                        actual_base_content = server_content
+                                        # 回滚事务
+                                        if session is not None and hasattr(session, 'rollback'):
+                                            try:
+                                                await session.rollback()
+                                            except Exception:
+                                                pass
+                                else:
+                                    # 其他错误，使用服务器内容作为 base_content
+                                    logger.warning(f"获取历史版本内容失败: {e}，使用服务器内容作为 base_content 进行融合")
+                                    actual_base_content = server_content
+                                    # 如果会话存在且事务失败，回滚事务
+                                    if session is not None and hasattr(session, 'rollback'):
+                                        try:
+                                            await session.rollback()
+                                            logger.debug("已回滚失败的事务")
+                                        except Exception as rollback_error:
+                                            logger.debug(f"回滚事务失败（可能已经回滚）: {rollback_error}")
+                        elif base_version == server_version:
+                            # 如果 base_version 等于服务器版本，使用服务器内容
+                            actual_base_content = server_content
+                            logger.info(f"base_version 等于服务器版本，使用服务器内容作为 base_content (无db_session)")
+                        else:
+                            # 关键改进：如果没有 db_session，使用服务器内容作为 base_content
+                            logger.info(f"无db_session且无法获取版本 {base_version} 的内容，使用服务器内容作为 base_content 进行融合")
+                            actual_base_content = server_content
                     
                     # 关键改进：即使版本号相同或客户端更大，也要检查内容是否不同
                     # 因为可能存在并发修改但版本号相同的情况
                     content_different = server_content != content
                     
                     # 关键改进：如果有 base_content 且不为空，使用基于差异的合并
-                    if base_content is not None and base_content.strip() and base_content != content:
-                        logger.info(f"使用基于差异的合并: base长度={len(base_content)}, client长度={len(content)}, server长度={len(server_content)}")
-                        logger.info(f"base内容预览: {base_content[:100]}...")
+                    if actual_base_content is not None and actual_base_content.strip() and actual_base_content != content:
+                        logger.info(f"使用基于差异的合并: base版本={base_version}, base长度={len(actual_base_content)}, client长度={len(content)}, server版本={server_version}, server长度={len(server_content)}")
+                        logger.info(f"base内容预览: {actual_base_content[:100]}...")
                         logger.info(f"client内容预览: {content[:100]}...")
                         logger.info(f"server内容预览: {server_content[:100]}...")
                         merged_content = await self._merge_with_diff(
-                            base_content=base_content,
+                            base_content=actual_base_content,
                             client_content=content,
                             server_content=server_content
                         )
                         document["content"] = merged_content
-                        document["version"] = max(server_version, version) + 1
-                        logger.info(f"✅ 差异合并完成，新版本: {document['version']}, 合并后长度: {len(merged_content)}")
+                        # 关键修复：版本号应该是服务器最新版本 + 1，确保版本号严格递增
+                        document["version"] = server_version + 1
+                        merge_strategy = "diff_based"  # 记录合并策略
+                        logger.info(f"✅ 差异合并完成，新版本: {document['version']} (基于服务器版本 {server_version} + 1), 合并后长度: {len(merged_content)}")
                         logger.info(f"合并后内容预览: {merged_content[:100]}...")
-                    elif base_content is not None and not base_content.strip():
+                    elif actual_base_content is not None and not actual_base_content.strip():
                         # base_content 为空，可能是第一次同步，使用智能合并
                         logger.info(f"base_content 为空，使用智能合并")
                         merged_content = await self._smart_merge_content(
@@ -1035,8 +1279,10 @@ class ShareDBService:
                             client_version=version
                         )
                         document["content"] = merged_content
-                        document["version"] = max(server_version, version) + 1
-                        logger.info(f"智能合并完成，新版本: {document['version']}, 合并后长度: {len(merged_content)}")
+                        # 关键修复：版本号应该是服务器最新版本 + 1，确保版本号严格递增
+                        document["version"] = server_version + 1
+                        merge_strategy = "smart_merge"  # 记录合并策略
+                        logger.info(f"智能合并完成，新版本: {document['version']} (基于服务器版本 {server_version} + 1), 合并后长度: {len(merged_content)}")
                     # 如果服务器版本更新，或者内容不同，都需要合并
                     elif server_version > version or (content_different and server_version == version):
                         if server_version > version:
@@ -1056,8 +1302,10 @@ class ShareDBService:
                         )
                         
                         document["content"] = merged_content
-                        document["version"] = max(server_version, version) + 1  # 合并后版本递增
-                        logger.info(f"内容已合并，新版本: {document['version']}, 合并后长度: {len(merged_content)}")
+                        # 关键修复：版本号应该是服务器最新版本 + 1，确保版本号严格递增
+                        document["version"] = server_version + 1
+                        merge_strategy = "smart_merge"  # 记录合并策略
+                        logger.info(f"内容已合并，新版本: {document['version']} (基于服务器版本 {server_version} + 1), 合并后长度: {len(merged_content)}")
                     elif content_different:
                         # 版本号相同但内容不同（可能是并发修改），也需要合并
                         logger.info(f"检测到并发修改: 版本相同 ({version}) 但内容不同")
@@ -1069,13 +1317,16 @@ class ShareDBService:
                         )
                         document["content"] = merged_content
                         document["version"] = server_version + 1
+                        merge_strategy = "smart_merge"  # 记录合并策略
                         logger.info(f"并发修改已合并，新版本: {document['version']}")
                     else:
                         # 内容和版本都相同，无需更新
                         logger.info("内容和版本都相同，无需更新")
-                        # 但仍然更新版本号和时间戳，表示有同步操作
-                        document["version"] = max(version + 1, server_version + 1)
+                        # 关键修复：即使内容相同，版本号也应该基于服务器版本 + 1，确保版本号严格递增
+                        # 这样可以确保即使两个客户端同时同步相同内容，也能获得相同的版本号
+                        document["version"] = server_version + 1
                         document["content"] = content  # 保持原内容
+                        logger.info(f"版本号递增: {server_version} -> {document['version']} (内容未变化)")
                     
                     document["updated_at"] = datetime.utcnow().isoformat()
                     if user_id:
@@ -1087,112 +1338,165 @@ class ShareDBService:
                     settings.SHAREDB_DOCUMENT_TTL or 86400,  # 24小时默认TTL
                     json.dumps(document)
                 )
+                logger.info(f"✅ [ShareDB] 已保存到Redis: {document_id}, 版本 {document.get('version')}, 内容长度 {len(document.get('content', ''))}")
 
-                # 计算内容哈希
-                final_content = document["content"]
-                content_hash = hashlib.md5(final_content.encode('utf-8')).hexdigest() if final_content else None
-                
-                # 确定合并策略和冲突信息
-                # 注意：这里需要使用合并前的server_version，所以需要在合并逻辑中保存
-                merge_strategy = None
-                conflict_resolved = False
-                sync_type = "sync"
-                
-                # 根据实际的合并逻辑确定策略
-                # 如果文档不存在，说明是新文档
-                if not document or (document.get("version", 0) == 1 and not document.get("updated_at")):
-                    # 新文档，无冲突
-                    sync_type = "sync"
-                    original_server_version = 0
-                else:
-                    # 使用在合并逻辑中保存的server_version
-                    original_server_version = server_version
-                    
-                    # 判断合并策略
-                    if base_content is not None and base_content.strip() and base_content != content:
-                        # 使用差异合并
-                        merge_strategy = "diff_based"
-                        conflict_resolved = True
-                        sync_type = "merge"
-                    elif server_version > version or (content_different and server_version == version):
-                        # 有冲突并已解决
-                        merge_strategy = "smart_merge"
-                        conflict_resolved = True
-                        sync_type = "merge"
-                    elif content_different:
-                        # 并发修改
-                        merge_strategy = "smart_merge"
-                        conflict_resolved = True
-                        sync_type = "merge"
-                    else:
-                        # 普通同步
-                        sync_type = "sync"
-                
-                # 保存同步历史到数据库（如果提供了db_session）
-                if db_session is not None:
+                # 关键改进：如果 create_version 为 True 或表不存在，创建版本历史记录
+                # 使用当前合并后的内容作为版本历史
+                if db_session is not None and document.get("version"):
                     try:
                         from memos.api.models.document import DocumentSyncHistory
+                        from sqlalchemy.ext.asyncio import AsyncSession
+                        from sqlalchemy import select
+                        import hashlib
                         
-                        sync_history = DocumentSyncHistory(
-                            document_id=document_id,
-                            version=document["version"],
-                            content=final_content if create_version else None,  # 只有create_version=True时才保存内容
-                            content_hash=content_hash,
-                            user_id=user_id,
-                            sync_type=sync_type,
-                            conflict_resolved=conflict_resolved,
-                            merge_strategy=merge_strategy,
-                            base_version=version if base_content else None,
-                            client_version=version,
-                            server_version=original_server_version if document else None,
-                            metadata={
-                                "create_version": create_version,
-                                "content_length": len(final_content) if final_content else 0,
-                            }
-                        )
-                        db_session.add(sync_history)
-                        await db_session.commit()
-                        logger.info(f"已保存文档同步历史: {document_id}, 版本: {document['version']}")
-                    except Exception as e:
-                        logger.warning(f"保存同步历史失败（不影响同步功能）: {e}")
-                        # 如果保存历史失败，不影响同步功能，只记录警告
-                        if db_session:
+                        # FastAPI 的 Depends 应该已经解析了生成器，db_session 应该是 AsyncSession 对象
+                        # 直接使用，不要手动从生成器中获取（避免连接泄漏）
+                        session = db_session
+                        
+                        # 检查是否是 AsyncSession 对象（有 execute 方法）
+                        if not hasattr(session, 'execute'):
+                            logger.warning(f"db_session 类型错误: {type(session)}，跳过创建版本历史记录")
+                            session = None
+                        
+                        if session is not None:
                             try:
-                                await db_session.rollback()
-                            except:
-                                pass
+                                # 关键修复：如果之前有错误导致事务回滚，先回滚事务
+                                try:
+                                    await session.rollback()
+                                except Exception:
+                                    # 如果回滚失败（可能已经回滚或没有事务），继续
+                                    pass
+                                
+                                # 检查是否已存在该版本的记录
+                                stmt = select(DocumentSyncHistory).where(
+                                    DocumentSyncHistory.document_id == document_id,
+                                    DocumentSyncHistory.version == document["version"]
+                                )
+                                result = await session.execute(stmt)
+                                existing = result.scalar_one_or_none()
+                                
+                                if not existing:
+                                    # 创建版本历史记录
+                                    merged_content = document.get("content", content)
+                                    content_hash = hashlib.md5(merged_content.encode()).hexdigest()
+                                    
+                                    # 获取合并策略（从之前的合并逻辑中）
+                                    # 如果文档是新创建的，server_version 可能不存在
+                                    current_server_version = document.get("version", 1) - 1 if document.get("version", 1) > 1 else 0
+                                    if 'server_version' in locals():
+                                        current_server_version = server_version
+                                    
+                                    current_merge_strategy = merge_strategy if merge_strategy else "diff_based"
+                                    
+                                    history_record = DocumentSyncHistory(
+                                        document_id=document_id,
+                                        version=document["version"],
+                                        content=merged_content,
+                                        content_hash=content_hash,
+                                        user_id=user_id,
+                                        sync_type="version_snapshot" if create_version else "sync",
+                                        conflict_resolved=True if document.get("version", 0) > current_server_version else False,
+                                        merge_strategy=current_merge_strategy,
+                                        base_version=base_version,
+                                        client_version=version,
+                                        server_version=current_server_version,
+                                        sync_metadata={"auto_created": False}
+                                    )
+                                    session.add(history_record)
+                                    await session.commit()
+                                    logger.info(f"✅ 已创建版本历史记录: 版本 {document['version']}, 内容长度 {len(merged_content)}")
+                                else:
+                                    logger.debug(f"版本历史记录已存在: 版本 {document['version']}")
+                            except Exception as e:
+                                error_str = str(e)
+                                # 如果创建失败，回滚事务
+                                try:
+                                    await session.rollback()
+                                except Exception:
+                                    pass
+                                
+                                if "does not exist" in error_str or "UndefinedTableError" in error_str:
+                                    logger.warning(f"版本历史表不存在: {e}，尝试创建表")
+                                    # 尝试创建表
+                                    try:
+                                        # 回滚失败的事务
+                                        try:
+                                            await session.rollback()
+                                        except Exception:
+                                            pass
+                                        
+                                        # 创建表 - 使用独立的连接来创建表，避免事务问题
+                                        from memos.api.core.database import Base, engine
+                                        from memos.api.models.document import DocumentSyncHistory
+                                        
+                                        async with engine.begin() as conn:
+                                            await conn.run_sync(Base.metadata.create_all)
+                                        logger.info("✅ 已创建 document_sync_history 表")
+                                        
+                                        # 表创建后，尝试再次创建版本历史记录
+                                        try:
+                                            # 回滚当前会话，准备新事务
+                                            try:
+                                                await session.rollback()
+                                            except Exception:
+                                                pass
+                                            
+                                            merged_content = document.get("content", content)
+                                            content_hash = hashlib.md5(merged_content.encode()).hexdigest()
+                                            
+                                            current_server_version = document.get("version", 1) - 1 if document.get("version", 1) > 1 else 0
+                                            if 'server_version' in locals():
+                                                current_server_version = server_version
+                                            
+                                            current_merge_strategy = merge_strategy if merge_strategy else "diff_based"
+                                            
+                                            history_record = DocumentSyncHistory(
+                                                document_id=document_id,
+                                                version=document["version"],
+                                                content=merged_content,
+                                                content_hash=content_hash,
+                                                user_id=user_id,
+                                                sync_type="version_snapshot" if create_version else "sync",
+                                                conflict_resolved=True if document.get("version", 0) > current_server_version else False,
+                                                merge_strategy=current_merge_strategy,
+                                                base_version=base_version,
+                                                client_version=version,
+                                                server_version=current_server_version,
+                                                sync_metadata={"auto_created": False, "table_created": True}
+                                            )
+                                            session.add(history_record)
+                                            await session.commit()
+                                            logger.info(f"✅ 已创建版本历史记录: 版本 {document['version']}, 内容长度 {len(merged_content)}")
+                                        except Exception as retry_error:
+                                            logger.warning(f"表创建后再次创建版本历史记录失败: {retry_error}")
+                                    except Exception as create_table_error:
+                                        logger.warning(f"创建表失败: {create_table_error}")
+                                elif "InFailedSQLTransactionError" in error_str or "transaction is aborted" in error_str:
+                                    logger.warning(f"事务已中止，跳过创建版本历史记录: {e}")
+                                else:
+                                    logger.warning(f"创建版本历史记录失败: {e}")
+                    except Exception as e:
+                        logger.debug(f"创建版本历史记录时出错（不影响同步）: {e}")
 
-                # 计算差异并生成操作（增量更新）
-                operations = []
-                if document and "content" in document:
-                    # 获取之前的文档内容（用于计算差异）
-                    previous_content = document.get("previous_content") or server_content if document else ""
-                    new_content = document["content"]
-                    
-                    # 如果内容不同，计算差异
-                    if previous_content != new_content:
-                        operations = self._calculate_diff_operations(previous_content, new_content)
-                        logger.info(f"计算差异: 从 {len(previous_content)} 到 {len(new_content)} 字符，生成 {len(operations)} 个操作")
-                    
-                    # 保存当前内容作为下次的previous_content
-                    document["previous_content"] = new_content
-                
-                # 始终发送完整内容更新（更可靠）
-                # 同时也可以发送操作作为辅助信息，但优先使用完整内容
+                # 记录操作历史（可选）
+                operation_record = {
+                    "doc_id": document_id,
+                    "version": document["version"],
+                    "operation": {
+                        "type": "full_update",
+                        "content": content
+                    },
+                    "user_id": user_id or 0,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+                # 广播更新给所有连接的客户端（广播合并后的内容）
                 await self._broadcast_update(document_id, {
                     "type": "document_synced",
                     "document_id": document_id,
                     "version": document["version"],
-                    "content": document["content"],  # 完整内容（主要方式）
-                    "operations": operations if len(operations) <= 100 else [],  # 操作（辅助，可选）
-                    "full_content": True  # 标记这是完整内容更新
+                    "content": document["content"]  # 广播合并后的内容，不是客户端原始内容
                 })
-                
-                # 记录是否使用了增量操作
-                if operations and len(operations) <= 100:
-                    logger.info(f"已发送完整内容更新，同时包含 {len(operations)} 个增量操作（可选）")
-                else:
-                    logger.info(f"已发送完整内容更新（操作数: {len(operations) if operations else 0}，超过限制）")
 
                 logger.info(f"文档 {document_id} 已同步，版本: {document['version']}")
 

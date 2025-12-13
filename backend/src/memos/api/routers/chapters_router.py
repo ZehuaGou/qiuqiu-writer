@@ -12,6 +12,23 @@ from datetime import datetime
 
 from memos.api.core.database import get_async_db
 from memos.api.core.security import get_current_user_id
+
+# 辅助函数：确保返回的是 AsyncSession 对象，而不是生成器
+async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSession:
+    """
+    确保返回的是 AsyncSession 对象，而不是生成器
+    FastAPI 的 Depends 应该已经处理了生成器，但为了安全起见，我们再次检查
+    """
+    # FastAPI 的 Depends 应该已经处理了生成器，直接返回
+    # 但如果仍然是生成器，尝试获取会话对象
+    if hasattr(db, '__aiter__') and not hasattr(db, 'execute'):
+        # 如果是生成器，尝试获取会话对象
+        try:
+            db = await db.__anext__()
+        except StopAsyncIteration:
+            raise ValueError("无法从生成器获取数据库会话")
+    
+    return db
 from memos.api.services.chapter_service import ChapterService
 from memos.api.services.sharedb_service import ShareDBService
 # Chapter schemas will be created later
@@ -20,6 +37,9 @@ from memos.api.services.sharedb_service import ShareDBService
 #     ChapterVersionCreate, ChapterVersionResponse
 # )
 from memos.api.models.chapter import Chapter, ChapterVersion
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Temporary schemas - will be replaced with proper schema files
 from pydantic import BaseModel
@@ -36,10 +56,6 @@ class ChapterUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     status: Optional[str] = None
-    summary: Optional[str] = None
-    chapter_metadata: Optional[Dict[str, Any]] = None  # 包含outline和detailed_outline
-    tags: Optional[List[str]] = None
-    notes: Optional[Dict[str, Any]] = None
 
 class ChapterResponse(BaseModel):
     id: int
@@ -49,20 +65,8 @@ class ChapterResponse(BaseModel):
     volume_number: int
     status: str
     word_count: int
-    estimated_reading_time: Optional[int] = 0
-    content_hash: Optional[str] = None
-    tags: Optional[List[str]] = []
-    summary: Optional[str] = None
-    notes: Optional[Dict[str, Any]] = {}
-    metadata: Optional[Dict[str, Any]] = {}  # 包含outline和detailed_outline
-    sort_order: Optional[int] = 0
     created_at: str
     updated_at: str
-    published_at: Optional[str] = None
-    content_preview: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
 
 class ChapterListResponse(BaseModel):
     chapters: List[ChapterResponse]
@@ -91,7 +95,7 @@ sharedb_service = ShareDBService()
 async def create_chapter(
     chapter_data: ChapterCreate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -166,7 +170,7 @@ async def list_chapters(
     status: Optional[str] = Query(None, description="章节状态"),
     sort_by: str = Query("chapter_number", description="排序字段"),
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="排序方向"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -209,7 +213,7 @@ async def list_chapters(
 async def get_chapter(
     chapter_id: int,
     include_versions: bool = Query(False, description="是否包含版本历史"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -251,7 +255,7 @@ async def update_chapter(
     chapter_id: int,
     chapter_update: ChapterUpdate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -312,7 +316,7 @@ async def update_chapter(
 async def delete_chapter(
     chapter_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -364,7 +368,7 @@ async def get_chapter_versions(
     chapter_id: int,
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> List[Dict[str, Any]]:
     """
@@ -403,7 +407,7 @@ async def create_chapter_version(
     chapter_id: int,
     version_data: ChapterVersionCreate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -517,7 +521,7 @@ async def websocket_collaborate(
 @router.get("/{chapter_id}/document")
 async def get_chapter_document(
     chapter_id: int,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -545,10 +549,17 @@ async def get_chapter_document(
     # 获取ShareDB文档
     document = await sharedb_service.get_document(f"chapter_{chapter_id}")
     if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="ShareDB文档不存在"
-        )
+        # 如果ShareDB文档不存在，返回空内容而不是404
+        # 这样前端可以正常初始化编辑器
+        # 注意：Chapter 模型没有 content 属性，内容存储在 ShareDB 中
+        logger.warning(f"ShareDB文档不存在: chapter_{chapter_id}，返回空内容")
+        document = {
+            "id": f"chapter_{chapter_id}",
+            "content": "",  # 返回空内容，让前端可以正常初始化编辑器
+            "version": 1,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
 
     return {
         "document_id": f"chapter_{chapter_id}",
@@ -561,7 +572,7 @@ async def get_chapter_document(
 async def submit_document_operation(
     chapter_id: int,
     operation: Dict[str, Any],
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """

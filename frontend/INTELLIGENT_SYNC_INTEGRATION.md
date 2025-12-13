@@ -67,7 +67,7 @@
 ```typescript
 {
   syncDebounceDelay: 1000,      // 同步防抖延迟（毫秒）
-  pollInterval: 10000,          // 轮询间隔（毫秒）
+  pollInterval: 5000,          // 轮询间隔（毫秒）
   userInputWindow: 5000,        // 用户输入检测窗口（毫秒）
   syncCheckInterval: 3000,      // 同步检查间隔（毫秒）
   enablePolling: true,          // 是否启用轮询

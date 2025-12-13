@@ -31,7 +31,7 @@ export function ExampleEditor({ documentId }: { documentId: string }) {
     updateContent,
     {
       syncDebounceDelay: 1000,      // 同步防抖延迟 1 秒
-      pollInterval: 10000,          // 每 10 秒轮询一次
+      pollInterval: 5000,          // 每 10 秒轮询一次
       userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
       syncCheckInterval: 3000,      // 每 3 秒检查一次是否需要同步
       enablePolling: true,          // 启用轮询
@@ -166,7 +166,7 @@ export function ExampleLexicalEditor({ documentId }: { documentId: string }) {
     updateContent,
     {
       syncDebounceDelay: 1000,
-      pollInterval: 10000,
+      pollInterval: 5000,
       enablePolling: true,
     }
   );

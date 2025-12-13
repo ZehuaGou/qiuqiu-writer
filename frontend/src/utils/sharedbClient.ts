@@ -56,11 +56,16 @@ class ShareDBClient {
   private pendingOperations: ShareDBOperation[] = [];
   private lastSyncTime: Date | null = null;
   private syncInProgress: boolean = false;
-  private currentVersion: Map<string, number> = new Map();
-  private currentContent: Map<string, string> = new Map();
+  // 公开缓存，允许外部访问和更新
+  public currentVersion: Map<string, number> = new Map();
+  public currentContent: Map<string, string> = new Map();
   private pendingDocumentId: string | null = null;
   private subscribedDocumentId: string | null = null;
   private documentUpdateCallbacks: Map<string, Set<(content: string, version: number) => void>> = new Map();
+  // 记录断线时的文档状态，用于重连后合并
+  private offlineDocuments: Map<string, { content: string; version: number; timestamp: number }> = new Map();
+  // 记录断线时的文档状态，用于重连后合并
+  private offlineDocuments: Map<string, { content: string; version: number; timestamp: number }> = new Map();
 
   constructor(wsUrl?: string) {
     // 从环境变量或配置获取 WebSocket URL
@@ -84,8 +89,13 @@ class ShareDBClient {
         this.ws.onopen = () => {
           this.connected = true;
           this.reconnectAttempts = 0;
-          console.log('ShareDB 连接成功');
+          console.log('✅ [ShareDB] 连接成功');
           this.notifyConnectionChange(true);
+          
+          // 关键修复：重连后立即同步离线期间的更改
+          this.syncOfflineChanges().catch(error => {
+            console.error('❌ [ShareDB] 同步离线更改失败:', error);
+          });
           
           // 连接成功后，如果有待订阅的文档，自动订阅
           if (this.pendingDocumentId) {
@@ -107,8 +117,12 @@ class ShareDBClient {
 
         this.ws.onclose = () => {
           this.connected = false;
+          this.isOnline = false;
           this.notifyConnectionChange(false);
-          console.log('ShareDB 连接关闭');
+          console.log('⚠️ [ShareDB] 连接关闭，保存离线状态');
+          
+          // 关键修复：断线时保存当前文档状态，用于重连后合并
+          this.saveOfflineState();
           
           // 自动重连
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -404,26 +418,76 @@ class ShareDBClient {
   // ========== 私有方法 ==========
 
   private async fetchFromServer(documentId: string): Promise<ShareDBDocument | null> {
-    // 如果是章节文档，使用章节 API
-    if (documentId.startsWith('chapter_')) {
-      const chapterId = parseInt(documentId.replace('chapter_', ''));
-      try {
-        // 先尝试从章节 API 获取
-        const chapter = await chaptersApi.getChapter(chapterId);
-        if (chapter.content) {
-          return {
-            document_id: documentId,
-            content: chapter.content,
-            version: chapter.id, // 使用章节 ID 作为版本号
-            metadata: {
-              work_id: chapter.work_id,
-              chapter_id: chapter.id,
-              chapter_number: chapter.chapter_number,
-            },
-          };
+    // 关键修复：优先使用 ShareDB API 获取文档（确保获取最新版本）
+    // 这样可以确保所有客户端都从同一个数据源获取，版本号一致
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+      const token = localStorage.getItem('access_token');
+      
+      const response = await fetch(`${apiUrl}/v1/sharedb/documents/${documentId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
-        
-        // 如果章节 API 没有内容，尝试从 ShareDB 文档 API 获取
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const serverDoc: ShareDBDocument = {
+            document_id: documentId,
+          content: data.content || '',
+          version: data.version || 0,
+            metadata: {
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+          }
+        };
+        console.log('✅ [ShareDB] 从 ShareDB API 获取文档:', {
+          documentId,
+          version: serverDoc.version,
+          contentLength: serverDoc.content.length
+        });
+        return serverDoc;
+      } else if (response.status === 404) {
+        // 文档不存在，返回 null
+        console.log('⚠️ [ShareDB] 文档不存在:', documentId);
+        return null;
+      } else {
+        console.warn('⚠️ [ShareDB] 获取文档失败:', response.status, response.statusText);
+        // 如果 ShareDB API 失败，尝试回退到章节 API（仅对章节文档）
+        return await this.fallbackToChapterAPI(documentId);
+      }
+    } catch (error) {
+      console.error('❌ [ShareDB] 从 ShareDB API 获取文档失败:', error);
+      // 如果 ShareDB API 失败，尝试回退到章节 API（仅对章节文档）
+      return await this.fallbackToChapterAPI(documentId);
+    }
+  }
+
+  /**
+   * 回退到章节 API（仅用于兼容旧格式）
+   */
+  private async fallbackToChapterAPI(documentId: string): Promise<ShareDBDocument | null> {
+    // 如果是章节文档，使用章节 API 作为回退
+    let chapterId: number | null = null;
+    
+    if (documentId.startsWith('chapter_')) {
+      chapterId = parseInt(documentId.replace('chapter_', ''));
+    } else if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
+      // 处理 work_${workId}_chapter_${chapterId} 格式
+      const match = documentId.match(/work_\d+_chapter_(\d+)/);
+      if (match) {
+        chapterId = parseInt(match[1]);
+      }
+    }
+    
+    if (!chapterId || isNaN(chapterId)) {
+      return null;
+    }
+
+    try {
+      // 尝试从章节 API 获取
         const result = await chaptersApi.getChapterDocument(chapterId);
         let content: any = result.content;
         
@@ -436,25 +500,23 @@ class ShareDBClient {
           }
         }
         
+      // 注意：章节 API 可能没有版本号，使用章节 ID 作为版本号（不准确，但作为回退方案）
+      console.warn('⚠️ [ShareDB] 使用章节 API 回退，版本号可能不准确');
         return {
           document_id: documentId,
           content: content || '',
-          version: result.chapter_info.id,
+        version: result.chapter_info?.id || chapterId, // 使用章节 ID 作为版本号（不准确）
           metadata: {
-            work_id: result.chapter_info.work_id,
-            chapter_id: result.chapter_info.id,
-            chapter_number: result.chapter_info.chapter_number,
+          work_id: result.chapter_info?.work_id,
+          chapter_id: result.chapter_info?.id || chapterId,
+          chapter_number: result.chapter_info?.chapter_number,
           },
         };
       } catch (error) {
-        console.error('获取章节文档失败:', error);
+      console.error('❌ [ShareDB] 从章节 API 获取文档失败:', error);
         return null;
       }
     }
-
-    // 其他类型的文档可以通过通用 API 获取
-    return null;
-  }
 
   /**
    * 同步文档状态（借鉴 nexcode_web 的实现）
@@ -485,6 +547,7 @@ class ShareDBClient {
       let serverDoc: ShareDBDocument | null = null;
       let fetchFailed = false;
       let baseContent = this.currentContent.get(documentId) || '';
+      let baseVersion = this.currentVersion.get(documentId) || 0;  // 记录上次同步的版本号
       
       try {
         // 设置超时，避免阻塞太久
@@ -504,7 +567,7 @@ class ShareDBClient {
           // 关键修复：如果服务器版本更新，说明有其他用户修改了
           // 必须使用服务器内容作为baseContent，而不是本地旧内容
           if (serverVersion > currentVersion) {
-            console.log('⚠️ [同步] 检测到服务器版本更新，使用服务器内容作为baseContent:', {
+            console.log('⚠️ [同步] 检测到服务器版本更新，立即更新缓存:', {
               serverVersion,
               clientVersion: currentVersion,
               serverContentLength: serverContent.length,
@@ -512,17 +575,26 @@ class ShareDBClient {
               oldBaseContentLength: baseContent.length
             });
             
-            // 使用服务器内容作为baseContent，确保不会丢失其他用户的更改
-            baseContent = serverContent;
-            
-            // 更新本地版本号和内容
+            // 关键修复：立即更新前端缓存信息
             this.currentVersion.set(documentId, serverVersion);
             this.currentContent.set(documentId, serverContent);
+            console.log('✅ [同步] 已更新前端缓存:', {
+              version: serverVersion,
+              contentLength: serverContent.length
+            });
             
-            // 关键修复：用户当前的content参数是基于旧版本的，不能直接使用
-            // 需要通知编辑器更新内容，然后使用更新后的内容
-            // 或者：使用服务器内容作为content（因为编辑器会更新）
-            // 方案：通知编辑器更新，然后使用服务器内容作为content
+            // 使用服务器内容作为baseContent，确保不会丢失其他用户的更改
+            baseContent = serverContent;
+            // 如果服务器版本更新，baseVersion 应该保持为客户端当前版本（用户基于哪个版本做的更改）
+            // 但 baseContent 使用服务器内容（用于差异计算）
+            // 注意：baseVersion 保持不变，因为用户是基于旧版本做的更改
+            
+            // 关键修复：用户当前的content参数是基于旧版本的，但这是用户的真实编辑
+            // 不能丢弃用户的编辑，应该使用用户的content，但baseContent必须是服务器内容
+            // 这样差异合并可以正确计算：从服务器内容（base）到用户内容（client）的差异
+            // 然后应用到服务器内容上
+            
+            // 通知编辑器更新内容（让用户看到服务器的最新内容）
             const callbacks = this.documentUpdateCallbacks.get(documentId);
             if (callbacks) {
               callbacks.forEach(callback => {
@@ -534,12 +606,9 @@ class ShareDBClient {
               });
             }
             
-            // 关键修复：使用服务器内容作为content，因为用户的内容是基于旧版本的
-            // 编辑器已经更新为服务器内容，所以应该使用服务器内容
-            // 但用户可能还在编辑，所以需要等待编辑器更新完成
-            // 简化方案：使用服务器内容，让编辑器更新后再同步用户的更改
-            contentStr = serverContent;  // 使用服务器内容，避免基于旧版本的content导致合并错误
-            console.log('⚠️ [同步] 使用服务器内容作为content，因为用户的内容是基于旧版本的');
+            // 重要：不要修改 contentStr，保持用户的真实编辑内容
+            // baseContent 已经更新为服务器内容，差异合并会正确处理
+            console.log('✅ [同步] 使用服务器内容作为baseContent，保持用户编辑内容作为content');
           } else if (serverVersion === currentVersion && serverContent !== contentStr) {
             // 版本相同但内容不同，说明有并发修改
             console.log('⚠️ [同步] 检测到并发修改（版本相同但内容不同）:', {
@@ -550,6 +619,14 @@ class ShareDBClient {
             
             // 使用服务器内容作为baseContent，确保合并正确
             baseContent = serverContent;
+            // 立即更新缓存（即使版本相同，内容可能不同）
+            this.currentVersion.set(documentId, serverVersion);
+            this.currentContent.set(documentId, serverContent);
+            console.log('✅ [同步] 已更新前端缓存（并发修改）:', {
+              version: serverVersion,
+              contentLength: serverContent.length
+            });
+            // baseVersion 保持不变，因为版本相同
           } else if (serverVersion === currentVersion && serverContent === contentStr) {
             // 版本和内容都相同，说明没有其他用户修改，可以使用本地baseContent
             console.log('✅ [同步] 服务器版本和内容与客户端一致，使用本地baseContent');
@@ -619,6 +696,7 @@ class ShareDBClient {
         }
         
         console.log('📤 [同步] 发送差异同步:', {
+          baseVersion: baseVersion,
           baseLength: baseContent.length,
           contentLength: contentStr.length,
           version: syncVersion,
@@ -634,9 +712,10 @@ class ShareDBClient {
           },
           body: JSON.stringify({
             doc_id: documentId,
-            version: syncVersion,  // 使用服务器的最新版本号
-            content: contentStr,
-            base_content: baseContent,  // 发送上次同步的内容，用于计算差异
+            version: syncVersion,  // 客户端当前版本号
+            content: contentStr,  // 客户端当前内容
+            base_version: baseVersion,  // 基于哪个版本做的更改（关键：告诉后端用户基于哪个版本）
+            base_content: baseContent,  // 上次同步的内容（用于计算差异，作为备用）
             create_version: false
           })
         });
@@ -644,6 +723,13 @@ class ShareDBClient {
         if (syncResponse.ok) {
           const data = await syncResponse.json();
           response = data as SyncResponse;
+          
+          console.log('✅ [同步] 服务器响应成功:', {
+            success: response.success,
+            version: response.version,
+            contentLength: response.content.length,
+            hasOperations: response.operations?.length > 0
+          });
           
           // 如果服务器返回的内容与客户端不同，说明发生了合并
           if (response.content !== contentStr) {
@@ -654,7 +740,13 @@ class ShareDBClient {
             });
           }
         } else {
-          throw new Error('Sync API not available, falling back to chapter API');
+          const errorText = await syncResponse.text();
+          console.error('❌ [同步] 服务器响应失败:', {
+            status: syncResponse.status,
+            statusText: syncResponse.statusText,
+            error: errorText
+          });
+          throw new Error(`Sync API failed: ${syncResponse.status} ${syncResponse.statusText}`);
         }
       } catch (error) {
         // 回退到原有的章节 API 同步方式
@@ -830,7 +922,7 @@ class ShareDBClient {
       }
       
       console.warn('⚠️ [ShareDB] 服务器上没有找到文档:', documentId);
-      return null;
+    return null;
     } catch (error) {
       console.error('❌ [ShareDB] 强制拉取失败:', error);
       throw error;
@@ -1204,6 +1296,224 @@ class ShareDBClient {
   }
 
   /**
+   * 保存离线状态（断线时调用）
+   * 记录所有有本地缓存的文档，用于重连后合并
+   */
+  private saveOfflineState(): void {
+    console.log('💾 [ShareDB] 保存离线状态');
+    
+    // 遍历所有有缓存的文档，保存其状态
+    this.currentContent.forEach((content, documentId) => {
+      const version = this.currentVersion.get(documentId) || 0;
+      this.offlineDocuments.set(documentId, {
+        content,
+        version,
+        timestamp: Date.now()
+      });
+      console.log('💾 [ShareDB] 保存离线文档状态:', {
+        documentId,
+        version,
+        contentLength: content.length
+      });
+    });
+  }
+
+  /**
+   * 同步离线期间的更改（重连后调用）
+   * 将本地缓存中的文本传递给后端，让后端合并后发送给多端
+   */
+  private async syncOfflineChanges(): Promise<void> {
+    if (this.offlineDocuments.size === 0) {
+      console.log('✅ [ShareDB] 没有离线更改需要同步');
+      return;
+    }
+
+    console.log('🔄 [ShareDB] 开始同步离线更改，文档数量:', this.offlineDocuments.size);
+
+    const syncPromises: Promise<void>[] = [];
+
+    for (const [documentId, offlineState] of this.offlineDocuments.entries()) {
+      syncPromises.push(
+        this.syncOfflineDocument(documentId, offlineState).catch(error => {
+          console.error(`❌ [ShareDB] 同步离线文档失败 ${documentId}:`, error);
+        })
+      );
+    }
+
+    await Promise.all(syncPromises);
+    
+    // 清空离线状态记录
+    this.offlineDocuments.clear();
+    console.log('✅ [ShareDB] 离线更改同步完成');
+  }
+
+  /**
+   * 同步单个离线文档
+   */
+  private async syncOfflineDocument(
+    documentId: string,
+    offlineState: { content: string; version: number; timestamp: number }
+  ): Promise<void> {
+    console.log('🔄 [ShareDB] 同步离线文档:', {
+      documentId,
+      offlineVersion: offlineState.version,
+      offlineContentLength: offlineState.content.length,
+      offlineTime: new Date(offlineState.timestamp).toISOString()
+    });
+
+    try {
+      // 1. 先获取服务器最新版本
+      const serverDoc = await this.fetchFromServer(documentId);
+      
+      if (serverDoc) {
+        const serverVersion = serverDoc.version || 0;
+        const serverContent = typeof serverDoc.content === 'string' 
+          ? serverDoc.content 
+          : JSON.stringify(serverDoc.content);
+        
+        console.log('📥 [ShareDB] 服务器文档状态:', {
+          serverVersion,
+          serverContentLength: serverContent.length
+        });
+
+        // 2. 如果服务器版本更新，说明有其他用户修改了
+        // 需要将本地离线更改与服务器内容合并
+        if (serverVersion > offlineState.version) {
+          console.log('⚠️ [ShareDB] 检测到服务器版本更新，需要合并离线更改');
+          
+          // 3. 使用差异合并：将本地离线内容与服务器内容合并
+          // base_content 是离线时的内容，content 是当前本地内容（可能已更新）
+          const currentLocalContent = this.currentContent.get(documentId) || offlineState.content;
+          
+          // 如果本地内容与离线时不同，说明用户在离线期间继续编辑了
+          if (currentLocalContent !== offlineState.content) {
+            console.log('📝 [ShareDB] 检测到离线期间有新的编辑，使用最新本地内容');
+          }
+
+          // 4. 同步到服务器，后端会进行合并
+          // 使用离线时的内容作为 base_content，当前本地内容作为 content
+          const result = await this.syncDocumentStateWithBase(
+            documentId,
+            currentLocalContent,
+            offlineState.content,
+            offlineState.version
+          );
+          
+          if (result.success) {
+            console.log('✅ [ShareDB] 离线文档同步成功:', {
+              documentId,
+              mergedVersion: result.version,
+              mergedContentLength: result.content.length
+            });
+            
+            // 5. 更新本地缓存
+            this.currentVersion.set(documentId, result.version);
+            this.currentContent.set(documentId, result.content);
+            
+            // 6. 通知编辑器更新（如果有回调）
+            const callbacks = this.documentUpdateCallbacks.get(documentId);
+            if (callbacks) {
+              callbacks.forEach(callback => {
+                try {
+                  callback(result.content, result.version);
+                } catch (error) {
+                  console.error('执行文档更新回调失败:', error);
+                }
+              });
+            }
+          } else {
+            console.error('❌ [ShareDB] 离线文档同步失败:', result.error);
+          }
+        } else if (serverVersion === offlineState.version) {
+          // 版本相同，但可能内容不同（并发修改）
+          console.log('⚠️ [ShareDB] 版本相同但可能内容不同，进行合并');
+          const currentLocalContent = this.currentContent.get(documentId) || offlineState.content;
+          const result = await this.syncDocumentState(documentId, currentLocalContent);
+          
+          if (result.success) {
+            this.currentVersion.set(documentId, result.version);
+            this.currentContent.set(documentId, result.content);
+          }
+        } else {
+          // 服务器版本更小（不应该发生），直接使用本地内容
+          console.log('⚠️ [ShareDB] 服务器版本更小，使用本地内容');
+          const currentLocalContent = this.currentContent.get(documentId) || offlineState.content;
+          const result = await this.syncDocumentState(documentId, currentLocalContent);
+          
+          if (result.success) {
+            this.currentVersion.set(documentId, result.version);
+            this.currentContent.set(documentId, result.content);
+          }
+        }
+      } else {
+        // 服务器没有文档，直接创建
+        console.log('📝 [ShareDB] 服务器没有文档，创建新文档');
+        const currentLocalContent = this.currentContent.get(documentId) || offlineState.content;
+        const result = await this.syncDocumentState(documentId, currentLocalContent);
+        
+        if (result.success) {
+          this.currentVersion.set(documentId, result.version);
+          this.currentContent.set(documentId, result.content);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [ShareDB] 同步离线文档失败 ${documentId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 使用 base_content 同步文档状态（用于离线重连）
+   */
+  private async syncDocumentStateWithBase(
+    documentId: string,
+    content: string,
+    baseContent: string,
+    baseVersion: number
+  ): Promise<SyncResponse> {
+    // 复用 syncDocumentState 的逻辑，但明确指定 base_content 和 base_version
+    const currentVersion = this.currentVersion.get(documentId) || 0;
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+      const token = localStorage.getItem('access_token');
+      
+      const syncResponse = await fetch(`${apiUrl}/v1/sharedb/documents/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          doc_id: documentId,
+          version: currentVersion,
+          content: contentStr,
+          base_version: baseVersion,  // 明确指定基于哪个版本
+          base_content: baseContent,  // 明确指定基础内容
+          create_version: false
+        })
+      });
+
+      if (syncResponse.ok) {
+        const data = await syncResponse.json();
+        return data as SyncResponse;
+      } else {
+        throw new Error('Sync API failed');
+      }
+    } catch (error) {
+      console.error('同步离线文档失败:', error);
+      return {
+        success: false,
+        version: currentVersion,
+        content: contentStr,
+        operations: [],
+        error: 'network_error'
+      };
+    }
+  }
+
+  /**
    * 清理资源（借鉴 nexcode_web 的实现）
    */
   destroy(): void {
@@ -1215,6 +1525,7 @@ class ShareDBClient {
     this.syncInProgress = false;
     this.currentVersion.clear();
     this.currentContent.clear();
+    this.offlineDocuments.clear();
     
     // 断开 WebSocket 连接
     this.disconnect();

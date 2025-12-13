@@ -19,11 +19,28 @@ from memos.api.models.work import Work, WorkCollaborator
 router = APIRouter(prefix="/api/v1/works", tags=["作品管理"])
 
 
+async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSession:
+    """
+    确保返回的是 AsyncSession 对象，而不是生成器
+    FastAPI 的 Depends 应该已经处理了生成器，但为了安全起见，我们再次检查
+    """
+    # FastAPI 的 Depends 应该已经处理了生成器，直接返回
+    # 但如果仍然是生成器，尝试获取会话对象
+    if hasattr(db, '__aiter__') and not hasattr(db, 'execute'):
+        # 如果是生成器，尝试获取会话对象
+        try:
+            db = await db.__anext__()
+        except StopAsyncIteration:
+            raise ValueError("无法从生成器获取数据库会话")
+    
+    return db
+
+
 @router.post("/", response_model=WorkResponse)
 async def create_work(
     work_data: WorkCreate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -62,7 +79,7 @@ async def list_works(
     sort_by: str = Query("created_at", description="排序字段"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
     include_collaborators: bool = Query(False, description="是否包含协作者信息"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -139,7 +156,7 @@ async def get_public_works(
     search: Optional[str] = Query(None, description="搜索关键词"),
     sort_by: str = Query("created_at", description="排序字段"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db_session)
 ) -> Dict[str, Any]:
     """
     获取公开作品列表
@@ -206,7 +223,7 @@ async def get_work(
     work_id: int,
     include_collaborators: bool = Query(False, description="是否包含协作者信息"),
     include_chapters: bool = Query(False, description="是否包含章节信息"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -241,7 +258,7 @@ async def update_work(
     work_id: int,
     work_update: WorkUpdate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -291,7 +308,7 @@ async def update_work(
 async def delete_work(
     work_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -335,7 +352,7 @@ async def delete_work(
 async def publish_work(
     work_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -382,7 +399,7 @@ async def publish_work(
 async def archive_work(
     work_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -429,7 +446,7 @@ async def archive_work(
 @router.get("/{work_id}/collaborators", response_model=List[WorkCollaboratorResponse])
 async def get_work_collaborators(
     work_id: int,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> List[Dict[str, Any]]:
     """
@@ -456,7 +473,7 @@ async def add_collaborator(
     work_id: int,
     collaborator_data: WorkCollaboratorCreate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -516,7 +533,7 @@ async def update_collaborator(
     user_id: int,
     collaborator_update: WorkCollaboratorUpdate,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -567,7 +584,7 @@ async def remove_collaborator(
     work_id: int,
     user_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
