@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Info, Coins, Settings, Undo2, Redo2, Type, Bold, Underline, ToggleLeft, ToggleRight, ChevronDown, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Info, Coins, Settings, Undo2, Redo2, Type, Bold, Underline, ToggleLeft, ToggleRight, ChevronDown, Trash2, Sparkles, Loader2, Save } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
@@ -1960,9 +1960,86 @@ export default function NovelEditorPage(){
     loadChapterContent();
   }, [selectedChapter, editor]);
 
-  // 手动保存函数（用于调试和手动触发）
+  // 手动保存函数（用于主动保存当前章节内容）
+  const handleManualSave = async () => {
+    if (!editor || !selectedChapter || !workId) {
+      console.warn('⚠️ [手动保存] 编辑器、章节或作品ID不存在');
+      return;
+    }
+
+    const chapterId = parseInt(selectedChapter);
+    if (isNaN(chapterId)) {
+      console.warn('⚠️ [手动保存] 章节ID无效');
+      return;
+    }
+
+    // 关键修复：使用编辑器中的实际内容，而不是缓存内容
+    const editorContent = editor.getHTML();
+    const documentId = `work_${workId}_chapter_${chapterId}`;
+
+    console.log('💾 [手动保存] 开始保存:', {
+      chapterId,
+      documentId,
+      contentLength: editorContent.length,
+    });
+
+    try {
+      // 显示保存状态
+      const saveButton = document.querySelector('.manual-save-btn') as HTMLButtonElement;
+      if (saveButton) {
+        saveButton.disabled = true;
+        if (saveButton.querySelector('span')) {
+          saveButton.querySelector('span')!.textContent = '保存中...';
+        }
+      }
+
+      // 1. 保存到本地缓存
+      await documentCache.updateDocument(documentId, editorContent, {
+        work_id: Number(workId),
+        chapter_id: chapterId,
+        updated_at: new Date().toISOString(),
+      });
+
+      // 2. 同步到服务器
+      const result = await documentCache.syncDocumentState(documentId, editorContent);
+
+      if (result.success) {
+        console.log('✅ [手动保存] 保存成功:', {
+          version: result.version,
+          contentLength: result.content.length,
+        });
+        
+        // 显示成功提示（可选）
+        if (saveButton && saveButton.querySelector('span')) {
+          saveButton.querySelector('span')!.textContent = '已保存';
+          setTimeout(() => {
+            if (saveButton && saveButton.querySelector('span')) {
+              saveButton.querySelector('span')!.textContent = '保存';
+            }
+            if (saveButton) {
+              saveButton.disabled = false;
+            }
+          }, 1000);
+        }
+      } else {
+        throw new Error(result.error || '保存失败');
+      }
+    } catch (err) {
+      console.error('❌ [手动保存] 保存失败:', err);
+      alert('保存失败: ' + (err instanceof Error ? err.message : String(err)));
+      
+      // 恢复按钮状态
+      const saveButton = document.querySelector('.manual-save-btn') as HTMLButtonElement;
+      if (saveButton) {
+        saveButton.disabled = false;
+        if (saveButton.querySelector('span')) {
+          saveButton.querySelector('span')!.textContent = '保存';
+        }
+      }
+    }
+  };
+
   // 智能同步 Hook - 使用 useIntelligentSync 替代原有的同步逻辑
-  // 注意：这个 Hook 需要在 handleManualSave 之前定义，以便在手动保存时使用
   const getCurrentContent = () => {
     if (!editor || !selectedChapter || !workId) return '';
     return editor.getHTML();
@@ -2991,6 +3068,17 @@ export default function NovelEditorPage(){
                       title="重做"
                     >
                       <Redo2 size={16} />
+                    </button>
+                  </div>
+                  <div className="toolbar-divider" />
+                  <div className="toolbar-group">
+                    <button
+                      className="toolbar-btn manual-save-btn"
+                      onClick={handleManualSave}
+                      title="手动保存当前章节内容"
+                    >
+                      <Save size={16} />
+                      <span>保存</span>
                     </button>
                   </div>
                   <div className="toolbar-divider" />
