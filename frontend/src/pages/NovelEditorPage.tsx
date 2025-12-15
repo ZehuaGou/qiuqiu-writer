@@ -2446,14 +2446,6 @@ export default function NovelEditorPage(){
 
       // 如果是编辑现有章节
       if (data.id && !isNaN(parseInt(data.id))) {
-        const chapterId = parseInt(data.id);
-        await chaptersApi.updateChapter(chapterId, {
-          title: data.title,
-          chapter_metadata: {
-            outline: data.outline || '',
-            detailed_outline: data.detailOutline || '',
-          },
-        });
         
         // 更新本地状态
         setChaptersData(prev => ({
