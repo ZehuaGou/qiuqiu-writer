@@ -3,7 +3,7 @@ AI接口的数据模型定义
 包含章节分析相关的请求和响应模型
 """
 
-from typing import Generic, Literal, TypeVar, List
+from typing import Generic, Literal, Optional, TypeVar, List
 
 from pydantic import BaseModel, Field
 
@@ -25,10 +25,10 @@ class BaseResponse(BaseModel, Generic[T]):
 class AnalysisSettings(BaseModel):
     """AI分析设置"""
 
-    model: str = Field(
-        default="gpt-3.5-turbo",
-        description="AI模型名称",
-        json_schema_extra={"example": "gpt-4"},
+    model: Optional[str] = Field(
+        default=None,  # 默认None，使用AI服务的默认模型（从环境变量读取）
+        description="AI模型名称，如果不指定则使用DEFAULT_AI_MODEL环境变量",
+        json_schema_extra={"example": "codedrive-chat"},
     )
     temperature: float = Field(
         default=0.7,

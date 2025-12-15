@@ -9,7 +9,6 @@ from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, JSON,
     Index, ForeignKey, and_
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, foreign
 from sqlalchemy.sql import func
 
@@ -28,7 +27,7 @@ class Work(Base):
     work_type = Column(String(20), nullable=False, index=True)  # novel/script/short_story/film_script
     status = Column(String(20), default="draft", index=True)  # draft/published/archived
     cover_image_url = Column(String(255))
-    tags = Column(JSONB, default=list)
+    tags = Column(JSON, default=list)
     category = Column(String(50), index=True)
     genre = Column(String(50), index=True)
     target_audience = Column(String(50))
@@ -40,8 +39,8 @@ class Work(Base):
     collaborator_count = Column(Integer, default=0)
     is_public = Column(Boolean, default=False, index=True)
     is_collaborative = Column(Boolean, default=False)
-    settings = Column(JSONB, default=dict)  # 作品设置
-    work_metadata = Column("metadata", JSONB, default=dict)  # 扩展元数据
+    settings = Column(JSON, default=dict)  # 作品设置
+    work_metadata = Column("metadata", JSON, default=dict)  # 扩展元数据
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     published_at = Column(DateTime(timezone=True))
@@ -50,12 +49,16 @@ class Work(Base):
     owner = relationship("User", back_populates="works")
     collaborators = relationship("WorkCollaborator", back_populates="work", cascade="all, delete-orphan")
     chapters = relationship("Chapter", back_populates="work", cascade="all, delete-orphan")
+    # 注意：characters和locations现在保存在work_metadata中，不再使用单独的Character表
+    # characters = relationship("Character", back_populates="work", cascade="all, delete-orphan")
     factions = relationship("Faction", back_populates="work", cascade="all, delete-orphan")
     extended_info = relationship("WorkInfoExtended", back_populates="work", cascade="all, delete-orphan")
+    # AIAnalysis使用多态关联（target_type + target_id），使用延迟导入避免循环依赖
     ai_analyses = relationship(
         "AIAnalysis",
         primaryjoin=lambda: _get_work_ai_analyses_join(),
-        cascade="all, delete-orphan"
+        viewonly=True,
+        lazy="dynamic"
     )
 
     def __repr__(self):
@@ -209,6 +212,6 @@ def _get_work_ai_analyses_join():
     """获取 Work 和 AIAnalysis 之间的连接条件"""
     from memos.api.models.writing import AIAnalysis
     return and_(
-        Work.id == foreign(AIAnalysis.target_id),
+        foreign(AIAnalysis.target_id) == Work.id,
         AIAnalysis.target_type == 'work'
     )

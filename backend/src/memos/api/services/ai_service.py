@@ -98,7 +98,7 @@ class AIService:
             base_url=self.base_url,
         )
 
-        # 可用的模型列表
+        # 可用的模型列表（包含默认模型）
         self.available_models = [
             "gpt-3.5-turbo",
             "gpt-4",
@@ -106,9 +106,14 @@ class AIService:
             "gpt-4o",
             "claude-3-sonnet",
             "claude-3-opus",
+            "codedrive-chat",  # 添加自定义模型
         ]
+        
+        # 确保默认模型在可用列表中
+        if self.default_model not in self.available_models:
+            self.available_models.append(self.default_model)
 
-        logger.info(f"AI Service initialized with base_url: {self.base_url}")
+        logger.info(f"AI Service initialized with base_url: {self.base_url}, default_model: {self.default_model}")
 
     def get_default_prompt(self) -> str:
         """获取默认的章节分析提示词"""
@@ -131,7 +136,7 @@ class AIService:
         content: str,
         prompt: str | None = None,
         system_prompt: str | None = None,
-        model: str = "gpt-3.5-turbo",
+        model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 20000,
     ) -> AsyncGenerator[str, None]:

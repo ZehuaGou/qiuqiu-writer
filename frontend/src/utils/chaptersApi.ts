@@ -6,6 +6,8 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 export interface Chapter {
+  outline: any;
+  detailed_outline: any;
   id: number;
   work_id: number;
   title: string;

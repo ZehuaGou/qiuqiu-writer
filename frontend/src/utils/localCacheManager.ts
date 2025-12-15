@@ -91,20 +91,8 @@ class LocalCacheManager {
    * 设置缓存项（本地优先）
    */
   async set<T>(key: string, data: T, version?: number): Promise<void> {
-    const dataSize = this.calculateSize(data);
-    const now = Date.now();
-    const itemVersion = version ?? this.getNextVersion(key);
 
-    console.log('💾 [Cache] 设置缓存:', {
-      key,
-      version: itemVersion,
-      dataSize,
-      dataType: typeof data,
-      isObject: typeof data === 'object' && data !== null,
-      dataPreview: typeof data === 'string' 
-        ? data.substring(0, 100) 
-        : JSON.stringify(data).substring(0, 100),
-    });
+    const itemVersion = version ?? this.getNextVersion(key);
 
     // 1. 立即写入内存缓存
     this.setToMemory(key, data, itemVersion, false);
@@ -289,36 +277,27 @@ class LocalCacheManager {
       const storageKey = `${STORAGE_PREFIX}${key}`;
       const itemJson = JSON.stringify(item);
       
-      console.log('💾 [Cache] 写入 localStorage:', {
-        key: storageKey,
-        dataSize: itemJson.length,
-        dataPreview: itemJson.substring(0, 200),
-        itemStructure: {
-          hasData: 'data' in item,
-          dataType: typeof item.data,
-          dataKeys: item.data && typeof item.data === 'object' ? Object.keys(item.data) : 'not object',
-        },
-      });
-      
       localStorage.setItem(storageKey, itemJson);
       
-      // 验证保存是否成功
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        console.log('✅ [Cache] localStorage 保存成功，验证通过');
-      } else {
-        console.error('❌ [Cache] localStorage 保存失败，验证未通过');
-      }
     } catch (e) {
-      console.error('❌ [Cache] 写入 localStorage 缓存失败:', e);
       // 如果存储空间不足，尝试清理
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        console.warn('⚠️ [Cache] 存储空间不足，尝试清理...');
         this.cleanupLocalStorage();
         // 清理后重试
         try {
-          localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(item));
-          console.log('✅ [Cache] 清理后重试保存成功');
+          const now = Date.now();
+          const retryItem: CacheItem<T> = {
+            key,
+            data,
+            version,
+            timestamp: now,
+            lastAccessed: now,
+            accessCount: 1,
+            size: this.calculateSize(data),
+            synced,
+            pendingChanges: !synced,
+          };
+          localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(retryItem));
         } catch (retryErr) {
           console.error('❌ [Cache] 清理后重试保存仍然失败:', retryErr);
         }

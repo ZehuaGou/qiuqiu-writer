@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Info, Coins, Settings, Undo2, Redo2, Type, Bold, Underline, ToggleLeft, ToggleRight, ChevronDown, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -17,11 +17,283 @@ import WorkInfoManager from '../components/editor/WorkInfoManager';
 import ThemeSelector from '../components/ThemeSelector';
 import { worksApi, type Work } from '../utils/worksApi';
 import { chaptersApi, type Chapter } from '../utils/chaptersApi';
-import { charactersApi, type Character } from '../utils/charactersApi';
-import { sharedbClient } from '../utils/sharedbClient';
 import { syncManager } from '../utils/syncManager';
 import { localCacheManager } from '../utils/localCacheManager';
 import { useIntelligentSync } from '../utils/intelligentSync';
+
+// 文档类型定义（从 sharedbClient 移过来）
+interface ShareDBDocument {
+  document_id: string;
+  content: any;
+  version?: number;
+  metadata?: {
+    work_id?: number;
+    chapter_id?: number;
+    chapter_number?: number;
+    created_by?: number;
+    created_at?: string;
+    updated_at?: string;
+    outline?: string;
+    detailed_outline?: string;
+  };
+}
+
+interface SyncResponse {
+  success: boolean;
+  version: number;
+  content: string;
+  operations: Array<{
+    doc_id: string;
+    version: number;
+    operation: any;
+    user_id: number;
+    timestamp: string;
+  }>;
+  error?: string;
+}
+
+// 文档缓存和同步工具函数（在组件内使用）
+const documentCache = {
+  // 版本和内容缓存
+  currentVersion: new Map<string, number>(),
+  currentContent: new Map<string, string>(),
+  // 请求去重：记录正在进行的请求，避免重复请求
+  pendingRequests: new Map<string, Promise<any>>(),
+  
+  // 获取文档（本地优先，然后从服务器）
+  async getDocument(documentId: string): Promise<ShareDBDocument | null> {
+    console.log('🔍 [DocumentCache] 获取文档:', documentId);
+    
+    // 先尝试从服务器获取最新版本
+    let serverDoc: ShareDBDocument | null = null;
+    
+    try {
+      const fetchPromise = documentCache.fetchFromServer(documentId);
+      const timeoutPromise = new Promise<null>((resolve) => 
+        setTimeout(() => resolve(null), 2000)
+      );
+      
+      serverDoc = await Promise.race([fetchPromise, timeoutPromise]) as ShareDBDocument | null;
+      
+      if (serverDoc) {
+        console.log('✅ [DocumentCache] 从服务器获取到最新文档:', {
+          version: serverDoc.version,
+          contentLength: typeof serverDoc.content === 'string' ? serverDoc.content.length : 'not string'
+        });
+        
+        const contentStr = typeof serverDoc.content === 'string' ? serverDoc.content : JSON.stringify(serverDoc.content);
+        documentCache.currentVersion.set(documentId, serverDoc.version || 1);
+        documentCache.currentContent.set(documentId, contentStr);
+        
+        await localCacheManager.set(documentId, serverDoc, (serverDoc.version || 1)).catch(console.error);
+        
+        return serverDoc;
+      } else {
+        console.warn('⚠️ [DocumentCache] 从服务器获取文档超时或失败，尝试使用缓存');
+      }
+    } catch (error) {
+      console.warn('⚠️ [DocumentCache] 从服务器获取文档失败，尝试使用缓存:', error);
+    }
+    
+    // 如果服务器获取失败，使用本地缓存
+    try {
+      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
+      if (cached) {
+        const contentStr = typeof cached.content === 'string' ? cached.content : JSON.stringify(cached.content);
+        documentCache.currentVersion.set(documentId, cached.version || 1);
+        documentCache.currentContent.set(documentId, contentStr);
+        return cached;
+      }
+    } catch (error) {
+      console.error('从缓存获取文档失败:', error);
+    }
+
+    return null;
+  },
+  
+  // 更新文档（保存到本地缓存）
+  async updateDocument(
+    documentId: string,
+    content: any,
+    metadata?: ShareDBDocument['metadata']
+  ): Promise<void> {
+    console.log('💾 [DocumentCache] 更新文档:', {
+      documentId,
+      contentType: typeof content,
+      contentLength: typeof content === 'string' ? content.length : JSON.stringify(content).length,
+      metadata,
+    });
+    
+    const existing = await localCacheManager.get<ShareDBDocument>(documentId);
+    const version = existing?.version || 0;
+    
+    const updated: ShareDBDocument = {
+      document_id: documentId,
+      content,
+      version: version + 1,
+      metadata: metadata || existing?.metadata,
+    };
+
+    await localCacheManager.set(documentId, updated, updated.version || 1);
+    
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+    documentCache.currentVersion.set(documentId, updated.version || 1);
+    documentCache.currentContent.set(documentId, contentStr);
+    
+    console.log('✅ [DocumentCache] 已保存到缓存:', documentId);
+  },
+  
+  // 同步文档状态（仅保存到本地缓存，不再调用服务器接口）
+  async syncDocumentState(documentId: string, content: string): Promise<SyncResponse> {
+    const localVersion = documentCache.currentVersion.get(documentId) || 0;
+    const localContent = documentCache.currentContent.get(documentId) || content;
+
+    console.log('🔄 [DocumentCache] 保存文档到本地缓存:', {
+      documentId,
+      localVersion,
+      contentLength: localContent.length
+    });
+
+    try {
+      // 仅保存到本地缓存，定时任务会处理服务器同步
+      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
+      if (cached) {
+        cached.content = localContent;
+        cached.version = (cached.version || 0) + 1;
+        await localCacheManager.set(documentId, cached, cached.version);
+        documentCache.currentVersion.set(documentId, cached.version);
+        documentCache.currentContent.set(documentId, localContent);
+      } else {
+        // 如果缓存不存在，创建新的
+        const newDoc: ShareDBDocument = {
+          document_id: documentId,
+          content: localContent,
+          version: 1,
+        };
+        await localCacheManager.set(documentId, newDoc, 1);
+        documentCache.currentVersion.set(documentId, 1);
+        documentCache.currentContent.set(documentId, localContent);
+      }
+
+      console.log('✅ [DocumentCache] 已保存到本地缓存:', documentId);
+
+      return {
+        success: true,
+        version: documentCache.currentVersion.get(documentId) || localVersion,
+        content: localContent,
+        operations: [],
+      };
+    } catch (error) {
+      console.error('❌ [DocumentCache] 保存失败:', error);
+      return {
+        success: false,
+        version: localVersion,
+        content: localContent,
+        operations: [],
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  },
+  
+  // 强制从服务器拉取
+  async forcePullFromServer(documentId: string): Promise<ShareDBDocument | null> {
+    console.log('🔄 [DocumentCache] 强制从服务器拉取最新内容:', documentId);
+    
+    await localCacheManager.delete(documentId);
+    documentCache.currentVersion.delete(documentId);
+    documentCache.currentContent.delete(documentId);
+    
+    return await documentCache.getDocument(documentId);
+  },
+  
+  // 从服务器获取文档（回退到章节 API）
+  async fetchFromServer(documentId: string): Promise<ShareDBDocument | null> {
+    let chapterId: number | null = null;
+    
+    if (documentId.startsWith('chapter_')) {
+      chapterId = parseInt(documentId.replace('chapter_', ''));
+    } else if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
+      const match = documentId.match(/work_\d+_chapter_(\d+)/);
+      if (match) {
+        chapterId = parseInt(match[1]);
+      }
+    }
+    
+    if (!chapterId || isNaN(chapterId)) {
+      return null;
+    }
+
+    // 请求去重：如果已经有相同章节的请求正在进行，等待该请求完成
+    const requestKey = `chapter_doc_${chapterId}`;
+    if (documentCache.pendingRequests.has(requestKey)) {
+      console.log('⏳ [DocumentCache] 请求已在进行中，等待完成:', requestKey);
+      try {
+        const existingResult = await documentCache.pendingRequests.get(requestKey);
+        // 将结果转换为 ShareDBDocument 格式
+        if (existingResult) {
+          let content: any = existingResult.content;
+          if (typeof content === 'object' && content !== null) {
+            if ('content' in content) {
+              content = content.content;
+            } else {
+              content = JSON.stringify(content);
+            }
+          }
+          return {
+            document_id: documentId,
+            content: content || '',
+            version: existingResult.chapter_info?.id || chapterId,
+            metadata: {
+              work_id: existingResult.chapter_info?.work_id,
+              chapter_id: existingResult.chapter_info?.id || chapterId,
+              chapter_number: existingResult.chapter_info?.chapter_number,
+              outline: existingResult.chapter_info?.metadata?.outline,
+              detailed_outline: existingResult.chapter_info?.metadata?.detailed_outline,
+            },
+          };
+        }
+      } catch (error) {
+        console.warn('等待中的请求失败:', error);
+      }
+    }
+
+    try {
+      // 创建请求并记录
+      const requestPromise = chaptersApi.getChapterDocument(chapterId);
+      documentCache.pendingRequests.set(requestKey, requestPromise);
+      
+      const result = await requestPromise;
+      
+      // 请求完成后移除
+      documentCache.pendingRequests.delete(requestKey);
+      let content: any = result.content;
+      
+      if (typeof content === 'object' && content !== null) {
+        if ('content' in content) {
+          content = content.content;
+        } else {
+          content = JSON.stringify(content);
+        }
+      }
+      
+      return {
+        document_id: documentId,
+        content: content || '',
+        version: result.chapter_info?.id || chapterId,
+        metadata: {
+          work_id: result.chapter_info?.work_id,
+          chapter_id: result.chapter_info?.id || chapterId,
+          chapter_number: result.chapter_info?.chapter_number,
+          outline: result.chapter_info?.metadata?.outline,
+          detailed_outline: result.chapter_info?.metadata?.detailed_outline,
+        },
+      };
+    } catch (error) {
+      console.error('❌ [DocumentCache] 从章节 API 获取文档失败:', error);
+      return null;
+    }
+  },
+};
 import '../components/editor/NovelEditor.css';
 import './NovelEditorPage.css';
 
@@ -38,7 +310,7 @@ interface ChapterFullData {
   detailOutline: string;
 }
 
-export default function NovelEditorPage() {
+export default function NovelEditorPage(){
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workId = searchParams.get('workId');
@@ -125,45 +397,8 @@ export default function NovelEditorPage() {
   const lastCharacterCacheRef = useRef<string>('');
   const lastAllChaptersRef = useRef<Chapter[]>([]);
   
-  useEffect(() => {
-    if (!workId) {
-      setHasCharacterModule(false);
-      setAvailableCharacters([]);
-      return;
-    }
-
-    const loadCharactersFromAPI = async () => {
-      try {
-        const response = await charactersApi.listCharacters(Number(workId));
-        const characters = response.characters || [];
-        
-        // 转换为前端需要的格式
-        const formattedCharacters = characters.map((char: Character) => ({
-          id: String(char.id),
-          name: char.name || '',
-          avatar: char.avatar_url || undefined,
-          gender: char.gender || undefined,
-          description: char.description || '',
-          type: char.is_main_character ? '主要角色' : '次要角色',
-          source: 'api',
-        }));
-        
-        setAvailableCharacters(formattedCharacters);
-        setHasCharacterModule(formattedCharacters.length > 0);
-        
-        console.log('📋 从API获取角色列表:', {
-          total: formattedCharacters.length,
-          characters: formattedCharacters,
-        });
-      } catch (err) {
-        console.error('从API加载角色数据失败:', err);
-        setHasCharacterModule(false);
-        setAvailableCharacters([]);
-      }
-    };
-
-    loadCharactersFromAPI();
-  }, [workId]);
+  // 角色数据现在从 WorkInfoManager 缓存中加载（在 loadLocationsFromCache 中处理）
+  // 不再需要从 API 加载角色数据
 
   // 从WorkInfoManager缓存中提取地点数据（基于workId）
   useEffect(() => {
@@ -596,8 +831,8 @@ export default function NovelEditorPage() {
 
   // 分析本书
   const handleAnalyzeWork = async () => {
-    if (!workId || !allChapters || allChapters.length === 0) {
-      alert('没有可分析的章节');
+    if (!workId) {
+      alert('没有选择作品');
       return;
     }
     
@@ -608,40 +843,7 @@ export default function NovelEditorPage() {
     setAnalysisProgress('准备分析...');
     
     try {
-      // 收集所有章节的内容
-      const chaptersContent: string[] = [];
-      for (const chapter of allChapters) {
-        try {
-          // 从 ShareDB 获取章节内容
-          const documentId = `work_${workId}_chapter_${chapter.id}`;
-          const doc = await sharedbClient.getDocument(documentId);
-          if (doc && doc.content) {
-            const content = typeof doc.content === 'string' ? doc.content : JSON.stringify(doc.content);
-            chaptersContent.push(content);
-          } else {
-            // 如果 ShareDB 没有，尝试从章节 API 获取
-            const chapterData = await chaptersApi.getChapter(chapter.id);
-            if (chapterData.content) {
-              chaptersContent.push(chapterData.content);
-            }
-          }
-        } catch (err) {
-          console.warn(`获取章节 ${chapter.id} 内容失败:`, err);
-        }
-      }
-      
-      if (chaptersContent.length === 0) {
-        alert('没有找到可分析的章节内容');
-        setIsAnalyzing(false);
-        return;
-      }
-      
-      // 合并所有章节内容（用分隔符分开）
-      const combinedContent = chaptersContent.join('\n\n---章节分隔符---\n\n');
-      
-      setAnalysisProgress(`开始分析 ${chaptersContent.length} 个章节...`);
-      
-      // 调用渐进式分析接口
+      // 调用后端接口，后端会自动获取所有章节内容并逐章处理
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
       const token = localStorage.getItem('access_token');
       const headers: HeadersInit = {
@@ -652,19 +854,16 @@ export default function NovelEditorPage() {
       }
       
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/ai/analyze-chapters-incremental?work_id=${workId}`,
+        `${API_BASE_URL}/ai/analyze-work-chapters?work_id=${workId}`,
         {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            content: combinedContent,
-            settings: {},
-          }),
         }
       );
       
       if (!response.ok) {
-        throw new Error(`分析失败: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`分析失败: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
       // 处理流式响应
@@ -688,10 +887,22 @@ export default function NovelEditorPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.type === 'chunk' && data.content) {
-                setAnalysisProgress(data.content.substring(0, 100));
+              if (data.type === 'start') {
+                setAnalysisProgress(data.message || '开始分析...');
+              } else if (data.type === 'chapter_start') {
+                setAnalysisProgress(`正在分析第 ${data.chapter_index}/${data.total_chapters} 章：${data.chapter_title || ''}`);
+              } else if (data.type === 'chunk' && data.content) {
+                // 显示部分内容作为进度提示
+                const preview = data.content.substring(0, 50);
+                if (preview) {
+                  setAnalysisProgress(`分析中... ${preview}...`);
+                }
               } else if (data.type === 'chapter_inserted') {
-                setAnalysisProgress(`第 ${data.chapter_index + 1} 章分析完成并已插入作品`);
+                setAnalysisProgress(`✓ 第 ${data.chapter_index}/${data.total_chapters} 章《${data.chapter_title || ''}》分析完成并已插入作品`);
+              } else if (data.type === 'chapter_skipped') {
+                setAnalysisProgress(`⚠ 第 ${data.chapter_index} 章《${data.chapter_title || ''}》已跳过：${data.message || ''}`);
+              } else if (data.type === 'chapter_error') {
+                setAnalysisProgress(`✗ 第 ${data.chapter_index} 章处理失败：${data.message || ''}`);
               } else if (data.type === 'all_chapters_complete') {
                 setAnalysisProgress('所有章节分析完成！');
                 setTimeout(() => {
@@ -704,9 +915,12 @@ export default function NovelEditorPage() {
               } else if (data.type === 'error' || data.type === 'chapter_insert_error') {
                 console.error('分析错误:', data.message);
                 setAnalysisProgress(`错误: ${data.message}`);
+                setIsAnalyzing(false);
+                alert(`分析失败: ${data.message}`);
               }
             } catch (e) {
               // 忽略解析错误
+              console.warn('解析SSE消息失败:', e, line);
             }
           }
         }
@@ -816,6 +1030,18 @@ export default function NovelEditorPage() {
           };
         });
         setChaptersData(chaptersDataMap);
+        
+        // 如果没有选中章节，自动选中第一个章节
+        if (allChapters.length > 0) {
+          setSelectedChapter(prev => {
+            if (!prev) {
+              const firstChapter = allChapters[0];
+              console.log('📖 自动选中第一个章节:', firstChapter.id, firstChapter.title);
+              return String(firstChapter.id);
+            }
+            return prev;
+          });
+        }
       } catch (err) {
         console.error('加载章节列表失败:', err);
       }
@@ -887,14 +1113,14 @@ export default function NovelEditorPage() {
           // 如果编辑器内容已经被清空或改变，说明可能已经切换了，不应该保存
           if (currentContent && currentContent.trim() !== '<p></p>' && currentContent.trim() !== '') {
             // 立即保存前一个章节的内容，使用同步方式确保保存完成
-            await sharedbClient.updateDocument(previousDocumentId, currentContent, {
+            await documentCache.updateDocument(previousDocumentId, currentContent, {
               work_id: Number(workId),
               chapter_id: previousChapterId,
               updated_at: new Date().toISOString(),
             });
             
             // 验证保存是否成功
-            const savedDoc = await sharedbClient.getDocument(previousDocumentId);
+            const savedDoc = await documentCache.getDocument(previousDocumentId);
             if (savedDoc && typeof savedDoc.content === 'string') {
               if (savedDoc.content === currentContent) {
                 console.log('✅ [切换章节] 前一个章节内容已保存并验证成功');
@@ -950,7 +1176,7 @@ export default function NovelEditorPage() {
           });
           
           // 先尝试新格式
-          let cachedDoc = await sharedbClient.getDocument(documentId);
+          let cachedDoc = await documentCache.getDocument(documentId);
           
           // 验证缓存内容是否属于当前章节
           if (cachedDoc) {
@@ -1011,6 +1237,46 @@ export default function NovelEditorPage() {
                 console.log('⚠️ 缓存内容是对象，已序列化，长度:', content.length);
               }
             }
+            
+            // 从缓存中读取 outline 和 detailed_outline（如果存在）
+            if (cachedDoc.metadata?.outline || cachedDoc.metadata?.detailed_outline) {
+              const chapterIdStr = String(chapterId);
+              const cachedOutline = cachedDoc.metadata.outline || '';
+              const cachedDetailedOutline = cachedDoc.metadata.detailed_outline || '';
+              
+              console.log('📝 从缓存读取章节大纲和细纲:', {
+                chapterId: chapterIdStr,
+                hasOutline: !!cachedOutline,
+                hasDetailedOutline: !!cachedDetailedOutline,
+              });
+              
+              // 更新 chaptersData 中的章节数据
+              setChaptersData(prev => {
+                const updated = { ...prev };
+                if (updated[chapterIdStr]) {
+                  updated[chapterIdStr] = {
+                    ...updated[chapterIdStr],
+                    outline: cachedOutline,
+                    detailOutline: cachedDetailedOutline,
+                  };
+                }
+                return updated;
+              });
+              
+              // 如果当前选中的章节就是这个章节，也更新 currentChapterData
+              if (selectedChapter === chapterIdStr) {
+                setCurrentChapterData(prev => {
+                  if (prev && prev.id === chapterIdStr) {
+                    return {
+                      ...prev,
+                      outline: cachedOutline,
+                      detailOutline: cachedDetailedOutline,
+                    };
+                  }
+                  return prev;
+                });
+              }
+            }
           } else {
             console.log('❌ 缓存中没有找到文档（新格式和旧格式都未找到）');
           }
@@ -1018,25 +1284,140 @@ export default function NovelEditorPage() {
           console.warn('⚠️ 从缓存加载失败，将从服务器获取:', cacheErr);
         }
         
-        // 2. 如果缓存中没有内容，从服务器获取
-        if (!content) {
-          console.log('🌐 缓存中没有内容，从服务器获取...');
-          
-          // 优先从 ShareDB 文档 API 获取（因为内容存储在 ShareDB 中）
+        // 2. 只有当 chaptersData 中没有大纲和细纲时，才从服务器获取章节信息
+        // 避免频繁请求，优先使用已缓存的数据
+        let docResult: any = null;
+        const chapterIdStr = String(chapterId);
+        const hasOutlineInCache = chaptersData[chapterIdStr]?.outline && chaptersData[chapterIdStr].outline.trim().length > 0;
+        const hasDetailOutlineInCache = chaptersData[chapterIdStr]?.detailOutline && chaptersData[chapterIdStr].detailOutline.trim().length > 0;
+        
+        // 只有当缓存中没有大纲或细纲时，才从服务器获取
+        if (!hasOutlineInCache || !hasDetailOutlineInCache) {
           try {
-            const docResult = await chaptersApi.getChapterDocument(chapterId);
-            console.log('📥 从 ShareDB 文档 API 获取:', {
-              hasContent: !!docResult.content,
-              contentType: typeof docResult.content,
-              contentKeys: docResult.content && typeof docResult.content === 'object' 
-                ? Object.keys(docResult.content) 
-                : 'not object',
+            console.log('📥 获取章节文档信息（用于更新大纲和细纲）...', {
+              hasOutlineInCache,
+              hasDetailOutlineInCache,
             });
+            docResult = await chaptersApi.getChapterDocument(chapterId);
+          console.log('📥 从 ShareDB 文档 API 获取:', {
+            hasContent: !!docResult.content,
+            contentType: typeof docResult.content,
+            contentKeys: docResult.content && typeof docResult.content === 'object' 
+              ? Object.keys(docResult.content) 
+              : 'not object',
+            hasChapterInfo: !!docResult.chapter_info,
+            hasMetadata: !!docResult.chapter_info?.metadata,
+          });
+          
+          // 打印完整的文档对象用于调试
+          console.log('📦 ShareDB 完整文档对象:', JSON.stringify(docResult, null, 2));
+          
+          // 更新章节的 outline 和 detailed_outline 到设置中
+          if (docResult.chapter_info?.metadata) {
+              const chapterIdStr = String(docResult.chapter_info.id);
+              
+              // 将对象格式的 outline 转换为字符串
+              let outline = '';
+              if (docResult.chapter_info.metadata.outline) {
+                const outlineObj = docResult.chapter_info.metadata.outline as any;
+                if (typeof outlineObj === 'object' && outlineObj !== null) {
+                  // 格式化大纲对象为可读字符串
+                  const parts: string[] = [];
+                  if (outlineObj.core_function) {
+                    parts.push(`核心功能：${outlineObj.core_function}`);
+                  }
+                  if (outlineObj.key_points && Array.isArray(outlineObj.key_points)) {
+                    parts.push(`关键情节点：\n${outlineObj.key_points.map((p: string, i: number) => `${i + 1}. ${p}`).join('\n')}`);
+                  }
+                  if (outlineObj.visual_scenes && Array.isArray(outlineObj.visual_scenes)) {
+                    parts.push(`画面感：\n${outlineObj.visual_scenes.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`);
+                  }
+                  if (outlineObj.atmosphere && Array.isArray(outlineObj.atmosphere)) {
+                    parts.push(`氛围：${outlineObj.atmosphere.join('、')}`);
+                  }
+                  if (outlineObj.hook) {
+                    parts.push(`结尾钩子：${outlineObj.hook}`);
+                  }
+                  outline = parts.join('\n\n');
+                } else if (typeof outlineObj === 'string') {
+                  outline = outlineObj;
+                }
+              }
+              
+              // 将对象格式的 detailed_outline 转换为字符串
+              let detailedOutline = '';
+              if (docResult.chapter_info.metadata.detailed_outline) {
+                const detailedObj = docResult.chapter_info.metadata.detailed_outline as any;
+                if (typeof detailedObj === 'object' && detailedObj !== null) {
+                  // 格式化细纲对象为可读字符串
+                  if (detailedObj.sections && Array.isArray(detailedObj.sections)) {
+                    detailedOutline = detailedObj.sections.map((section: any) => {
+                      const sectionNum = section.section_number || '';
+                      const sectionTitle = section.title || '';
+                      const sectionContent = section.content || '';
+                      return `${sectionNum}. ${sectionTitle}\n${sectionContent}`;
+                    }).join('\n\n');
+                  } else {
+                    detailedOutline = JSON.stringify(detailedObj, null, 2);
+                  }
+                } else if (typeof detailedObj === 'string') {
+                  detailedOutline = detailedObj;
+                }
+              }
+              
+              console.log('📝 更新章节大纲和细纲:', {
+                chapterId: chapterIdStr,
+                hasOutline: !!outline,
+                hasDetailedOutline: !!detailedOutline,
+                outlineLength: outline.length,
+                detailedOutlineLength: detailedOutline.length,
+              });
+              
+              // 更新 chaptersData 中的章节数据
+              setChaptersData(prev => {
+                const updated = { ...prev };
+                if (updated[chapterIdStr]) {
+                  updated[chapterIdStr] = {
+                    ...updated[chapterIdStr],
+                    outline,
+                    detailOutline: detailedOutline,
+                  };
+                } else {
+                  // 如果章节数据不存在，创建新的数据
+                  const volNum = docResult.chapter_info.volume_number || 0;
+                  updated[chapterIdStr] = {
+                    id: chapterIdStr,
+                    volumeId: `vol${volNum}`,
+                    volumeTitle: volNum === 0 ? '未分卷' : `第${volNum}卷`,
+                    title: docResult.chapter_info.title,
+                    chapter_number: docResult.chapter_info.chapter_number,
+                    characters: [],
+                    locations: [],
+                    outline,
+                    detailOutline: detailedOutline,
+                  };
+                }
+                return updated;
+              });
+              
+              // 如果当前选中的章节就是这个章节，也更新 currentChapterData
+              if (selectedChapter === chapterIdStr) {
+                setCurrentChapterData(prev => {
+                  if (prev && prev.id === chapterIdStr) {
+                    return {
+                      ...prev,
+                      outline,
+                      detailOutline: detailedOutline,
+                    };
+                  }
+                  return prev;
+                });
+              }
+            }
             
-            // 打印完整的文档对象用于调试
-            console.log('📦 ShareDB 完整文档对象:', JSON.stringify(docResult, null, 2));
-            
-            if (docResult.content) {
+            // 3. 如果缓存中没有内容，从 docResult 中提取内容
+            if (!content && docResult.content) {
+              console.log('🌐 缓存中没有内容，从 docResult 中提取...');
               console.log('📦 ShareDB 文档结构:', {
                 isString: typeof docResult.content === 'string',
                 isObject: typeof docResult.content === 'object',
@@ -1052,7 +1433,7 @@ export default function NovelEditorPage() {
               if (typeof docResult.content === 'string') {
                 // 直接是字符串内容
                 content = docResult.content;
-                console.log('✅ 获取到字符串内容，长度:', content.length);
+                console.log('✅ 获取到字符串内容，长度:', content?.length || 0);
               } else if (docResult.content && typeof docResult.content === 'object') {
                 // ShareDB 文档对象格式：{ id, content, title, metadata, ... }
                 // 实际内容在 content 字段中
@@ -1134,7 +1515,7 @@ export default function NovelEditorPage() {
                 }
               }
               
-              // 如果成功获取内容，保存到缓存
+              // 如果成功获取内容，保存到缓存（包含 outline 和 detailed_outline）
               if (content) {
                 if (!workId) {
                   console.error('❌ [缓存] workId 不存在，无法保存到缓存');
@@ -1142,17 +1523,71 @@ export default function NovelEditorPage() {
                 }
                 const cacheKey = `work_${workId}_chapter_${chapterId}`;
                 
-                console.log('💾 保存到缓存:', {
+                // 提取 outline 和 detailed_outline（如果存在）
+                let outline = '';
+                let detailedOutline = '';
+                if (docResult.chapter_info?.metadata) {
+                  // 将对象格式的 outline 转换为字符串
+                  if (docResult.chapter_info.metadata.outline) {
+                    const outlineObj = docResult.chapter_info.metadata.outline as any;
+                    if (typeof outlineObj === 'object' && outlineObj !== null) {
+                      const parts: string[] = [];
+                      if (outlineObj.core_function) {
+                        parts.push(`核心功能：${outlineObj.core_function}`);
+                      }
+                      if (outlineObj.key_points && Array.isArray(outlineObj.key_points)) {
+                        parts.push(`关键情节点：\n${outlineObj.key_points.map((p: string, i: number) => `${i + 1}. ${p}`).join('\n')}`);
+                      }
+                      if (outlineObj.visual_scenes && Array.isArray(outlineObj.visual_scenes)) {
+                        parts.push(`画面感：\n${outlineObj.visual_scenes.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`);
+                      }
+                      if (outlineObj.atmosphere && Array.isArray(outlineObj.atmosphere)) {
+                        parts.push(`氛围：${outlineObj.atmosphere.join('、')}`);
+                      }
+                      if (outlineObj.hook) {
+                        parts.push(`结尾钩子：${outlineObj.hook}`);
+                      }
+                      outline = parts.join('\n\n');
+                    } else if (typeof outlineObj === 'string') {
+                      outline = outlineObj;
+                    }
+                  }
+                  
+                  // 将对象格式的 detailed_outline 转换为字符串
+                  if (docResult.chapter_info.metadata.detailed_outline) {
+                    const detailedObj = docResult.chapter_info.metadata.detailed_outline as any;
+                    if (typeof detailedObj === 'object' && detailedObj !== null) {
+                      if (detailedObj.sections && Array.isArray(detailedObj.sections)) {
+                        detailedOutline = detailedObj.sections.map((section: any) => {
+                          const sectionNum = section.section_number || '';
+                          const sectionTitle = section.title || '';
+                          const sectionContent = section.content || '';
+                          return `${sectionNum}. ${sectionTitle}\n${sectionContent}`;
+                        }).join('\n\n');
+                      } else {
+                        detailedOutline = JSON.stringify(detailedObj, null, 2);
+                      }
+                    } else if (typeof detailedObj === 'string') {
+                      detailedOutline = detailedObj;
+                    }
+                  }
+                }
+                
+                console.log('💾 保存到缓存（包含大纲和细纲）:', {
                   cacheKey,
                   contentLength: content.length,
+                  hasOutline: !!outline,
+                  hasDetailedOutline: !!detailedOutline,
                 });
                 
-                sharedbClient.updateDocument(cacheKey, content, {
+                documentCache.updateDocument(cacheKey, content, {
                   work_id: docResult.chapter_info.work_id,
                   chapter_id: docResult.chapter_info.id,
                   chapter_number: docResult.chapter_info.chapter_number,
+                  outline: outline || undefined,
+                  detailed_outline: detailedOutline || undefined,
                 }).then(() => {
-                  console.log('✅ 已保存到缓存:', cacheKey);
+                  console.log('✅ 已保存到缓存（包含大纲和细纲）:', cacheKey);
                 }).catch(err => {
                   console.error('❌ 保存到缓存失败:', err);
                 });
@@ -1164,32 +1599,37 @@ export default function NovelEditorPage() {
             console.error('❌ 从 ShareDB 文档 API 获取失败:', docErr);
             
             // 如果 ShareDB 失败，尝试从普通章节 API 获取（作为后备）
-            try {
-              const chapter = await chaptersApi.getChapter(chapterId);
-              console.log('📥 从章节 API 获取（后备）:', {
-                chapterId: chapter.id,
-                hasContent: !!chapter.content,
-                contentLength: chapter.content?.length || 0,
-              });
-              
-              if (chapter.content) {
-                content = chapter.content;
-                if (!workId) {
-                  console.error('❌ [缓存] workId 不存在，无法保存到缓存');
-                  return;
-                }
-                const cacheKey = `work_${workId}_chapter_${chapterId}`;
+            // 注意：这个 API 不包含大纲和细纲，只用于获取内容
+            if (!content) {
+              try {
+                const chapter = await chaptersApi.getChapter(chapterId);
+                console.log('📥 从章节 API 获取（后备）:', {
+                  chapterId: chapter.id,
+                  hasContent: !!chapter.content,
+                  contentLength: chapter.content?.length || 0,
+                });
                 
-                sharedbClient.updateDocument(cacheKey, chapter.content, {
-                  work_id: chapter.work_id,
-                  chapter_id: chapter.id,
-                  chapter_number: chapter.chapter_number,
-                }).catch(err => console.error('保存到缓存失败:', err));
+                if (chapter.content) {
+                  content = chapter.content;
+                  if (!workId) {
+                    console.error('❌ [缓存] workId 不存在，无法保存到缓存');
+                    return;
+                  }
+                  const cacheKey = `work_${workId}_chapter_${chapterId}`;
+                  
+                  documentCache.updateDocument(cacheKey, chapter.content, {
+                    work_id: chapter.work_id,
+                    chapter_id: chapter.id,
+                    chapter_number: chapter.chapter_number,
+                  }).catch(err => console.error('保存到缓存失败:', err));
+                }
+              } catch (err) {
+                console.error('❌ 从章节 API 获取也失败:', err);
               }
-            } catch (err) {
-              console.error('❌ 从章节 API 获取也失败:', err);
             }
           }
+        } else {
+          console.log('📝 [loadChapterContent] 缓存中已有大纲和细纲，跳过服务器请求');
         }
         
         // 3. 设置编辑器内容（即使为空也设置，让用户可以编辑）
@@ -1261,7 +1701,7 @@ export default function NovelEditorPage() {
             }
             
             console.log('🔄 [自动拉取] 章节切换后自动从服务器拉取最新更新:', documentId);
-            const serverDoc = await sharedbClient.forcePullFromServer(documentId);
+            const serverDoc = await documentCache.forcePullFromServer(documentId);
             
             // 再次验证章节ID（可能在异步操作期间切换了）
             const currentChapterIdCheck2 = currentChapterIdRef.current;
@@ -1330,8 +1770,8 @@ export default function NovelEditorPage() {
         
         // 隐藏加载动画
         setChapterLoading(false);
-      } catch (innerErr) {
-        console.error('加载章节内容失败:', innerErr);
+      } catch (err) {
+        console.error('加载章节内容失败（内层）:', err);
         // 即使所有方法都失败，也显示空内容，保证编辑器可用
         editor.commands.setContent('<p></p>');
         // 隐藏加载动画
@@ -1445,9 +1885,9 @@ export default function NovelEditorPage() {
     updateContent,
     {
       syncDebounceDelay: 1000,      // 同步防抖延迟 1 秒
-      pollInterval: 10000,          // 每 10 秒轮询一次
+      pollInterval: 30000,          // 每 30 秒轮询一次（降低频率，减少请求）
       userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
-      syncCheckInterval: 3000,      // 每 3 秒检查一次是否需要同步
+      syncCheckInterval: 5000,      // 每 5 秒检查一次是否需要同步（降低频率）
       enablePolling: true,          // 始终启用轮询（内部会根据 documentId 判断）
       onSyncSuccess: (content, version) => {
         console.log('✅ [智能同步] 同步成功:', { version, contentLength: content.length });
@@ -1553,14 +1993,14 @@ export default function NovelEditorPage() {
           }
           
           // 1. 立即保存到本地缓存（用户操作即时响应）
-          await sharedbClient.updateDocument(documentId, content, {
+          await documentCache.updateDocument(documentId, content, {
             work_id: Number(workId),
             chapter_id: chapterId,
             updated_at: new Date().toISOString(),
           });
           
           // 关键修复：保存后验证内容确实保存到了正确的章节
-          const savedDoc = await sharedbClient.getDocument(documentId);
+          const savedDoc = await documentCache.getDocument(documentId);
           if (savedDoc) {
             const savedChapterId = savedDoc.metadata?.chapter_id;
             if (savedChapterId && savedChapterId !== chapterId) {
@@ -1571,7 +2011,7 @@ export default function NovelEditorPage() {
               });
               // 尝试修复：删除错误的缓存，重新保存
               await localCacheManager.delete(documentId);
-              await sharedbClient.updateDocument(documentId, content, {
+              await documentCache.updateDocument(documentId, content, {
                 work_id: Number(workId),
                 chapter_id: chapterId,
                 updated_at: new Date().toISOString(),
@@ -1637,6 +2077,18 @@ export default function NovelEditorPage() {
     volumeTitle: string,
     chapterData?: ChapterFullData
   ) => {
+    console.log('📝 [handleOpenChapterModal] 打开弹窗，传递数据:', {
+      mode,
+      volumeId,
+      volumeTitle,
+      hasChapterData: !!chapterData,
+      chapterId: chapterData?.id,
+      title: chapterData?.title,
+      outline: chapterData?.outline,
+      detailOutline: chapterData?.detailOutline,
+      outlineLength: chapterData?.outline?.length || 0,
+      detailOutlineLength: chapterData?.detailOutline?.length || 0,
+    });
     setChapterModalMode(mode);
     setCurrentVolumeId(volumeId);
     setCurrentVolumeTitle(volumeTitle);
@@ -1920,10 +2372,162 @@ export default function NovelEditorPage() {
   };
 
   // 打开当前章节/草稿的编辑弹框
-  const handleEditCurrentChapter = () => {
+  const handleEditCurrentChapter = async () => {
     if (!selectedChapter) return;
-    const data = chaptersData[selectedChapter];
+    
+    // 先从 chaptersData 获取数据
+    let data = chaptersData[selectedChapter];
+    
+    console.log('📝 [handleEditCurrentChapter] 初始数据:', {
+      hasData: !!data,
+      dataId: data?.id,
+      title: data?.title,
+      outlineFromChaptersData: data?.outline,
+      detailOutlineFromChaptersData: data?.detailOutline,
+      outlineLength: data?.outline?.length || 0,
+      detailOutlineLength: data?.detailOutline?.length || 0,
+      selectedChapter,
+      isDraft: data?.id?.startsWith('draft-'),
+      parsedChapterId: parseInt(selectedChapter),
+      isNaN: isNaN(parseInt(selectedChapter)),
+    });
+    
+    // 如果是真实章节（不是草稿），尝试从服务器 API 获取最新的大纲和细纲
+    const condition1 = !!data;
+    const condition2 = !data?.id?.startsWith('draft-');
+    const condition3 = !isNaN(parseInt(selectedChapter));
+    const allConditions = condition1 && condition2 && condition3;
+    
+    console.log('📝 [handleEditCurrentChapter] 条件检查:', {
+      condition1,
+      condition2,
+      condition3,
+      allConditions,
+      dataId: data?.id,
+      isDraft: data?.id?.startsWith('draft-'),
+      selectedChapter,
+      parsedChapterId: parseInt(selectedChapter),
+    });
+    
+    if (allConditions) {
+      const chapterId = parseInt(selectedChapter);
+      const needsOutline = !data.outline || data.outline.trim().length === 0;
+      const needsDetailOutline = !data.detailOutline || data.detailOutline.trim().length === 0;
+      
+      console.log('📝 [handleEditCurrentChapter] ✅ 进入条件判断，准备获取大纲和细纲:', {
+        chapterId,
+        hasData: !!data,
+        dataId: data?.id,
+        outline: data?.outline,
+        detailOutline: data?.detailOutline,
+        outlineLength: data?.outline?.length || 0,
+        detailOutlineLength: data?.detailOutline?.length || 0,
+        needsOutline,
+        needsDetailOutline,
+        willFetch: needsOutline || needsDetailOutline,
+      });
+      
+      // 只有当 chaptersData 中没有大纲和细纲时，才从服务器获取
+      // 避免频繁请求，优先使用已缓存的数据
+      if (needsOutline || needsDetailOutline) {
+        try {
+          console.log('📝 [handleEditCurrentChapter] 从服务器 API 获取大纲和细纲:', {
+            chapterId,
+            needsOutline,
+            needsDetailOutline,
+          });
+          
+          // 直接从服务器 API 获取最新的大纲和细纲
+          const docResult = await chaptersApi.getChapterDocument(chapterId);
+          console.log('📝 [handleEditCurrentChapter] 服务器文档:', {
+            hasDocResult: !!docResult,
+            hasChapterInfo: !!docResult?.chapter_info,
+            hasMetadata: !!docResult?.chapter_info?.metadata,
+            metadataKeys: docResult?.chapter_info?.metadata ? Object.keys(docResult.chapter_info.metadata) : [],
+            hasOutline: !!docResult?.chapter_info?.metadata?.outline,
+            hasDetailedOutline: !!docResult?.chapter_info?.metadata?.detailed_outline,
+          });
+          
+          if (docResult?.chapter_info?.metadata) {
+            // 解析 outline（可能是对象格式）
+            let outline = data.outline || '';
+            if (needsOutline && docResult.chapter_info.metadata.outline) {
+              const outlineObj = docResult.chapter_info.metadata.outline as any;
+              if (typeof outlineObj === 'object' && outlineObj !== null) {
+                // 格式化大纲对象为可读字符串
+                const parts: string[] = [];
+                if (outlineObj.core_function) {
+                  parts.push(`核心功能：${outlineObj.core_function}`);
+                }
+                if (outlineObj.key_points && Array.isArray(outlineObj.key_points)) {
+                  parts.push(`关键情节点：\n${outlineObj.key_points.map((p: string, i: number) => `${i + 1}. ${p}`).join('\n')}`);
+                }
+                if (outlineObj.visual_scenes && Array.isArray(outlineObj.visual_scenes)) {
+                  parts.push(`画面感：\n${outlineObj.visual_scenes.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`);
+                }
+                if (outlineObj.atmosphere && Array.isArray(outlineObj.atmosphere)) {
+                  parts.push(`氛围：${outlineObj.atmosphere.join('、')}`);
+                }
+                if (outlineObj.hook) {
+                  parts.push(`结尾钩子：${outlineObj.hook}`);
+                }
+                outline = parts.join('\n\n');
+              } else if (typeof outlineObj === 'string') {
+                outline = outlineObj;
+              }
+            }
+            
+            // 解析 detailed_outline（可能是对象格式）
+            let detailedOutline = data.detailOutline || '';
+            if (needsDetailOutline && docResult.chapter_info.metadata.detailed_outline) {
+              const detailedObj = docResult.chapter_info.metadata.detailed_outline as any;
+              if (typeof detailedObj === 'object' && detailedObj !== null) {
+                // 格式化细纲对象为可读字符串
+                if (detailedObj.sections && Array.isArray(detailedObj.sections)) {
+                  detailedOutline = detailedObj.sections.map((section: any) => {
+                    const sectionNum = section.section_number || '';
+                    const sectionTitle = section.title || '';
+                    const sectionContent = section.content || '';
+                    return `${sectionNum}. ${sectionTitle}\n${sectionContent}`;
+                  }).join('\n\n');
+                } else {
+                  detailedOutline = JSON.stringify(detailedObj, null, 2);
+                }
+              } else if (typeof detailedObj === 'string') {
+                detailedOutline = detailedObj;
+              }
+            }
+            
+            // 更新数据，包含从服务器获取的大纲和细纲
+            data = {
+              ...data,
+              outline: outline || data.outline || '',
+              detailOutline: detailedOutline || data.detailOutline || '',
+            };
+            
+            console.log('✅ [handleEditCurrentChapter] 从服务器获取并解析大纲和细纲:', {
+              outlineLength: outline.length,
+              detailOutlineLength: detailedOutline.length,
+              finalOutlineLength: data.outline.length,
+              finalDetailOutlineLength: data.detailOutline.length,
+            });
+          } else {
+            console.warn('⚠️ [handleEditCurrentChapter] 服务器文档没有 metadata');
+          }
+        } catch (error) {
+          console.warn('从服务器获取大纲和细纲失败:', error);
+        }
+    }
+    
     if (data) {
+      console.log('📝 [handleEditCurrentChapter] 准备打开弹窗，数据:', {
+        id: data.id,
+        title: data.title,
+        outline: data.outline,
+        detailOutline: data.detailOutline,
+        outlineLength: data.outline?.length || 0,
+        detailOutlineLength: data.detailOutline?.length || 0,
+      });
       handleOpenChapterModal('edit', data.volumeId, data.volumeTitle, data);
     } else {
       // 如果没有数据，从 ID 推断
@@ -1961,7 +2565,7 @@ export default function NovelEditorPage() {
       });
     }
   };
-
+}
   if (loading) {
     return (
       <div className="novel-editor-page">
@@ -2044,7 +2648,7 @@ export default function NovelEditorPage() {
             <button 
               className="action-btn analyze-work-btn" 
               onClick={handleAnalyzeWork}
-              disabled={isAnalyzing || !allChapters || allChapters.length === 0}
+              disabled={isAnalyzing || !workId}
               title="分析本书的所有章节"
             >
               {isAnalyzing ? (
@@ -2111,6 +2715,7 @@ export default function NovelEditorPage() {
 
         {/* 主编辑区 */}
         <div className="novel-editor-main">
+
           {/* 根据导航项显示不同内容 */}
           {activeNav === 'work-info' && selectedChapter === null && <WorkInfoManager workId={workId} />}
           {activeNav === 'tags' && <TagsManager />}
@@ -2317,3 +2922,4 @@ export default function NovelEditorPage() {
     </div>
   );
 }
+

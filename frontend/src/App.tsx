@@ -9,7 +9,6 @@ import NovelPage from './pages/NovelPage';
 import NovelEditorPage from './pages/NovelEditorPage';
 import ScriptPage from './pages/ScriptPage';
 import ScriptEditorPage from './pages/ScriptEditorPage';
-import BookSplitterPage from './pages/BookSplitterPage';
 import MainLayout from './components/layout/MainLayout';
 
 function AppContent() {
@@ -25,7 +24,6 @@ function AppContent() {
       </Route>
       <Route path="/novel/editor" element={<NovelEditorPage />} />
       <Route path="/script/editor" element={<ScriptEditorPage />} />
-      <Route path="/book-splitter" element={<BookSplitterPage />} />
       <Route
         path="/editor-old"
         element={<Editor docId={null} onDocChange={() => {}} />}

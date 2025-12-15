@@ -5,7 +5,168 @@
  */
 
 import { useRef, useCallback, useEffect } from 'react';
-import { sharedbClient, type ShareDBDocument } from './sharedbClient';
+import { localCacheManager } from './localCacheManager';
+import { chaptersApi } from './chaptersApi';
+
+// 类型定义
+interface ShareDBDocument {
+  document_id: string;
+  content: any;
+  version?: number;
+  metadata?: {
+    work_id?: number;
+    chapter_id?: number;
+    chapter_number?: number;
+    created_by?: number;
+    created_at?: string;
+    updated_at?: string;
+    outline?: string;  // 章节大纲
+    detailed_outline?: string;  // 章节细纲
+  };
+}
+
+interface SyncResponse {
+  success: boolean;
+  version: number;
+  content: string;
+  operations: Array<{
+    doc_id: string;
+    version: number;
+    operation: any;
+    user_id: number;
+    timestamp: string;
+  }>;
+  error?: string;
+}
+
+// 文档缓存（与 NovelEditorPage 中的 documentCache 保持一致）
+const documentCache = {
+  currentVersion: new Map<string, number>(),
+  currentContent: new Map<string, string>(),
+  
+  async getDocument(documentId: string): Promise<ShareDBDocument | null> {
+    // 先尝试从服务器获取
+    let serverDoc: ShareDBDocument | null = null;
+    try {
+      const fetchPromise = this.fetchFromServer(documentId);
+      const timeoutPromise = new Promise<null>((resolve) => 
+        setTimeout(() => resolve(null), 2000)
+      );
+      serverDoc = await Promise.race([fetchPromise, timeoutPromise]) as ShareDBDocument | null;
+      
+      if (serverDoc) {
+        const contentStr = typeof serverDoc.content === 'string' ? serverDoc.content : JSON.stringify(serverDoc.content);
+        this.currentVersion.set(documentId, serverDoc.version || 1);
+        this.currentContent.set(documentId, contentStr);
+        await localCacheManager.set(documentId, serverDoc, serverDoc.version || 1).catch(console.error);
+        return serverDoc;
+      }
+    } catch (error) {
+      console.warn('从服务器获取文档失败:', error);
+    }
+    
+    // 从缓存获取
+    try {
+      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
+      if (cached) {
+        const contentStr = typeof cached.content === 'string' ? cached.content : JSON.stringify(cached.content);
+        this.currentVersion.set(documentId, cached.version || 1);
+        this.currentContent.set(documentId, contentStr);
+        return cached;
+      }
+    } catch (error) {
+      console.error('从缓存获取文档失败:', error);
+    }
+    return null;
+  },
+  
+  async syncDocumentState(documentId: string, content: string): Promise<SyncResponse> {
+    const localVersion = this.currentVersion.get(documentId) || 0;
+    const localContent = this.currentContent.get(documentId) || content;
+
+    try {
+      // 仅保存到本地缓存，定时任务会处理服务器同步
+      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
+      if (cached) {
+        cached.content = localContent;
+        cached.version = (cached.version || 0) + 1;
+        await localCacheManager.set(documentId, cached, cached.version);
+        this.currentVersion.set(documentId, cached.version);
+        this.currentContent.set(documentId, localContent);
+      } else {
+        // 如果缓存不存在，创建新的
+        const newDoc: ShareDBDocument = {
+          document_id: documentId,
+          content: localContent,
+          version: 1,
+        };
+        await localCacheManager.set(documentId, newDoc, 1);
+        this.currentVersion.set(documentId, 1);
+        this.currentContent.set(documentId, localContent);
+      }
+
+      return {
+        success: true,
+        version: this.currentVersion.get(documentId) || localVersion,
+        content: localContent,
+        operations: [],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        version: localVersion,
+        content: localContent,
+        operations: [],
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  },
+  
+  async fetchFromServer(documentId: string): Promise<ShareDBDocument | null> {
+    let chapterId: number | null = null;
+    
+    if (documentId.startsWith('chapter_')) {
+      chapterId = parseInt(documentId.replace('chapter_', ''));
+    } else if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
+      const match = documentId.match(/work_\d+_chapter_(\d+)/);
+      if (match) {
+        chapterId = parseInt(match[1]);
+      }
+    }
+    
+    if (!chapterId || isNaN(chapterId)) {
+      return null;
+    }
+
+    try {
+      const result = await chaptersApi.getChapterDocument(chapterId);
+      let content: any = result.content;
+      
+      if (typeof content === 'object' && content !== null) {
+        if ('content' in content) {
+          content = content.content;
+        } else {
+          content = JSON.stringify(content);
+        }
+      }
+      
+      return {
+        document_id: documentId,
+        content: content || '',
+        version: result.chapter_info?.id || chapterId,
+        metadata: {
+          work_id: result.chapter_info?.work_id,
+          chapter_id: result.chapter_info?.id || chapterId,
+          chapter_number: result.chapter_info?.chapter_number,
+          outline: result.chapter_info?.metadata?.outline,
+          detailed_outline: result.chapter_info?.metadata?.detailed_outline,
+        },
+      };
+    } catch (error) {
+      return null;
+    }
+  },
+};
 
 export interface IntelligentSyncOptions {
   /** 同步防抖延迟（毫秒），默认 1000ms */
@@ -110,26 +271,26 @@ export function useIntelligentSync(
     try {
       console.log('[IntelligentSync] 开始同步，内容长度:', currentContent.length);
       
-      // 使用 sharedbClient 的同步方法
-      const result = await sharedbClient.syncDocumentState(documentId, currentContent);
+      // 使用 documentCache 的同步方法
+      const result = await documentCache.syncDocumentState(documentId, currentContent);
 
       if (result.success) {
-        // 重要：使用服务器返回的合并后的内容
-        const mergedContent = result.content;
+        // 同步成功，内容已保存到本地缓存
+        const syncedContent = result.content;
         
         // 关键：检查版本是否已应用，避免重复应用
         if (appliedVersions.current.has(result.version)) {
           console.log('⚠️ [IntelligentSync] 版本已应用，跳过:', result.version);
-          lastSyncedContent.current = mergedContent;
+          lastSyncedContent.current = syncedContent;
           lastSyncedVersion.current = result.version;
           return; // 避免重复应用
         }
         
-        // 如果服务器返回的内容与本地不同，说明发生了合并
-        if (mergedContent !== currentContent) {
-          console.log('🔄 [IntelligentSync] 检测到内容合并:', {
+        // 如果同步后的内容与本地不同（通常不会发生，因为只是保存到本地）
+        if (syncedContent !== currentContent) {
+          console.log('🔄 [IntelligentSync] 检测到内容变化:', {
             originalLength: currentContent.length,
-            mergedLength: mergedContent.length,
+            syncedLength: syncedContent.length,
             version: result.version
           });
           
@@ -139,24 +300,21 @@ export function useIntelligentSync(
           const userIsEditing = timeSinceLastInput < userInputWindow;
           
           if (!userIsEditing) {
-            // 用户没有在编辑，立即应用合并后的内容
-            console.log('✅ [IntelligentSync] 应用合并后的内容');
-            updateContent(mergedContent);
-            lastSyncedContent.current = mergedContent;
+            // 用户没有在编辑，更新内容
+            console.log('✅ [IntelligentSync] 更新内容');
+            updateContent(syncedContent);
+            lastSyncedContent.current = syncedContent;
             appliedVersions.current.add(result.version); // 标记版本已应用
-            onCollaborativeUpdate?.(true);
           } else {
-            // 用户正在编辑，标记有协作更新但不立即应用
-            console.log('⏸️ [IntelligentSync] 用户正在编辑，延迟应用合并内容');
-            onCollaborativeUpdate?.(true);
+            // 用户正在编辑，保留用户当前编辑的内容
+            console.log('⏸️ [IntelligentSync] 用户正在编辑，保留当前内容');
             // 仍然更新 lastSyncedContent，但保留用户当前编辑的内容
-            // 用户停止编辑后会自动同步
-            lastSyncedContent.current = mergedContent;
+            lastSyncedContent.current = syncedContent;
             appliedVersions.current.add(result.version); // 标记版本已应用
           }
         } else {
-          // 内容相同，没有合并
-          lastSyncedContent.current = mergedContent;
+          // 内容相同
+          lastSyncedContent.current = syncedContent;
           appliedVersions.current.add(result.version); // 标记版本已应用
         }
         
@@ -166,7 +324,7 @@ export function useIntelligentSync(
         // 清理旧版本记录
         cleanupOldVersions();
 
-        onSyncSuccess?.(mergedContent, result.version);
+        onSyncSuccess?.(syncedContent, result.version);
         onContentChange?.(true);
         console.log('[IntelligentSync] 同步成功，版本:', result.version);
       } else {
@@ -217,7 +375,7 @@ export function useIntelligentSync(
       
       console.log('[IntelligentSync] 开始轮询，文档ID:', documentId, '章节ID:', expectedChapterId);
       // 获取服务器最新状态
-      const serverDoc = await sharedbClient.getDocument(documentId);
+      const serverDoc = await documentCache.getDocument(documentId);
       
       if (!serverDoc) {
         console.log('[IntelligentSync] 服务器文档不存在:', documentId);
@@ -267,10 +425,10 @@ export function useIntelligentSync(
           ? serverDoc.content 
           : JSON.stringify(serverDoc.content);
         
-        // 关键修复：立即更新 sharedbClient 的缓存
-        sharedbClient.currentVersion.set(documentId, serverVersion);
-        sharedbClient.currentContent.set(documentId, serverContent);
-        console.log('✅ [IntelligentSync] 已更新 sharedbClient 缓存:', {
+        // 关键修复：立即更新 documentCache 的缓存
+        documentCache.currentVersion.set(documentId, serverVersion);
+        documentCache.currentContent.set(documentId, serverContent);
+        console.log('✅ [IntelligentSync] 已更新 documentCache 缓存:', {
           version: serverVersion,
           contentLength: serverContent.length
         });

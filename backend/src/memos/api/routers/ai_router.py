@@ -5,6 +5,7 @@ AI接口路由
 
 import traceback
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -19,10 +20,13 @@ from memos.api.ai_models import (
     ErrorResponse,
     HealthCheckData,
     HealthCheckResponse,
+    AnalysisSettings,
 )
 from memos.api.core.database import get_async_db
 from memos.api.services.ai_service import get_ai_service
 from memos.api.services.book_analysis_service import BookAnalysisService
+from memos.api.services.chapter_service import ChapterService
+from memos.api.services.sharedb_service import ShareDBService
 from memos.api.routers.auth_router import get_current_user_id
 from memos.log import get_logger
 
@@ -135,7 +139,7 @@ async def analyze_chapter(
                     content=request.content,
                     prompt=user_prompt,
                     system_prompt=system_prompt,
-                    model=settings.model,
+                    model=settings.model,  # 如果为None，AI服务会使用默认模型
                     temperature=settings.temperature,
                     max_tokens=settings.max_tokens,
                 ):
@@ -278,7 +282,8 @@ async def analyze_chapters_incremental(
                     accumulated_content += chapter_content + "\n\n"
                     
                     # 构建包含所有已分析章节的prompt
-                    full_prompt = enhanced_prompt_template.format(content=accumulated_content)
+                    # 使用 replace 而不是 format，避免 JSON 示例中的大括号被误解析
+                    full_prompt = enhanced_prompt_template.replace("{content}", accumulated_content)
                     
                     # 发送章节开始分析的消息
                     import json
@@ -314,6 +319,9 @@ async def analyze_chapters_incremental(
                     # 解析AI响应并渐进式插入
                     try:
                         analysis_data = book_analysis_service.parse_ai_response(full_response)
+                        
+                        if not analysis_data:
+                            raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
                         
                         # 渐进式插入到作品
                         result = await book_analysis_service.incremental_insert_to_work(
@@ -372,6 +380,264 @@ async def analyze_chapters_incremental(
         raise
     except Exception as e:
         logger.error(f"Failed to analyze chapters incrementally: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
+
+
+@router.post(
+    "/analyze-work-chapters",
+    summary="分析作品所有章节接口",
+    description="直接分析作品的所有章节，后端自动获取章节内容并逐章处理（流式响应）",
+    responses={
+        200: {"description": "分析成功，返回流式响应"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+        500: {"model": ErrorResponse, "description": "服务器内部错误"},
+        503: {"model": ErrorResponse, "description": "AI服务不可用"},
+    },
+)
+async def analyze_work_chapters(
+    work_id: int = Query(..., description="作品ID"),
+    settings: Optional[AnalysisSettings] = None,
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """
+    分析作品的所有章节，后端自动获取章节内容并逐章处理
+    
+    Args:
+        work_id: 作品ID
+        settings: 分析设置（可选）
+        db: 数据库会话
+        current_user_id: 当前用户ID
+    
+    Returns:
+        StreamingResponse: 服务器发送事件流
+    """
+    try:
+        # 获取AI服务
+        ai_service = get_ai_service()
+        if not ai_service.is_healthy():
+            raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+
+        # 获取服务
+        book_analysis_service = BookAnalysisService(db)
+        chapter_service = ChapterService(db)
+        sharedb_service = ShareDBService()
+        await sharedb_service.initialize()
+        
+        # 检查作品权限
+        from memos.api.services.work_service import WorkService
+        work_service = WorkService(db)
+        work = await work_service.get_work_by_id(work_id)
+        if not work:
+            raise HTTPException(status_code=404, detail="作品不存在")
+        if work.owner_id != current_user_id:
+            raise HTTPException(status_code=403, detail="没有权限编辑该作品")
+
+        # 获取所有章节（不分页，获取全部）
+        chapters, total = await chapter_service.get_chapters(
+            filters={"work_id": work_id},
+            page=1,
+            size=10000,  # 设置一个很大的值以获取所有章节
+            sort_by="chapter_number",
+            sort_order="asc"
+        )
+        
+        if total == 0:
+            raise HTTPException(status_code=400, detail="该作品没有章节")
+
+        # 获取增强的prompt模板
+        prompt_template_obj = await book_analysis_service.get_default_prompt_template("book_analysis")
+        if prompt_template_obj:
+            enhanced_prompt_template = prompt_template_obj.prompt_content
+        else:
+            enhanced_prompt_template = book_analysis_service.get_enhanced_book_analysis_prompt()
+
+        # 获取分析设置
+        if settings:
+            analysis_settings = settings
+        else:
+            analysis_settings = AnalysisSettings()
+
+        logger.info(
+            f"Received work chapters analysis request: "
+            f"work_id={work_id}, "
+            f"chapters_count={total}, "
+            f"model={analysis_settings.model}"
+        )
+
+        # 执行流式分析
+        async def generate_analysis():
+            """生成分析响应"""
+            try:
+                import json
+                
+                # 发送开始消息
+                start_msg = json.dumps({
+                    "type": "start",
+                    "message": f"开始分析作品《{work.title}》的所有章节，共 {total} 章",
+                    "total_chapters": total
+                })
+                yield f"data: {start_msg}\n\n"
+                
+                accumulated_content = ""  # 累积的章节内容
+                
+                for idx, chapter in enumerate(chapters, 1):
+                    # 获取章节内容
+                    chapter_content = ""
+                    try:
+                        # 优先从 ShareDB 获取
+                        document_id_new = f"work_{work_id}_chapter_{chapter.id}"
+                        document_id_old = f"chapter_{chapter.id}"
+                        
+                        document = await sharedb_service.get_document(document_id_new)
+                        if not document:
+                            document = await sharedb_service.get_document(document_id_old)
+                        
+                        if document:
+                            content = document.get("content", "")
+                            if isinstance(content, dict):
+                                # 如果是对象，尝试提取内容
+                                content = content.get("content", "") or json.dumps(content, ensure_ascii=False)
+                            elif not isinstance(content, str):
+                                content = str(content)
+                            chapter_content = content
+                        else:
+                            # 如果 ShareDB 没有，尝试从章节元数据获取
+                            if chapter.chapter_metadata and isinstance(chapter.chapter_metadata, dict):
+                                chapter_content = chapter.chapter_metadata.get("content", "")
+                            
+                            if not chapter_content:
+                                logger.warning(f"章节 {chapter.id} 没有找到内容，跳过")
+                                # 发送跳过消息
+                                skip_msg = json.dumps({
+                                    "type": "chapter_skipped",
+                                    "message": f"第 {idx} 章《{chapter.title}》没有内容，跳过",
+                                    "chapter_index": idx,
+                                    "chapter_id": chapter.id,
+                                    "chapter_title": chapter.title
+                                })
+                                yield f"data: {skip_msg}\n\n"
+                                continue
+                    except Exception as e:
+                        logger.error(f"获取章节 {chapter.id} 内容失败: {traceback.format_exc()}")
+                        # 发送错误消息但继续处理下一章
+                        error_msg = json.dumps({
+                            "type": "chapter_error",
+                            "message": f"第 {idx} 章《{chapter.title}》获取内容失败: {str(e)}",
+                            "chapter_index": idx,
+                            "chapter_id": chapter.id
+                        })
+                        yield f"data: {error_msg}\n\n"
+                        continue
+                    
+                    # 累积当前章节内容
+                    accumulated_content += f"第{chapter.chapter_number}章 {chapter.title}\n\n{chapter_content}\n\n"
+                    
+                    # 构建包含所有已分析章节的prompt
+                    # 使用 replace 而不是 format，避免 JSON 示例中的大括号被误解析
+                    full_prompt = enhanced_prompt_template.replace("{content}", accumulated_content)
+                    
+                    # 发送章节开始分析的消息
+                    chapter_start_msg = json.dumps({
+                        "type": "chapter_start",
+                        "message": f"开始分析第 {idx} 章《{chapter.title}》",
+                        "chapter_index": idx,
+                        "total_chapters": total,
+                        "chapter_id": chapter.id,
+                        "chapter_number": chapter.chapter_number,
+                        "chapter_title": chapter.title
+                    })
+                    yield f"data: {chapter_start_msg}\n\n"
+                    
+                    # 分析当前累积的内容
+                    full_response = ""
+                    async for message in ai_service.analyze_chapter_stream(
+                        content=accumulated_content,
+                        prompt=full_prompt,
+                        system_prompt=None,  # 使用默认 system_prompt
+                        model=analysis_settings.model,
+                        temperature=analysis_settings.temperature,
+                        max_tokens=analysis_settings.max_tokens * 2,
+                    ):
+                        # 如果是chunk消息，累积内容
+                        if message.startswith("data: "):
+                            try:
+                                data = json.loads(message[6:])
+                                if data.get("type") == "chunk":
+                                    full_response += data.get("content", "")
+                            except:
+                                pass
+                        
+                        yield message
+                    
+                    # 解析AI响应并渐进式插入
+                    try:
+                        analysis_data = book_analysis_service.parse_ai_response(full_response)
+                        
+                        if not analysis_data:
+                            raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
+                        
+                        # 渐进式插入到作品
+                        result = await book_analysis_service.incremental_insert_to_work(
+                            work_id=work_id,
+                            analysis_data=analysis_data,
+                            user_id=current_user_id,
+                            chapter_index=idx
+                        )
+                        
+                        # 发送插入成功的消息
+                        insert_success_msg = json.dumps({
+                            "type": "chapter_inserted",
+                            "message": f"第 {idx} 章《{chapter.title}》分析完成并已插入作品",
+                            "chapter_index": idx,
+                            "chapter_id": chapter.id,
+                            "chapter_number": chapter.chapter_number,
+                            "chapter_title": chapter.title,
+                            "data": result
+                        })
+                        yield f"data: {insert_success_msg}\n\n"
+                        
+                    except Exception as e:
+                        logger.error(f"渐进式插入失败 (章节 {idx}): {traceback.format_exc()}")
+                        error_msg = json.dumps({
+                            "type": "chapter_insert_error",
+                            "message": f"第 {idx} 章《{chapter.title}》插入失败: {str(e)}",
+                            "chapter_index": idx,
+                            "chapter_id": chapter.id
+                        })
+                        yield f"data: {error_msg}\n\n"
+                
+                # 发送完成消息
+                complete_msg = json.dumps({
+                    "type": "all_chapters_complete",
+                    "message": "所有章节分析完成",
+                    "total_chapters": total
+                })
+                yield f"data: {complete_msg}\n\n"
+                        
+            except Exception as e:
+                logger.error(f"Error in work chapters analysis stream: {traceback.format_exc()}")
+                import json
+                error_data = json.dumps({"type": "error", "message": str(e)})
+                yield f"data: {error_data}\n\n"
+
+        return StreamingResponse(
+            generate_analysis(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "*",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to analyze work chapters: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
 
 
@@ -506,14 +772,14 @@ async def analyze_book(
         book_analysis_service = BookAnalysisService(db)
         
         # 获取增强的prompt模板
-        prompt_template = await book_analysis_service.get_default_prompt_template("book_analysis")
-        if prompt_template:
+        prompt_template_obj = await book_analysis_service.get_default_prompt_template("book_analysis")
+        if prompt_template_obj:
             # 使用数据库中的模板
-            enhanced_prompt = prompt_template.format_prompt(content=request.content)
+            enhanced_prompt = prompt_template_obj.format_prompt(content=request.content)
         else:
             # 使用默认的增强prompt
-            enhanced_prompt = book_analysis_service.get_enhanced_book_analysis_prompt().format(
-                content=request.content
+            enhanced_prompt = book_analysis_service.get_enhanced_book_analysis_prompt().replace(
+                "{content}", request.content
             )
 
         # 获取分析设置
@@ -556,6 +822,9 @@ async def analyze_book(
                     try:
                         # 解析AI响应
                         analysis_data = book_analysis_service.parse_ai_response(full_response)
+                        
+                        if not analysis_data:
+                            raise ValueError("无法解析AI响应，可能返回的不是有效的JSON格式")
                         
                         # 创建作品
                         result = await book_analysis_service.create_work_from_analysis(
@@ -801,9 +1070,167 @@ async def analyze_chapter_by_file(
 
 
 @router.post(
+    "/generate-chapter-outlines",
+    summary="逐章生成大纲和细纲接口",
+    description="为作品的所有章节（或指定章节）逐章生成大纲和细纲，从work的metadata中获取characters和locations信息",
+    responses={
+        200: {"description": "生成成功，返回流式响应"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+        500: {"model": ErrorResponse, "description": "服务器内部错误"},
+        503: {"model": ErrorResponse, "description": "AI服务不可用"},
+    },
+)
+async def generate_chapter_outlines(
+    work_id: int = Query(..., description="作品ID"),
+    chapter_ids: Optional[str] = Query(None, description="指定要处理的章节ID列表（逗号分隔），如果不提供则处理所有章节"),
+    prompt: Optional[str] = Query(None, description="自定义prompt（可选）"),
+    settings: Optional[AnalysisSettings] = None,
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """
+    为作品的所有章节（或指定章节）逐章生成大纲和细纲
+    
+    Args:
+        work_id: 作品ID
+        chapter_ids: 指定要处理的章节ID列表（逗号分隔，可选）
+        prompt: 自定义prompt（可选）
+        settings: AI分析设置（可选）
+        db: 数据库会话
+        current_user_id: 当前用户ID
+    
+    Returns:
+        StreamingResponse: 服务器发送事件流
+    """
+    try:
+        # 验证作品是否存在
+        from memos.api.services.work_service import WorkService
+        work_service = WorkService(db)
+        work = await work_service.get_work_by_id(work_id)
+        if not work:
+            raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+        
+        # 检查权限
+        chapter_service = ChapterService(db)
+        if not await chapter_service.can_edit_work(user_id=current_user_id, work_id=work_id):
+            raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
+        
+        # 获取AI服务
+        ai_service = get_ai_service()
+        if not ai_service.is_healthy():
+            raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+        
+        # 解析章节ID列表
+        chapter_id_list = None
+        if chapter_ids:
+            try:
+                chapter_id_list = [int(id.strip()) for id in chapter_ids.split(",") if id.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="章节ID格式错误，应为逗号分隔的整数列表")
+        
+        # 获取分析设置
+        analysis_settings = {}
+        if settings:
+            analysis_settings = {
+                "model": settings.model,
+                "temperature": settings.temperature,
+                "max_tokens": settings.max_tokens,
+            }
+        
+        # 获取拆书分析服务
+        book_analysis_service = BookAnalysisService(db)
+        
+        logger.info(
+            f"开始为作品 {work_id} 生成章节大纲和细纲，"
+            f"章节数量: {len(chapter_id_list) if chapter_id_list else '全部'}"
+        )
+        
+        # 执行流式生成
+        async def generate_outlines():
+            """生成大纲和细纲响应"""
+            try:
+                import json
+                
+                # 发送开始消息
+                start_msg = json.dumps({
+                    "type": "start",
+                    "message": f"开始为作品《{work.title}》生成章节大纲和细纲"
+                })
+                yield f"data: {start_msg}\n\n"
+                
+                # 逐章生成大纲和细纲
+                async for result in book_analysis_service.generate_outlines_for_all_chapters(
+                    work_id=work_id,
+                    ai_service=ai_service,
+                    prompt=prompt,
+                    settings=analysis_settings,
+                    chapter_ids=chapter_id_list
+                ):
+                    if "error" in result:
+                        # 发送错误消息
+                        error_msg = json.dumps({
+                            "type": "chapter_error",
+                            "chapter_id": result.get("chapter_id"),
+                            "chapter_number": result.get("chapter_number"),
+                            "index": result.get("index"),
+                            "total": result.get("total"),
+                            "message": result.get("error")
+                        })
+                        yield f"data: {error_msg}\n\n"
+                    else:
+                        # 发送成功消息
+                        success_msg = json.dumps({
+                            "type": "chapter_complete",
+                            "chapter_id": result.get("chapter_id"),
+                            "chapter_number": result.get("chapter_number"),
+                            "title": result.get("title"),
+                            "index": result.get("index"),
+                            "total": result.get("total"),
+                            "outline": result.get("outline", {}),
+                            "detailed_outline": result.get("detailed_outline", {}),
+                            "message": f"第 {result.get('chapter_number')} 章《{result.get('title')}》大纲和细纲生成完成"
+                        })
+                        yield f"data: {success_msg}\n\n"
+                
+                # 发送完成消息
+                done_msg = json.dumps({
+                    "type": "done",
+                    "message": "所有章节的大纲和细纲生成完成"
+                })
+                yield f"data: {done_msg}\n\n"
+                
+            except Exception as e:
+                logger.error(f"生成大纲和细纲过程出错: {traceback.format_exc()}")
+                error_msg = json.dumps({
+                    "type": "error",
+                    "message": f"服务器错误: {str(e)}"
+                })
+                yield f"data: {error_msg}\n\n"
+        
+        return StreamingResponse(
+            generate_outlines(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "*",
+            },
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate chapter outlines: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
+
+
+@router.post(
     "/create-work-from-file",
-    summary="从文件直接创建作品和章节（不进行AI分析）",
-    description="直接将文件拆分的章节创建为作品和章节，不进行AI分析",
+    summary="从文件创建作品和章节",
+    description="根据文件名和章节数据批量创建作品和章节（不进行AI分析）",
     responses={
         200: {"description": "创建成功"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
@@ -816,39 +1243,146 @@ async def create_work_from_file(
     current_user_id: int = Depends(get_current_user_id),
 ):
     """
-    从文件直接创建作品和章节（不进行AI分析）
+    从文件创建作品和章节
     
     工作流程：
-    1. 根据文件名查找或创建作品
-    2. 为每个章节创建章节记录
-    3. 将章节内容保存到ShareDB
-    4. 不进行AI分析，后续可在作品中通过按键进行分析
+    1. 根据文件名查找作品（从work_metadata.source_file）
+    2. 如果不存在，创建新作品（标题=文件名）
+    3. 批量创建章节
+    4. 将章节内容保存到 ShareDB
+    
+    Args:
+        request: 从文件创建作品请求
+        db: 数据库会话
+        current_user_id: 当前用户ID
+    
+    Returns:
+        Dict: 创建结果，包含作品ID、标题、创建的章节数等
     """
     try:
-        book_analysis_service = BookAnalysisService(db)
+        from memos.api.services.work_service import WorkService
+        from memos.api.services.chapter_service import ChapterService
+        from memos.api.services.sharedb_service import ShareDBService
         
-        # 准备章节数据
-        chapters_data = [
-            {
-                "chapter_number": ch.chapter_number,
-                "title": ch.title,
-                "content": ch.content,
-                "volume_number": ch.volume_number
-            }
-            for ch in request.chapters
-        ]
+        work_service = WorkService(db)
+        chapter_service = ChapterService(db)
+        sharedb_service = ShareDBService()
+        await sharedb_service.initialize()
         
-        # 调用服务方法创建作品和章节
-        result = await book_analysis_service.create_work_and_chapters_from_file(
-            file_name=request.file_name,
-            chapters_data=chapters_data,
-            user_id=current_user_id
+        # 1. 根据文件名查找作品
+        work = await work_service.find_work_by_filename(request.file_name, current_user_id)
+        work_created = False
+        
+        if not work:
+            # 2. 如果不存在，创建新作品
+            # 从文件名提取标题（去掉扩展名）
+            import os
+            work_title = os.path.splitext(request.file_name)[0]
+            
+            work = await work_service.create_work(
+                owner_id=current_user_id,
+                title=work_title,
+                work_type="novel",  # 默认类型
+                work_metadata={
+                    "source_file": request.file_name
+                }
+            )
+            work_created = True
+            logger.info(f"✅ 创建新作品: {work.id} - {work.title}")
+        else:
+            logger.info(f"📖 找到现有作品: {work.id} - {work.title}")
+        
+        # 3. 批量创建章节
+        created_chapters = []
+        skipped_chapters = []
+        
+        for chapter_data in request.chapters:
+            try:
+                # 检查章节是否已存在（根据章节号和卷号）
+                from sqlalchemy import and_
+                from sqlalchemy.future import select
+                from memos.api.models.chapter import Chapter
+                
+                existing_chapter_stmt = select(Chapter).where(
+                    and_(
+                        Chapter.work_id == work.id,
+                        Chapter.chapter_number == chapter_data.chapter_number,
+                        Chapter.volume_number == (chapter_data.volume_number or 1)
+                    )
+                )
+                existing_result = await db.execute(existing_chapter_stmt)
+                existing_chapter = existing_result.scalar_one_or_none()
+                
+                if existing_chapter:
+                    logger.warning(f"⚠️ 章节已存在，跳过: 第{chapter_data.chapter_number}章 - {chapter_data.title}")
+                    skipped_chapters.append({
+                        "chapter_id": existing_chapter.id,
+                        "chapter_number": chapter_data.chapter_number,
+                        "volume_number": chapter_data.volume_number or 1,
+                        "title": chapter_data.title
+                    })
+                    continue
+                
+                # 创建章节
+                chapter = await chapter_service.create_chapter(
+                    work_id=work.id,
+                    title=chapter_data.title,
+                    chapter_number=chapter_data.chapter_number,
+                    volume_number=chapter_data.volume_number or 1,
+                    status="draft",
+                    word_count=len(chapter_data.content) if chapter_data.content else 0,
+                )
+                
+                # 4. 将章节内容保存到 ShareDB
+                document_id = f"work_{work.id}_chapter_{chapter.id}"
+                await sharedb_service.create_document(
+                    document_id=document_id,
+                    initial_content={
+                        "id": document_id,
+                        "content": chapter_data.content,
+                        "title": chapter_data.title,
+                        "metadata": {
+                            "work_id": work.id,
+                            "chapter_id": chapter.id,
+                            "chapter_number": chapter_data.chapter_number,
+                            "volume_number": chapter_data.volume_number or 1,
+                        }
+                    }
+                )
+                
+                created_chapters.append({
+                    "chapter_id": chapter.id,
+                    "chapter_number": chapter_data.chapter_number,
+                    "volume_number": chapter_data.volume_number or 1,
+                    "title": chapter_data.title
+                })
+                
+                logger.info(f"✅ 创建章节: {chapter.id} - 第{chapter_data.chapter_number}章 - {chapter_data.title}")
+                
+            except Exception as e:
+                logger.error(f"❌ 创建章节失败: {e}", exc_info=True)
+                # 继续处理下一个章节
+                continue
+        
+        # 更新作品统计
+        await work_service.update_work(
+            work_id=work.id,
+            chapter_count=len(created_chapters)
         )
         
-        return result
+        return {
+            "work_id": work.id,
+            "work_title": work.title,
+            "work_created": work_created,
+            "chapters_created": len(created_chapters),
+            "chapters_skipped": len(skipped_chapters),
+            "created_chapters": created_chapters,
+            "skipped_chapters": skipped_chapters,
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"创建作品和章节失败: {traceback.format_exc()}")
+        logger.error(f"Failed to create work from file: {traceback.format_exc()}")
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
