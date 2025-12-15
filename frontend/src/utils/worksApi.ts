@@ -294,9 +294,48 @@ class WorksApiClient {
    * 删除作品
    */
   async deleteWork(workId: number): Promise<void> {
-    await this.request(`/api/v1/works/${workId}`, {
+    const url = `${this.baseUrl}/api/v1/works/${workId}`;
+    console.log('删除作品请求URL:', url);
+    
+    const response = await fetch(url, {
       method: 'DELETE',
+      headers: this.getAuthHeaders(),
     });
+
+    console.log('删除作品响应状态:', response.status, response.statusText);
+    console.log('删除作品响应头:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      let errorData: any = {};
+      try {
+        const text = await response.text();
+        console.log('删除作品错误响应体:', text);
+        if (text) {
+          errorData = JSON.parse(text);
+        }
+      } catch (parseErr) {
+        console.warn('解析错误响应失败:', parseErr);
+      }
+      
+      const errorMessage = errorData.detail || errorData.message || `删除作品失败: ${response.statusText} (${response.status})`;
+      console.error('删除作品失败:', errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    // DELETE请求可能返回空响应(204)或JSON响应(200)
+    // 尝试解析响应，如果没有内容或解析失败，也视为成功
+    try {
+      const text = await response.text();
+      if (text) {
+        const data = JSON.parse(text);
+        console.log('删除作品成功响应:', data);
+      } else {
+        console.log('删除作品成功（空响应）');
+      }
+    } catch (parseErr) {
+      // 如果解析失败，可能是空响应，也视为成功
+      console.log('删除作品成功（无法解析响应，可能是空响应）');
+    }
   }
 
   /**

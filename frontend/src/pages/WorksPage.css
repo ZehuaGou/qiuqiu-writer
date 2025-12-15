@@ -325,6 +325,7 @@
   padding: 4px;
   z-index: 1000;
   animation: slideDown 0.2s ease;
+  pointer-events: auto;
 }
 
 @keyframes slideDown {
@@ -353,6 +354,11 @@
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.2s ease;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .menu-item:hover {

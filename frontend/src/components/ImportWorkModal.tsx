@@ -14,6 +14,9 @@ interface Chapter {
   title: string;
   content: string;
   number: number;
+  volumeNumber?: number;
+  originalVolumeNumber?: number;
+  originalChapterNumber?: number;
 }
 
 export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWorkModalProps) {
@@ -42,10 +45,12 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
 
   // 章节拆分逻辑
   const splitTextToChapters = async (content: string): Promise<Chapter[]> => {
-    const headingPattern = /(^\s*(?:第\s*[0-9一二三四五六七八九十百千零]+\s*[章回节卷篇]|(?:Chapter|CHAPTER)\s*\d+|序章|楔子|尾声|后记|番外)[^\n]*\n)/gm;
+    // 支持识别：第X章、第X卷第Y章、第X回、Chapter X 等格式
+    const headingPattern = /(^\s*(?:第\s*[0-9一二三四五六七八九十百千零]+\s*[卷]\s*第\s*[0-9一二三四五六七八九十百千零]+\s*[章回节]|第\s*[0-9一二三四五六七八九十百千零]+\s*[章回节卷篇]|(?:Chapter|CHAPTER)\s*\d+|序章|楔子|尾声|后记|番外)[^\n]*\n)/gm;
     const parts = content.split(headingPattern);
     const chapters: Chapter[] = [];
-    let chapterNumber = 0;
+    let currentVolumeNumber = 1;
+    let chapterCountInVolumes: Record<number, number> = {}; // 记录每卷的章节数
 
     for (let i = 1; i < parts.length; i += 2) {
       if (parts[i] && parts[i + 1]) {
@@ -53,24 +58,79 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
         const content = parts[i + 1].trim();
         
         if (content) {
-          // 提取章节号
-          const numberMatch = heading.match(/(\d+|[一二三四五六七八九十百千零]+)/);
-          if (numberMatch) {
-            const cnNum = numberMatch[1];
-            if (/[一二三四五六七八九十百千零]/.test(cnNum)) {
-              chapterNumber = convertChineseNumberToArabic(cnNum);
+          let volumeNumber = 1;
+          let chapterNumber = 0;
+          let originalVolumeNumber: number | undefined;
+          let originalChapterNumber: number | undefined;
+
+          // 优先匹配：第X卷第Y章 格式
+          const volumeChapterMatch = heading.match(/第\s*([0-9一二三四五六七八九十百千零]+)\s*卷\s*第\s*([0-9一二三四五六七八九十百千零]+)\s*[章回节]/);
+          if (volumeChapterMatch) {
+            // 解析卷号
+            const volNumStr = volumeChapterMatch[1];
+            if (/[一二三四五六七八九十百千零]/.test(volNumStr)) {
+              volumeNumber = convertChineseNumberToArabic(volNumStr);
             } else {
-              chapterNumber = parseInt(cnNum, 10);
+              volumeNumber = parseInt(volNumStr, 10);
             }
+            
+            // 解析章节号
+            const chNumStr = volumeChapterMatch[2];
+            if (/[一二三四五六七八九十百千零]/.test(chNumStr)) {
+              chapterNumber = convertChineseNumberToArabic(chNumStr);
+            } else {
+              chapterNumber = parseInt(chNumStr, 10);
+            }
+            
+            originalVolumeNumber = volumeNumber;
+            originalChapterNumber = chapterNumber;
+            currentVolumeNumber = volumeNumber;
           } else {
-            chapterNumber++;
+            // 匹配：第X卷（单独出现，表示卷的开始）
+            const volumeMatch = heading.match(/第\s*([0-9一二三四五六七八九十百千零]+)\s*卷/);
+            if (volumeMatch) {
+              const volNumStr = volumeMatch[1];
+              if (/[一二三四五六七八九十百千零]/.test(volNumStr)) {
+                volumeNumber = convertChineseNumberToArabic(volNumStr);
+              } else {
+                volumeNumber = parseInt(volNumStr, 10);
+              }
+              currentVolumeNumber = volumeNumber;
+              chapterNumber = 1; // 新卷的第一章
+            } else {
+              // 匹配普通章节：第X章
+              const chapterMatch = heading.match(/第\s*([0-9一二三四五六七八九十百千零]+)\s*[章回节卷篇]|(?:Chapter|CHAPTER)\s*(\d+)/);
+              if (chapterMatch) {
+                const cnNum = chapterMatch[1];
+                const enNum = chapterMatch[2];
+                if (enNum) {
+                  chapterNumber = parseInt(enNum, 10);
+                } else if (cnNum) {
+                  if (/[一二三四五六七八九十百千零]/.test(cnNum)) {
+                    chapterNumber = convertChineseNumberToArabic(cnNum);
+                  } else {
+                    chapterNumber = parseInt(cnNum, 10);
+                  }
+                }
+                volumeNumber = currentVolumeNumber;
+                // 保存原始章节号，用于后续排序和修正
+                originalChapterNumber = chapterNumber;
+              } else {
+                // 特殊章节（序章、楔子等）
+                volumeNumber = currentVolumeNumber;
+                chapterNumber = 0; // 特殊章节编号为0
+              }
+            }
           }
 
           chapters.push({
-            id: `chapter-${chapterNumber}`,
+            id: `chapter-${volumeNumber}-${chapterNumber}`,
             title: heading,
             content: content,
-            number: chapterNumber
+            number: chapterNumber,
+            volumeNumber: volumeNumber,
+            originalVolumeNumber: originalVolumeNumber,
+            originalChapterNumber: originalChapterNumber
           });
         }
       }
@@ -82,8 +142,96 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
         id: 'chapter-1',
         title: '全文',
         content: content,
-        number: 1
+        number: 1,
+        volumeNumber: 1
       });
+    }
+
+    // 按照出现顺序排序（保持原有顺序，不重新排序）
+    // 这样可以在处理章节号回退时正确识别
+
+    // 修正章节号为递增顺序
+    // 使用简单的顺序递增逻辑，严格按照出现顺序递增
+    // 处理章节号回退的情况（比如第29章后又出现第一章，应该识别为第30章）
+    let globalChapterNumber = 1;
+    let currentVolume = 1; // 当前卷号
+    let lastChapterNumber = 0; // 记录上一章的原始章节号
+    let lastGlobalChapterNumber = 0; // 记录上一章的全局章节号
+    let volumeStartNumbers: Record<number, number> = { 1: 1 }; // 记录每卷的起始章节号
+    
+    for (let i = 0; i < chapters.length; i++) {
+      const chapter = chapters[i];
+      const origVolNum = chapter.originalVolumeNumber || chapter.volumeNumber || 1;
+      let volNum = origVolNum;
+      const origChNum = chapter.originalChapterNumber || chapter.number || 0;
+      
+      // 如果是特殊章节（序章、楔子等），保持编号为0
+      if (origChNum === 0 || chapter.title.match(/序章|楔子|尾声|后记|番外/)) {
+        chapter.number = 0;
+        continue;
+      }
+      
+      // 如果章节有明确的卷号信息，且大于当前卷号，更新当前卷号
+      if (origVolNum > currentVolume) {
+        currentVolume = origVolNum;
+        volNum = origVolNum;
+        if (!volumeStartNumbers[volNum]) {
+          volumeStartNumbers[volNum] = globalChapterNumber;
+        }
+      } else {
+        // 使用当前卷号
+        volNum = currentVolume;
+      }
+      
+      // 检查章节号是否回退（比如从29章回到1章）
+      // 只有在没有明确卷号信息时才进行回退检测
+      if (!chapter.originalVolumeNumber && origChNum < lastChapterNumber && lastChapterNumber > 0) {
+        // 章节号回退了，应该识别为新卷
+        currentVolume = currentVolume + 1;
+        volNum = currentVolume;
+        if (!volumeStartNumbers[volNum]) {
+          volumeStartNumbers[volNum] = globalChapterNumber;
+        }
+      }
+      
+      // 严格按照出现顺序递增，避免跳过章节号
+      // 新卷的第一章应该比上一卷最后一章大1
+      if (volNum > (chapter.originalVolumeNumber || 1) && lastGlobalChapterNumber > 0) {
+        // 明确的新卷，从上一章+1开始
+        globalChapterNumber = lastGlobalChapterNumber + 1;
+      } else if (origChNum === lastChapterNumber && lastChapterNumber > 0) {
+        // 章节号相同（重复），直接递增
+        globalChapterNumber = lastGlobalChapterNumber + 1;
+      } else if (origChNum < lastChapterNumber && lastChapterNumber > 0 && !chapter.originalVolumeNumber) {
+        // 章节号回退了，直接递增（已经在上面更新了卷号）
+        globalChapterNumber = lastGlobalChapterNumber + 1;
+      } else if (origChNum > lastChapterNumber && lastChapterNumber > 0) {
+        // 正常递增，但需要确保不跳过
+        // 如果原始章节号的增量大于1，说明可能跳过了中间章节，直接递增
+        const increment = origChNum - lastChapterNumber;
+        if (increment === 1) {
+          // 正常递增1，使用上一章+1
+          globalChapterNumber = lastGlobalChapterNumber + 1;
+        } else {
+          // 跳过了中间章节，直接递增1，避免跳过
+          globalChapterNumber = lastGlobalChapterNumber + 1;
+        }
+      } else {
+        // 第一章或其他情况，直接使用当前值
+        if (lastGlobalChapterNumber > 0) {
+          globalChapterNumber = lastGlobalChapterNumber + 1;
+        } else {
+          globalChapterNumber = 1;
+        }
+      }
+      
+      // 更新章节号为全局递增编号
+      chapter.number = globalChapterNumber;
+      chapter.volumeNumber = volNum;
+      
+      // 更新记录
+      lastChapterNumber = origChNum;
+      lastGlobalChapterNumber = globalChapterNumber;
     }
 
     return chapters;
@@ -165,11 +313,17 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
 
       // 准备章节数据
       const chaptersData = chapters.map(ch => ({
-        chapter_number: ch.number,
+        chapter_number: ch.number, // 使用修正后的递增章节号
         title: ch.title,
         content: ch.content,
-        volume_number: 1
+        volume_number: ch.volumeNumber || 1 // 使用解析出的卷号
       }));
+      
+      console.log('📚 章节数据预览:', chaptersData.slice(0, 5).map(ch => ({
+        章节号: ch.chapter_number,
+        卷号: ch.volume_number,
+        标题: ch.title.substring(0, 20)
+      })));
 
       // 调用创建接口
       const result = await createWorkFromFile(file.name, chaptersData);
