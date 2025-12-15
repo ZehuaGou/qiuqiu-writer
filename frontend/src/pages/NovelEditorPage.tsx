@@ -2470,19 +2470,6 @@ export default function NovelEditorPage(){
     // 先从 chaptersData 获取数据
     let data = chaptersData[selectedChapter];
     
-    console.log('📝 [handleEditCurrentChapter] 初始数据:', {
-      hasData: !!data,
-      dataId: data?.id,
-      title: data?.title,
-      outlineFromChaptersData: data?.outline,
-      detailOutlineFromChaptersData: data?.detailOutline,
-      outlineLength: data?.outline?.length || 0,
-      detailOutlineLength: data?.detailOutline?.length || 0,
-      selectedChapter,
-      isDraft: data?.id?.startsWith('draft-'),
-      parsedChapterId: parseInt(selectedChapter),
-      isNaN: isNaN(parseInt(selectedChapter)),
-    });
     
     // 如果是真实章节（不是草稿），尝试从服务器 API 获取最新的大纲和细纲
     const condition1 = !!data;
@@ -2490,56 +2477,19 @@ export default function NovelEditorPage(){
     const condition3 = !isNaN(parseInt(selectedChapter));
     const allConditions = condition1 && condition2 && condition3;
     
-    console.log('📝 [handleEditCurrentChapter] 条件检查:', {
-      condition1,
-      condition2,
-      condition3,
-      allConditions,
-      dataId: data?.id,
-      isDraft: data?.id?.startsWith('draft-'),
-      selectedChapter,
-      parsedChapterId: parseInt(selectedChapter),
-    });
-    
     if (allConditions) {
       const chapterId = parseInt(selectedChapter);
       const needsOutline = !data.outline || data.outline.trim().length === 0;
       const needsDetailOutline = !data.detailOutline || data.detailOutline.trim().length === 0;
       
-      console.log('📝 [handleEditCurrentChapter] ✅ 进入条件判断，准备获取大纲和细纲:', {
-        chapterId,
-        hasData: !!data,
-        dataId: data?.id,
-        outline: data?.outline,
-        detailOutline: data?.detailOutline,
-        outlineLength: data?.outline?.length || 0,
-        detailOutlineLength: data?.detailOutline?.length || 0,
-        needsOutline,
-        needsDetailOutline,
-        willFetch: needsOutline || needsDetailOutline,
-      });
-      
       // 只有当 chaptersData 中没有大纲和细纲时，才从服务器获取
       // 避免频繁请求，优先使用已缓存的数据
       if (needsOutline || needsDetailOutline) {
-        try {
-          console.log('📝 [handleEditCurrentChapter] 从服务器 API 获取大纲和细纲:', {
-            chapterId,
-            needsOutline,
-            needsDetailOutline,
-          });
+
           
           // 直接从服务器 API 获取最新的大纲和细纲
           const docResult = await chaptersApi.getChapterDocument(chapterId);
-          console.log('📝 [handleEditCurrentChapter] 服务器文档:', {
-            hasDocResult: !!docResult,
-            hasChapterInfo: !!docResult?.chapter_info,
-            hasMetadata: !!docResult?.chapter_info?.metadata,
-            metadataKeys: docResult?.chapter_info?.metadata ? Object.keys(docResult.chapter_info.metadata) : [],
-            hasOutline: !!docResult?.chapter_info?.metadata?.outline,
-            hasDetailedOutline: !!docResult?.chapter_info?.metadata?.detailed_outline,
-          });
-          
+
           if (docResult?.chapter_info?.metadata) {
             // 解析 outline（可能是对象格式）
             let outline = data.outline || '';
@@ -2597,29 +2547,12 @@ export default function NovelEditorPage(){
               detailOutline: detailedOutline || data.detailOutline || '',
             };
             
-            console.log('✅ [handleEditCurrentChapter] 从服务器获取并解析大纲和细纲:', {
-              outlineLength: outline.length,
-              detailOutlineLength: detailedOutline.length,
-              finalOutlineLength: data.outline.length,
-              finalDetailOutlineLength: data.detailOutline.length,
-            });
           } else {
             console.warn('⚠️ [handleEditCurrentChapter] 服务器文档没有 metadata');
           }
-        } catch (error) {
-          console.warn('从服务器获取大纲和细纲失败:', error);
-        }
     }
     
     if (data) {
-      console.log('📝 [handleEditCurrentChapter] 准备打开弹窗，数据:', {
-        id: data.id,
-        title: data.title,
-        outline: data.outline,
-        detailOutline: data.detailOutline,
-        outlineLength: data.outline?.length || 0,
-        detailOutlineLength: data.detailOutline?.length || 0,
-      });
       handleOpenChapterModal('edit', data.volumeId, data.volumeTitle, data);
     } else {
       // 如果没有数据，从 ID 推断
@@ -2657,7 +2590,7 @@ export default function NovelEditorPage(){
       });
     }
   };
-}
+
   if (loading) {
     return (
       <div className="novel-editor-page">
@@ -2678,7 +2611,7 @@ export default function NovelEditorPage(){
       </div>
     );
   }
-
+}
   return (
     <div className="novel-editor-page">
       {/* 顶部工具栏 */}
