@@ -5,8 +5,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Union, Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from passlib.hash import bcrypt
+import bcrypt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -15,9 +14,6 @@ from memos.api.core.redis import get_redis
 
 settings = get_settings()
 security = HTTPBearer()
-
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def create_access_token(
@@ -113,9 +109,17 @@ def get_password_hash(password: str) -> str:
         password: 明文密码
 
     Returns:
-        密码哈希字符串
+        密码哈希字符串（bcrypt 格式）
     """
-    return pwd_context.hash(password)
+    # bcrypt 会自动处理超过 72 字节的密码（自动截断）
+    password_bytes = password.encode('utf-8')
+    
+    # 生成盐并哈希密码
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    
+    # 返回解码后的字符串（bcrypt 哈希是 ASCII 字符串）
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -124,12 +128,23 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     Args:
         plain_password: 明文密码
-        hashed_password: 密码哈希
+        hashed_password: 密码哈希（bcrypt 格式）
 
     Returns:
         密码是否正确
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        # bcrypt 会自动处理超过 72 字节的密码（自动截断）
+        password_bytes = plain_password.encode('utf-8')
+        
+        # 将哈希字符串编码为字节
+        hashed_bytes = hashed_password.encode('utf-8')
+        
+        # 使用 bcrypt 验证密码
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception:
+        # 任何异常都返回 False
+        return False
 
 
 async def get_current_user_id(
