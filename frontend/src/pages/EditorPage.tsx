@@ -31,12 +31,6 @@ export default function EditorPage() {
               <p>角色管理功能开发中...</p>
             </div>
           )}
-          {activeNav === 'settings' && (
-            <div className="placeholder-content">
-              <h2>设定</h2>
-              <p>设定管理功能开发中...</p>
-            </div>
-          )}
         </div>
         <AIAssistant />
       </div>
