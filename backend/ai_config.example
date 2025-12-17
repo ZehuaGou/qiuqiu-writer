@@ -3,9 +3,22 @@
 # ==========================================
 # 复制此文件为 .env 或 .env.local 并填写实际的配置值
 
-# OpenAI API配置
+# ==========================================
+# OpenAI API配置（默认）
+# ==========================================
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_API_BASE=https://api.openai.com/v1
+
+# ==========================================
+# DeepSeek API配置（推荐，性价比高）
+# ==========================================
+# 使用 DeepSeek 时，取消下面的注释并填写你的 API Key
+# OPENAI_API_KEY=sk-5b8dc562ef4647738b008c011bbf4acc
+# OPENAI_API_BASE=https://api.deepseek.com
+# DEFAULT_AI_MODEL=deepseek-chat
+# 可选模型：
+#   - deepseek-chat: 通用对话模型（推荐）
+#   - deepseek-reasoner: 推理模型（更强大但更慢）
 
 # MemReader配置（用于记忆读取和处理）
 MEMRADER_API_KEY=your_openai_api_key_here
@@ -14,6 +27,8 @@ MEMRADER_MODEL=gpt-4o-mini
 MEMRADER_MAX_TOKENS=8000
 
 # 默认AI模型设置
+# 如果使用 OpenAI: gpt-3.5-turbo, gpt-4, gpt-4o 等
+# 如果使用 DeepSeek: deepseek-chat, deepseek-reasoner
 DEFAULT_AI_MODEL=gpt-3.5-turbo
 
 # API服务配置
@@ -34,14 +49,27 @@ LOG_LEVEL=INFO
 # ==========================================
 # 使用说明：
 # ==========================================
+# 
+# 方式1：使用 OpenAI（默认）
 # 1. 获取OpenAI API密钥：https://platform.openai.com/api-keys
-# 2. 如果使用其他OpenAI兼容的API（如Azure、本地部署的模型），
-#    修改OPENAI_API_BASE为对应的API端点
-# 3. 可选的AI模型：
-#    - gpt-3.5-turbo (推荐，性价比高)
-#    - gpt-4 (更强大但更贵)
-#    - gpt-4-turbo-preview
-#    - gpt-4o
+# 2. 设置 OPENAI_API_KEY 和 OPENAI_API_BASE
+# 3. 可选模型：gpt-3.5-turbo, gpt-4, gpt-4o 等
+#
+# 方式2：使用 DeepSeek（推荐，性价比高）
+# 1. 获取 DeepSeek API密钥：https://platform.deepseek.com/api_keys
+# 2. 设置以下环境变量：
+#    OPENAI_API_KEY=sk-你的deepseek-api-key
+#    OPENAI_API_BASE=https://api.deepseek.com
+#    DEFAULT_AI_MODEL=deepseek-chat
+# 3. 可选模型：
+#    - deepseek-chat: 通用对话模型（推荐，性价比高）
+#    - deepseek-reasoner: 推理模型（更强大但更慢）
+#
+# 方式3：使用其他OpenAI兼容的API
+# 1. 如果使用Azure、本地部署的模型等，修改OPENAI_API_BASE为对应的API端点
+# 2. 设置对应的模型名称
+#
+# 其他可选模型：
 #    - claude-3-sonnet (需要配置对应的API)
 #    - claude-3-opus
 

@@ -104,6 +104,8 @@ class AIService:
             "gpt-4",
             "gpt-4-turbo-preview",
             "gpt-4o",
+            "deepseek-chat",  # DeepSeek 通用对话模型
+            "deepseek-reasoner",  # DeepSeek 推理模型
             "claude-3-sonnet",
             "claude-3-opus",
             "codedrive-chat",  # 添加自定义模型

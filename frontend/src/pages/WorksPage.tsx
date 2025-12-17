@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grid, List, Plus, Upload, Video, FileText, MoreVertical, ChevronDown, Download, Link2, Trash2, ChevronRight } from 'lucide-react';
+import { Grid, List, Plus, Upload, ChevronDown, Download, Link2, Trash2 } from 'lucide-react';
 import { worksApi, type Work } from '../utils/worksApi';
+import { exportAsText, exportAsWord, exportAsPdf } from '../utils/exportUtils';
 import ImportWorkModal from '../components/ImportWorkModal';
 import './WorksPage.css';
 
@@ -14,11 +15,10 @@ export default function WorksPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [openSubMenu, setOpenSubMenu] = useState<string | null>(null);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
-  const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [openExportMenuId, setOpenExportMenuId] = useState<string | null>(null);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
+  const exportMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
   
   const [works, setWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,43 +74,30 @@ export default function WorksPage() {
     return colors[type] || '#10b981';
   };
 
-  // 处理菜单切换
-  const handleMenuToggle = (workId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpenMenuId(openMenuId === workId ? null : workId);
-    setOpenSubMenu(null);
-  };
-
-  // 处理子菜单切换
-  const handleSubMenuToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpenSubMenu(openSubMenu ? null : 'export');
-  };
-
   // 点击外部关闭菜单
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      Object.values(menuRefs.current).forEach((ref) => {
-        if (ref && !ref.contains(event.target as Node)) {
-          setOpenMenuId(null);
-          setOpenSubMenu(null);
-        }
-      });
-      
       // 关闭创建作品菜单
       if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
         setShowCreateMenu(false);
       }
+      
+      // 关闭导出菜单
+      Object.values(exportMenuRefs.current).forEach((ref) => {
+        if (ref && !ref.contains(event.target as Node)) {
+          setOpenExportMenuId(null);
+        }
+      });
     };
 
-    if (openMenuId || showCreateMenu) {
+    if (showCreateMenu || openExportMenuId) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openMenuId, showCreateMenu]);
+  }, [showCreateMenu, openExportMenuId]);
 
   // 处理删除作品
   const handleDeleteWork = async (workId: string) => {
@@ -171,15 +158,34 @@ export default function WorksPage() {
     try {
       switch (action) {
         case 'delete':
-          
           await handleDeleteWork(workId);
-          // 删除成功后关闭菜单
-          setOpenMenuId(null);
-          setOpenSubMenu(null);
           break;
         case 'export':
-          // TODO: 实现导出功能
-          
+          // 实现导出功能
+          try {
+            setLoading(true);
+            // 获取作品信息
+            const work = await worksApi.getWork(Number(workId));
+            
+            // 根据格式调用相应的导出函数
+            if (format === 'text') {
+              await exportAsText(work);
+              alert('导出为 Text 成功！');
+            } else if (format === 'word') {
+              await exportAsWord(work);
+              alert('导出为 Word 成功！');
+            } else if (format === 'pdf') {
+              await exportAsPdf(work);
+              alert('导出为 PDF 成功！');
+            } else {
+              alert('不支持的导出格式');
+            }
+          } catch (err) {
+            console.error('导出失败:', err);
+            alert(err instanceof Error ? err.message : '导出失败，请稍后重试');
+          } finally {
+            setLoading(false);
+          }
           break;
         case 'copy-link':
           // 生成作品链接
@@ -365,131 +371,75 @@ export default function WorksPage() {
                   </div>
                 )}
                 <div className="work-actions" onClick={(e) => e.stopPropagation()}>
-                  {work.work_type !== 'video' && (
-                    <>
-                      <button className="work-action-btn">
-                        <Video size={14} />
-                        <span>生成视频</span>
-                      </button>
-                      <button className="work-action-btn">
-                        <FileText size={14} />
-                        <span>转为剧本</span>
-                      </button>
-                    </>
-                  )}
-                  <div className="menu-wrapper" ref={(el) => { menuRefs.current[String(work.id)] = el; }}>
-                    <button 
-                      className="work-action-btn icon-only"
-                      onClick={(e) => handleMenuToggle(String(work.id), e)}
+                  <div className="export-menu-wrapper" ref={(el) => { exportMenuRefs.current[String(work.id)] = el; }}>
+                    <button
+                      className={`work-action-btn ${openExportMenuId === String(work.id) ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenExportMenuId(openExportMenuId === String(work.id) ? null : String(work.id));
+                      }}
+                      title="导出作品"
                     >
-                      <MoreVertical size={16} />
+                      <Download size={16} />
+                      <ChevronDown size={14} />
                     </button>
-                    {openMenuId === String(work.id) && (
-                      <div className="context-menu">
-                        <div
-                          className="menu-item"
-                          onMouseEnter={handleSubMenuToggle}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSubMenuToggle(e);
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleSubMenuToggle(e as any);
-                            }
-                          }}
-                        >
-                          <Download size={16} />
-                          <span>导出作品</span>
-                          <ChevronRight size={14} />
-                          {openSubMenu === 'export' && (
-                            <div className="sub-menu">
-                              <button
-                                className="sub-menu-item"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMenuAction('export', String(work.id), 'text');
-                                }}
-                              >
-                                Text
-                              </button>
-                              <button
-                                className="sub-menu-item"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMenuAction('export', String(work.id), 'word');
-                                }}
-                              >
-                                Word
-                              </button>
-                              <button
-                                className="sub-menu-item"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMenuAction('export', String(work.id), 'pdf');
-                                }}
-                              >
-                                Pdf
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                    {openExportMenuId === String(work.id) && (
+                      <div className="export-menu">
                         <button
-                          className="menu-item"
+                          className="export-menu-item"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleMenuAction('copy-link', String(work.id));
+                            handleMenuAction('export', String(work.id), 'text');
+                            setOpenExportMenuId(null);
                           }}
                         >
-                          <Link2 size={16} />
-                          <span>复制链接</span>
+                          导出为 Text
                         </button>
                         <button
-                          className="menu-item danger"
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            
-                          }}
+                          className="export-menu-item"
                           onClick={(e) => {
-                            
-                            
-                            
-                            
-                            
-                            
                             e.stopPropagation();
-                            e.preventDefault();
-                            
-                            const workIdToDelete = String(work.id);
-                            
-                            
-                            // 不立即关闭菜单，先执行删除操作
-                            handleDeleteWork(workIdToDelete).then(() => {
-                              
-                              setOpenMenuId(null);
-                              setOpenSubMenu(null);
-                            }).catch((error) => {
-                              console.error('删除失败:', error);
-                              setOpenMenuId(null);
-                              setOpenSubMenu(null);
-                            });
-                          }}
-                          onMouseUp={(e) => {
-                            e.stopPropagation();
-                            
+                            handleMenuAction('export', String(work.id), 'word');
+                            setOpenExportMenuId(null);
                           }}
                         >
-                          <Trash2 size={16} />
-                          <span>删除作品</span>
+                          导出为 Word
+                        </button>
+                        <button
+                          className="export-menu-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMenuAction('export', String(work.id), 'pdf');
+                            setOpenExportMenuId(null);
+                          }}
+                        >
+                          导出为 PDF
                         </button>
                       </div>
                     )}
                   </div>
+                  <button
+                    className="work-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMenuAction('copy-link', String(work.id));
+                    }}
+                    title="复制链接"
+                  >
+                    <Link2 size={16} />
+                  </button>
+                  <button
+                    className="work-action-btn danger"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleDeleteWork(String(work.id));
+                    }}
+                    title="删除作品"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))

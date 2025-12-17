@@ -110,6 +110,53 @@
   margin-bottom: 2px;
 }
 
+/* 导出菜单样式 */
+.export-menu-wrapper {
+  position: relative;
+}
+
+.export-menu-wrapper .work-action-btn {
+  position: relative;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 160px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 1000;
+  animation: slideDown 0.2s ease;
+  border: 1px solid #e5e7eb;
+}
+
+.export-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.export-menu-item:hover {
+  background: #f0fdf4;
+  color: #10b981;
+}
+
+.export-menu-item:not(:last-child) {
+  margin-bottom: 2px;
+}
+
 .view-toggle {
   display: flex;
   gap: 4px;
@@ -288,6 +335,7 @@
 .work-action-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   padding: 6px 12px;
   border: none;
@@ -297,11 +345,31 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .work-action-btn:hover {
   background: #e5e7eb;
   color: #1f2937;
+}
+
+.work-action-btn.danger {
+  color: #ef4444;
+}
+
+.work-action-btn.danger:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.work-action-btn.active {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.work-action-btn.active:hover {
+  background: #bae6fd;
+  color: #075985;
 }
 
 .work-action-btn.icon-only {

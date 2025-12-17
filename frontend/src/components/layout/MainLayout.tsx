@@ -12,16 +12,10 @@ type NavItem =
 
 const navItems: NavItem[] = [
   { id: 'home', label: '首页', icon: Home, path: '/' },
-  { id: 'works', label: '我的作品', icon: BookOpen, path: '/works' },
-  { id: 'novel', label: '小说写作', icon: FileText, path: '/novel' },
-  { id: 'script', label: '剧本写作', icon: Video, path: '/script' },
-  { id: 'comic-video', label: '漫剧视频', icon: PlaySquare, path: '/comic-video' },
-  { id: 'general', label: '通用写作', icon: PenTool, path: '/general' },
+  { id: 'works', label: '小说写作', icon: BookOpen, path: '/works' },
+
+
   { type: 'divider' },
-  { id: 'classroom', label: '蛙蛙课堂', icon: GraduationCap, path: '/classroom', badge: 'New' },
-  { id: 'tutorial', label: '使用教程', icon: Info, path: '/tutorial' },
-  { id: 'ai-tools-upgraded', label: 'AI工具 (升级版)', icon: Package, path: '/ai-tools-upgraded' },
-  { id: 'ai-toolbox', label: 'AI工具箱', icon: Bot, path: '/ai-toolbox' },
 ];
 
 const bottomNavItems = [
