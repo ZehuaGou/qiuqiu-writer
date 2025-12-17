@@ -131,6 +131,7 @@
   z-index: 1000;
   animation: slideDown 0.2s ease;
   border: 1px solid #e5e7eb;
+  pointer-events: auto;
 }
 
 .export-menu-item {
@@ -146,6 +147,10 @@
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.2s ease;
+  position: relative;
+  z-index: 1001;
+  pointer-events: auto;
+  user-select: none;
 }
 
 .export-menu-item:hover {

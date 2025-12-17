@@ -224,13 +224,7 @@ const documentCache = {
     // 这样可以确保保存的是用户当前编辑的内容，而不是可能过时的缓存内容
     const contentToSave = content;
 
-    console.log('🔄 [DocumentCache] 同步文档到服务器:', {
-      documentId,
-      localVersion,
-      contentLength: contentToSave.length,
-      usingEditorContent: true, // 标记使用的是编辑器内容
-    });
-
+    
     try {
       // 先保存到本地缓存（使用编辑器内容）
       const cached = await localCacheManager.get<ShareDBDocument>(documentId);
@@ -310,11 +304,7 @@ const documentCache = {
           };
           await localCacheManager.set(documentId, updatedDoc, result.version);
           
-          console.log('✅ [DocumentCache] 已同步到服务器:', {
-            documentId,
-            version: result.version,
-            previousVersion,
-            hasBaseContent: !!documentCache.lastSyncedContent.get(documentId),
+          ,
           });
 
           return {
@@ -725,9 +715,7 @@ export default function NovelEditorPage(){
             
             setAvailableCharacters(allUniqueCharacters);
             
-            console.log('📋 合并后的角色列表:', {
-              total: allUniqueCharacters.length,
-              fromTable: uniqueCharacters.filter(c => c.source === 'char-table').length,
+            .length,
               fromCard: uniqueCharacters.filter(c => c.source === 'character-card').length,
               extracted: extractedCharacters.length,
             });
@@ -1267,12 +1255,7 @@ export default function NovelEditorPage(){
           const currentContent = editor.getHTML();
           const previousDocumentId = `work_${workId}_chapter_${previousChapterId}`;
           
-          console.log('💾 [切换章节] 保存前一个章节内容:', {
-            previousChapterId,
-            newChapterId: chapterId,
-            previousDocumentId,
-            contentLength: currentContent.length,
-            contentPreview: currentContent.substring(0, 100),
+          ,
             editorContent: editor.getHTML().substring(0, 100), // 验证编辑器内容
           });
           
@@ -1387,12 +1370,7 @@ export default function NovelEditorPage(){
           // 只有在 serverDoc 不存在时，才从缓存获取
           try {
             // 关键修复：确保使用正确的文档ID，避免缓存键冲突
-            console.log('🔍 [缓存检查] 开始获取缓存，文档ID:', {
-              documentId,
-              chapterId,
-              workId,
-            });
-            
+                        
             // 先尝试新格式
             cachedDoc = await documentCache.getDocument(documentId);
           } catch (cacheErr) {
@@ -1627,10 +1605,7 @@ export default function NovelEditorPage(){
             // 3. 如果缓存中没有内容，从 docResult 中提取内容
             if (!content && docResult.content) {
               
-              console.log('📦 ShareDB 文档结构:', {
-                isString: typeof docResult.content === 'string',
-                isObject: typeof docResult.content === 'object',
-                keys: typeof docResult.content === 'object' ? Object.keys(docResult.content) : 'N/A',
+               : 'N/A',
                 contentValue: typeof docResult.content === 'object' && 'content' in docResult.content
                   ? (typeof docResult.content.content === 'string' 
                       ? docResult.content.content.substring(0, 200) 
@@ -1663,8 +1638,7 @@ export default function NovelEditorPage(){
                     content = null;
                   } else if (innerContent && typeof innerContent === 'object') {
                     // 如果 content 还是对象，可能是 TipTap 格式或其他格式
-                    console.log('📝 content 是对象，结构:', {
-                      keys: Object.keys(innerContent),
+                    ,
                       type: (innerContent as any).type,
                     });
                     
@@ -1772,13 +1746,7 @@ export default function NovelEditorPage(){
                   }
                 }
                 
-                console.log('💾 保存到缓存（包含大纲和细纲）:', {
-                  cacheKey,
-                  contentLength: content.length,
-                  hasOutline: !!outline,
-                  hasDetailedOutline: !!detailedOutline,
-                });
-                
+                                
                 documentCache.updateDocument(cacheKey, content, {
                   work_id: docResult.chapter_info.work_id,
                   chapter_id: docResult.chapter_info.id,
@@ -1795,7 +1763,7 @@ export default function NovelEditorPage(){
               // ShareDB 文档中没有内容可能是正常的（新章节或空章节），降低警告级别
               // 只在调试模式下输出，避免控制台噪音
               if (import.meta.env.DEV && import.meta.env.VITE_DEBUG === 'true') {
-                console.log('ℹ️ [ShareDB] 文档中没有内容（可能是新章节）');
+                
               }
             }
           } catch (docErr) {
@@ -1805,12 +1773,7 @@ export default function NovelEditorPage(){
             if (!content) {
               try {
                 const chapter = await chaptersApi.getChapter(chapterId);
-                console.log('📥 从章节 API 获取（后备）:', {
-                  chapterId: chapter.id,
-                  hasContent: !!chapter.content,
-                  contentLength: chapter.content?.length || 0,
-                });
-                
+                                
                 if (chapter.content) {
                   content = chapter.content;
                   if (!workId) {
@@ -1978,12 +1941,7 @@ export default function NovelEditorPage(){
               const normalizedServer = normalizeContent(serverContent);
               
               if (normalizedCurrent !== normalizedServer) {
-                console.log('✅ [自动拉取] 检测到服务器有新内容，更新编辑器:', {
-                  serverVersion: serverDoc.version,
-                  serverContentLength: serverContent.length,
-                  currentContentLength: currentContent.length
-                });
-                // 关键修复：从服务器拉取内容时，先清除历史再设置内容
+                                // 关键修复：从服务器拉取内容时，先清除历史再设置内容
                 // 这样可以避免撤销到旧内容
                 editor.commands.setContent('<p></p>', { emitUpdate: false });
                 setTimeout(() => {
@@ -2048,12 +2006,7 @@ export default function NovelEditorPage(){
     const editorContent = editor.getHTML();
     const documentId = `work_${workId}_chapter_${chapterId}`;
 
-    console.log('💾 [手动保存] 开始保存:', {
-      chapterId,
-      documentId,
-      contentLength: editorContent.length,
-    });
-
+    
     try {
       // 显示保存状态
       const saveButton = document.querySelector('.manual-save-btn') as HTMLButtonElement;
@@ -2075,11 +2028,7 @@ export default function NovelEditorPage(){
       const result = await documentCache.syncDocumentState(documentId, editorContent);
 
       if (result.success) {
-        console.log('✅ [手动保存] 保存成功:', {
-          version: result.version,
-          contentLength: result.content.length,
-        });
-        
+                
         // 显示成功提示（可选）
         if (saveButton && saveButton.querySelector('span')) {
           saveButton.querySelector('span')!.textContent = '已保存';
@@ -2245,12 +2194,7 @@ export default function NovelEditorPage(){
   // 自动保存章节内容（本地优先策略 + 智能同步）
   useEffect(() => {
     if (!editor || !selectedChapter || !workId) {
-      console.log('⚠️ 自动保存未启动:', {
-        hasEditor: !!editor,
-        selectedChapter,
-        workId,
-      });
-      return;
+            return;
     }
 
     const chapterId = parseInt(selectedChapter);
@@ -2323,12 +2267,7 @@ export default function NovelEditorPage(){
           // 使用 workId 和 chapterId 生成唯一的缓存键
           const documentId = `work_${workId}_chapter_${chapterId}`;
           
-          console.log('💾 [自动保存] 开始保存:', {
-            workId,
-            chapterId,
-            documentId,
-            contentLength: editorContent.length,
-            contentPreview: editorContent.substring(0, 100),
+          ,
             hasJson: !!editorContentJson,
             currentChapterIdRef: currentChapterIdRef.current, // 验证章节ID
             usingEditorContent: true, // 标记使用的是编辑器内容
@@ -2342,9 +2281,7 @@ export default function NovelEditorPage(){
             
           }
           
-          console.log('💾 [自动保存] 使用编辑器内容:', {
-            contentLength: editorContent.length,
-            contentPreview: editorContent.substring(0, 100),
+          ,
             hasJson: !!editorContentJson,
           });
           
@@ -2359,11 +2296,7 @@ export default function NovelEditorPage(){
           // 使用编辑器中的实际内容，同时提供 JSON 格式用于更精确的合并
           try {
             const syncResult = await documentCache.syncDocumentState(documentId, editorContent, editorContentJson);
-            console.log('✅ [自动保存] 已同步到服务器:', {
-              documentId,
-              contentLength: editorContent.length,
-            });
-            
+                        
             // 如果 sync 接口返回了更新后的作品和章节信息，更新本地状态
             if (syncResult.work || syncResult.chapter) {
               // 如果返回了更新后的作品信息，更新本地状态
@@ -2372,11 +2305,7 @@ export default function NovelEditorPage(){
                   prevWork ? { ...prevWork, word_count: syncResult.work!.word_count } : null
                 );
                 
-                console.log('✅ [字数统计] 作品总字数已更新（从 sync 接口返回）:', {
-                  workId,
-                  totalWordCount: syncResult.work.word_count,
-                });
-              }
+                              }
               
               // 如果返回了更新后的章节信息，更新本地章节数据
               if (syncResult.chapter) {
@@ -2386,11 +2315,7 @@ export default function NovelEditorPage(){
                   )
                 );
                 
-                console.log('✅ [字数统计] 章节字数已更新（从 sync 接口返回）:', {
-                  chapterId,
-                  wordCount: syncResult.chapter.word_count,
-                });
-              }
+                              }
             }
           } catch (syncErr) {
             console.warn('⚠️ [自动保存] 同步到服务器失败，但已保存到本地缓存:', syncErr);
@@ -2483,19 +2408,7 @@ export default function NovelEditorPage(){
     volumeTitle: string,
     chapterData?: ChapterFullData
   ) => {
-    console.log('📝 [handleOpenChapterModal] 打开弹窗，传递数据:', {
-      mode,
-      volumeId,
-      volumeTitle,
-      hasChapterData: !!chapterData,
-      chapterId: chapterData?.id,
-      title: chapterData?.title,
-      outline: chapterData?.outline,
-      detailOutline: chapterData?.detailOutline,
-      outlineLength: chapterData?.outline?.length || 0,
-      detailOutlineLength: chapterData?.detailOutline?.length || 0,
-    });
-    setChapterModalMode(mode);
+        setChapterModalMode(mode);
     setCurrentVolumeId(volumeId);
     setCurrentVolumeTitle(volumeTitle);
     setCurrentChapterData(chapterData);

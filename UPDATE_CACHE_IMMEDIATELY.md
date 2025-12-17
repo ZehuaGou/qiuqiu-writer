@@ -20,11 +20,7 @@ if (serverVersion > currentVersion) {
   // 关键修复：立即更新前端缓存信息
   this.currentVersion.set(documentId, serverVersion);
   this.currentContent.set(documentId, serverContent);
-  console.log('✅ [同步] 已更新前端缓存:', {
-    version: serverVersion,
-    contentLength: serverContent.length
-  });
-  
+    
   // 使用服务器内容作为baseContent
   baseContent = serverContent;
 }
@@ -48,11 +44,7 @@ if (serverVersion > currentVersion) {
   // 关键修复：立即更新 sharedbClient 的缓存
   sharedbClient.currentVersion.set(documentId, serverVersion);
   sharedbClient.currentContent.set(documentId, serverContent);
-  console.log('✅ [IntelligentSync] 已更新 sharedbClient 缓存:', {
-    version: serverVersion,
-    contentLength: serverContent.length
-  });
-}
+  }
 ```
 
 ### 3. WebSocket 更新时立即更新缓存 ✅

@@ -817,13 +817,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         lastModified: Date.now()
       };
 
-      console.log('准备保存模板配置:', {
-        workId,
-        templateId: template.id,
-        modulesCount: template.modules.length,
-        templateData
-      });
-
+      
       // 保存到本地缓存（使用模板ID作为key的一部分）
       try {
         saveToCache(templateData, workId || null, template.id);

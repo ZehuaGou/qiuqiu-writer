@@ -153,7 +153,6 @@ export default function WorksPage() {
   // 处理菜单项点击
   const handleMenuAction = async (action: string, workId: string, format?: string) => {
     
-    
     // 先执行操作，再关闭菜单，避免菜单关闭导致事件丢失
     try {
       switch (action) {
@@ -162,27 +161,49 @@ export default function WorksPage() {
           break;
         case 'export':
           // 实现导出功能
+          setLoading(true);
+          
+          
           try {
-            setLoading(true);
+            // 显示开始提示
+            const formatName = format === 'text' ? 'Text' : format === 'word' ? 'Word' : 'PDF';
+            
+            
             // 获取作品信息
+            
             const work = await worksApi.getWork(Number(workId));
+            
             
             // 根据格式调用相应的导出函数
             if (format === 'text') {
+              
               await exportAsText(work);
-              alert('导出为 Text 成功！');
+              
+              alert(`✅ 导出成功！\n\n文件：${work.title}.txt\n\n文件已开始下载，请查看浏览器下载文件夹。`);
             } else if (format === 'word') {
+              
               await exportAsWord(work);
-              alert('导出为 Word 成功！');
+              
+              alert(`✅ 导出成功！\n\n文件：${work.title}.doc\n\n文件已开始下载，请查看浏览器下载文件夹。`);
             } else if (format === 'pdf') {
+              
               await exportAsPdf(work);
-              alert('导出为 PDF 成功！');
+              
+              alert(`✅ 导出成功！\n\n正在打开打印对话框，请选择"另存为 PDF"保存文件。`);
             } else {
-              alert('不支持的导出格式');
+              alert('❌ 不支持的导出格式');
             }
           } catch (err) {
-            console.error('导出失败:', err);
-            alert(err instanceof Error ? err.message : '导出失败，请稍后重试');
+            console.error('❌ 导出失败:', err);
+            const errorMessage = err instanceof Error ? err.message : '导出失败，请稍后重试';
+            console.error('错误详情:', {
+              message: errorMessage,
+              stack: err instanceof Error ? err.stack : undefined,
+              format,
+              workId,
+            });
+            alert(`❌ 导出失败\n\n错误：${errorMessage}\n\n请查看浏览器控制台（F12）获取更多信息。`);
+            throw err; // 重新抛出错误，让调用者知道失败了
           } finally {
             setLoading(false);
           }
@@ -370,13 +391,27 @@ export default function WorksPage() {
                     <p className="work-date">{new Date(work.created_at).toLocaleString('zh-CN')}</p>
                   </div>
                 )}
-                <div className="work-actions" onClick={(e) => e.stopPropagation()}>
+                <div 
+                  className="work-actions" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    
+                  }}
+                >
                   <div className="export-menu-wrapper" ref={(el) => { exportMenuRefs.current[String(work.id)] = el; }}>
                     <button
                       className={`work-action-btn ${openExportMenuId === String(work.id) ? 'active' : ''}`}
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
-                        setOpenExportMenuId(openExportMenuId === String(work.id) ? null : String(work.id));
+                        
+                        const newState = openExportMenuId === String(work.id) ? null : String(work.id);
+                        
+                        setOpenExportMenuId(newState);
                       }}
                       title="导出作品"
                     >
@@ -384,36 +419,109 @@ export default function WorksPage() {
                       <ChevronDown size={14} />
                     </button>
                     {openExportMenuId === String(work.id) && (
-                      <div className="export-menu">
+                      <div 
+                        className="export-menu"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                        }}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                        }}
+                        onMouseEnter={() => {
+                          
+                        }}
+                        style={{ 
+                          pointerEvents: 'auto',
+                          zIndex: 1000
+                        }}
+                      >
                         <button
                           className="export-menu-item"
-                          onClick={(e) => {
+                          type="button"
+                          onMouseDown={(e) => {
+                            
+                            e.preventDefault();
                             e.stopPropagation();
-                            handleMenuAction('export', String(work.id), 'text');
+                          }}
+                          onMouseUp={(e) => {
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onMouseEnter={() => {
+                            
+                          }}
+                          onMouseLeave={() => {
+                            
+                          }}
+                          onClick={(e) => {
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            
+                            // 立即关闭菜单
                             setOpenExportMenuId(null);
+                            
+                            
+                            // 使用立即执行函数处理异步操作
+                            (async () => {
+                              try {
+                                setLoading(true);
+                                
+                                
+                                
+                                // 直接获取作品信息
+                                const workData = await worksApi.getWork(work.id);
+                                
+                                
+                                
+                                await exportAsText(workData);
+                                
+                                
+                                alert(`✅ 导出成功！\n\n文件：${workData.title}.txt\n\n文件已开始下载，请查看浏览器下载文件夹。`);
+                                
+                              } catch (err) {
+                                console.error('❌ [Text] 导出失败:', err);
+                                const errorMsg = err instanceof Error ? err.message : '未知错误';
+                                console.error('❌ [Text] 错误详情:', {
+                                  message: errorMsg,
+                                  stack: err instanceof Error ? err.stack : undefined,
+                                  error: err,
+                                  name: err instanceof Error ? err.name : 'Unknown'
+                                });
+                                alert(`❌ 导出失败\n\n错误：${errorMsg}\n\n请查看浏览器控制台（F12）获取更多信息。`);
+                              } finally {
+                                setLoading(false);
+                                
+                              }
+                            })();
                           }}
                         >
                           导出为 Text
                         </button>
                         <button
                           className="export-menu-item"
-                          onClick={(e) => {
+                          onClick={async (e) => {
+                            e.preventDefault();
                             e.stopPropagation();
-                            handleMenuAction('export', String(work.id), 'word');
+                            
                             setOpenExportMenuId(null);
+                            try {
+                              
+                              await handleMenuAction('export', String(work.id), 'word');
+                              
+                            } catch (err) {
+                              console.error('❌ 导出失败（外层捕获）:', err);
+                              alert(`导出失败：${err instanceof Error ? err.message : '未知错误'}`);
+                            }
                           }}
                         >
                           导出为 Word
-                        </button>
-                        <button
-                          className="export-menu-item"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMenuAction('export', String(work.id), 'pdf');
-                            setOpenExportMenuId(null);
-                          }}
-                        >
-                          导出为 PDF
                         </button>
                       </div>
                     )}

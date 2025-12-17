@@ -136,11 +136,6 @@
 
 ```typescript
 const status = getSyncStatus();
-console.log('同步状态:', {
-  isSyncing: status.isSyncing,
-  lastSyncTime: status.lastSyncTime,
-  hasPendingChanges: status.hasPendingChanges,
-});
 ```
 
 ## 注意事项

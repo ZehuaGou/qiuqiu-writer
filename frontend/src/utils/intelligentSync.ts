@@ -288,12 +288,7 @@ export function useIntelligentSync(
         
         // 如果同步后的内容与本地不同（通常不会发生，因为只是保存到本地）
         if (syncedContent !== currentContent) {
-          console.log('🔄 [IntelligentSync] 检测到内容变化:', {
-            originalLength: currentContent.length,
-            syncedLength: syncedContent.length,
-            version: result.version
-          });
-          
+                    
           // 检查用户是否正在编辑
           const now = Date.now();
           const timeSinceLastInput = now - lastUserInputTime.current;
@@ -418,11 +413,7 @@ export function useIntelligentSync(
         // 关键修复：立即更新 documentCache 的缓存
         documentCache.currentVersion.set(documentId, serverVersion);
         documentCache.currentContent.set(documentId, serverContent);
-        console.log('✅ [IntelligentSync] 已更新 documentCache 缓存:', {
-          version: serverVersion,
-          contentLength: serverContent.length
-        });
-
+        
         documentStateRef.current = {
           version: serverVersion,
           content: serverContent
