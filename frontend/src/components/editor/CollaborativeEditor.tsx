@@ -5,10 +5,11 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+// @ts-ignore - 类型定义可能缺失，但包已安装
 import Collaboration from '@tiptap/extension-collaboration'
+// @ts-ignore - 类型定义可能缺失，但包已安装
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import { useCollaboration } from '../../hooks/useCollaboration'
-import { useEffect } from 'react'
 
 interface CollaborativeEditorProps {
   documentId: string
@@ -27,7 +28,6 @@ export function CollaborativeEditor({
     documentId,
     userId,
     type: 'yjs',
-
   })
 
   const editor = useEditor({
@@ -55,13 +55,8 @@ export function CollaborativeEditor({
     }
   })
 
-  // 更新编辑器内容
-  useEffect(() => {
-    if (editor && yjsClient) {
-      const ytext = yjsClient.getText()
-      // Yjs会自动同步，不需要手动更新
-    }
-  }, [editor, yjsClient])
+  // Yjs会自动同步，不需要手动更新
+  // Collaboration 扩展会自动处理 Yjs 文档的同步
 
   if (!editor) {
     return <div>加载编辑器...</div>
