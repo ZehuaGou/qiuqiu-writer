@@ -781,7 +781,11 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           }
         }
       } catch (error) {
-        console.error('加载模板配置失败:', error);
+        // 静默处理模板配置加载失败，回退到本地缓存
+        // 只在开发模式下输出详细错误信息
+        if (import.meta.env.DEV) {
+          console.warn('加载模板配置失败（使用本地缓存）:', error instanceof Error ? error.message : error);
+        }
         // 加载失败，从本地缓存加载
         const cached = loadFromCache(workId);
         if (cached) {
@@ -902,10 +906,13 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           include_fields: false
         });
         
-        
         setUserTemplates(templates || []);
       } catch (error) {
-        console.error('加载模板列表失败:', error);
+        // 静默处理模板列表加载失败，不影响主要功能
+        // 只在开发模式下输出详细错误信息
+        if (import.meta.env.DEV) {
+          console.warn('加载模板列表失败（不影响使用）:', error instanceof Error ? error.message : error);
+        }
         setUserTemplates([]);
       } finally {
         setLoadingTemplates(false);

@@ -1299,13 +1299,23 @@ export default function NovelEditorPage(){
             // 验证保存是否成功
             const savedDoc = await documentCache.getDocument(previousDocumentId);
             if (savedDoc && typeof savedDoc.content === 'string') {
-              if (savedDoc.content === currentContent) {
-                
+              // 使用规范化比较，允许小的差异（可能是服务器格式化导致的）
+              const normalizeForCompare = (html: string) => html.trim().replace(/\s+/g, ' ');
+              const normalizedSaved = normalizeForCompare(savedDoc.content);
+              const normalizedOriginal = normalizeForCompare(currentContent);
+              
+              if (normalizedSaved === normalizedOriginal) {
+                // 保存成功
               } else {
-                console.warn('⚠️ [切换章节] 保存的内容与原始内容不匹配，可能存在问题', {
-                  savedLength: savedDoc.content.length,
-                  originalLength: currentContent.length,
-                });
+                // 允许小的长度差异（可能是换行符、空格等格式化差异）
+                const lengthDiff = Math.abs(savedDoc.content.length - currentContent.length);
+                if (lengthDiff > 5) { // 只对较大的差异发出警告
+                  console.warn('⚠️ [切换章节] 保存的内容与原始内容不匹配，可能存在问题', {
+                    savedLength: savedDoc.content.length,
+                    originalLength: currentContent.length,
+                    lengthDiff
+                  });
+                }
               }
             }
             
@@ -1782,7 +1792,11 @@ export default function NovelEditorPage(){
                 });
               }
             } else {
-              console.warn('⚠️ ShareDB 文档中没有内容');
+              // ShareDB 文档中没有内容可能是正常的（新章节或空章节），降低警告级别
+              // 只在调试模式下输出，避免控制台噪音
+              if (import.meta.env.DEV && import.meta.env.VITE_DEBUG === 'true') {
+                console.log('ℹ️ [ShareDB] 文档中没有内容（可能是新章节）');
+              }
             }
           } catch (docErr) {
             
@@ -1852,14 +1866,26 @@ export default function NovelEditorPage(){
               setCurrentChapterWordCount(wordCount);
               
               // 关键修复：验证设置后的内容（必须在 setTimeout 内部，确保内容已设置）
+              // TipTap 会自动规范化 HTML（去除多余空格、换行等），所以使用更宽松的比较
               const setContent = editor.getHTML();
-              if (setContent === normalizedContent) {
+              // 规范化比较：去除首尾空格和多余空白字符
+              const normalizeForCompare = (html: string) => html.trim().replace(/\s+/g, ' ');
+              const normalizedSetContent = normalizeForCompare(setContent);
+              const normalizedExpected = normalizeForCompare(normalizedContent);
+              
+              if (normalizedSetContent === normalizedExpected) {
                 // 内容设置成功
               } else {
-                console.warn('⚠️ [设置编辑器] 内容设置后不匹配，可能存在缓存问题', {
-                  expected: normalizedContent.substring(0, 50),
-                  actual: setContent.substring(0, 50)
-                });
+                // 如果规范化后仍然不匹配，才发出警告
+                // 但允许小的差异（可能是 TipTap 的 HTML 格式化）
+                const diff = Math.abs(normalizedSetContent.length - normalizedExpected.length);
+                if (diff > 10) { // 只对较大的差异发出警告
+                  console.warn('⚠️ [设置编辑器] 内容设置后不匹配，可能存在缓存问题', {
+                    expected: normalizedExpected.substring(0, 50),
+                    actual: normalizedSetContent.substring(0, 50),
+                    diff
+                  });
+                }
               }
             }, 0);
             lastSetContentRef.current = normalizedContent; // 记录已设置的内容

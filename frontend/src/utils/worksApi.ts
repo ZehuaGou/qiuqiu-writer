@@ -3,7 +3,7 @@
  * 对接后端作品接口 /api/v1/works
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+import { BaseApiClient } from './baseApiClient';
 
 // 前端使用的作品类型（用户友好）
 export type FrontendWorkType = 'long' | 'short' | 'script' | 'video';
@@ -85,46 +85,7 @@ export interface WorkListResponse {
   pages: number;
 }
 
-class WorksApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
-  }
-
-  private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...this.getAuthHeaders(),
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `API request failed: ${response.statusText}`
-      );
-    }
-
-    return response.json();
-  }
+class WorksApiClient extends BaseApiClient {
 
   /**
    * 创建作品
@@ -136,10 +97,7 @@ class WorksApiClient {
       work_type: mapWorkTypeToBackend(workData.work_type),
     };
     
-    const response = await this.request<any>('/api/v1/works/', {
-      method: 'POST',
-      body: JSON.stringify(backendData),
-    });
+    const response = await this.post<any>('/api/v1/works/', backendData);
     
     // 将后端类型转换为前端类型
     return {
@@ -181,10 +139,15 @@ class WorksApiClient {
         }
       });
     }
-    const query = queryParams.toString();
-    const response = await this.request<any>(
-      `/api/v1/works${query ? `?${query}` : ''}`
-    );
+    // 转换 work_type 参数
+    const backendParams = params ? {
+      ...params,
+      work_type: params.work_type && typeof params.work_type === 'string' && WORK_TYPE_MAP[params.work_type as FrontendWorkType]
+        ? mapWorkTypeToBackend(params.work_type as FrontendWorkType)
+        : params.work_type
+    } : undefined;
+    
+    const response = await this.get<any>('/api/v1/works', backendParams);
     
     // 转换作品类型
     return {
@@ -227,10 +190,15 @@ class WorksApiClient {
         }
       });
     }
-    const query = queryParams.toString();
-    const response = await this.request<any>(
-      `/api/v1/works/public${query ? `?${query}` : ''}`
-    );
+    // 转换 work_type 参数
+    const backendParams = params ? {
+      ...params,
+      work_type: params.work_type && typeof params.work_type === 'string' && WORK_TYPE_MAP[params.work_type as FrontendWorkType]
+        ? mapWorkTypeToBackend(params.work_type as FrontendWorkType)
+        : params.work_type
+    } : undefined;
+    
+    const response = await this.get<any>('/api/v1/works/public', backendParams);
     
     // 转换作品类型
     return {
@@ -258,9 +226,10 @@ class WorksApiClient {
       queryParams.append('include_chapters', String(include_chapters));
     }
     const query = queryParams.toString();
-    const response = await this.request<any>(
-      `/api/v1/works/${workId}${query ? `?${query}` : ''}`
-    );
+    const response = await this.get<any>(`/api/v1/works/${workId}`, {
+      include_collaborators,
+      include_chapters,
+    });
     
     // 转换作品类型
     return {
@@ -279,10 +248,7 @@ class WorksApiClient {
       backendUpdates.work_type = mapWorkTypeToBackend(updates.work_type) as any;
     }
     
-    const response = await this.request<any>(`/api/v1/works/${workId}`, {
-      method: 'PUT',
-      body: JSON.stringify(backendUpdates),
-    });
+    const response = await this.put<any>(`/api/v1/works/${workId}`, backendUpdates);
     
     // 转换作品类型
     return {
@@ -295,66 +261,29 @@ class WorksApiClient {
    * 删除作品
    */
   async deleteWork(workId: number): Promise<void> {
-    const url = `${this.baseUrl}/api/v1/works/${workId}`;
-    
-    
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers: this.getAuthHeaders(),
-    });
-
-    
-    
-
-    if (!response.ok) {
-      let errorData: any = {};
-      try {
-        const text = await response.text();
-        
-        if (text) {
-          errorData = JSON.parse(text);
-        }
-      } catch (parseErr) {
-        console.warn('解析错误响应失败:', parseErr);
-      }
-      
-      const errorMessage = errorData.detail || errorData.message || `删除作品失败: ${response.statusText} (${response.status})`;
-      console.error('删除作品失败:', errorMessage);
-      throw new Error(errorMessage);
-    }
-
-    // DELETE请求可能返回空响应(204)或JSON响应(200)
-    // 尝试解析响应，如果没有内容或解析失败，也视为成功
-    try {
-      const text = await response.text();
-      if (text) {
-        const data = JSON.parse(text);
-        
-      } else {
-        
-      }
-    } catch (parseErr) {
-      // 如果解析失败，可能是空响应，也视为成功
-      
-    }
+    await this.delete(`/api/v1/works/${workId}`);
   }
 
   /**
    * 发布作品
    */
   async publishWork(workId: number): Promise<Work> {
-    return this.request<Work>(`/api/v1/works/${workId}/publish`, {
-      method: 'POST',
-    });
+    const response = await this.post<Work>(`/api/v1/works/${workId}/publish`);
+    return {
+      ...response,
+      work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
+    };
   }
 
   /**
    * 归档作品
    */
   async archiveWork(workId: number): Promise<Work> {
-    return this.request<Work>(`/api/v1/works/${workId}/archive`, {
-      method: 'POST',
-    });
+    const response = await this.post<Work>(`/api/v1/works/${workId}/archive`);
+    return {
+      ...response,
+      work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
+    };
   }
 }
 
