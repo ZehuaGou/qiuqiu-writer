@@ -1,32 +1,443 @@
-import { MessageSquare, Sparkles, Upload, FileText, Send, ChevronUp } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { MessageSquare, Sparkles, Upload, FileText, Send, ChevronUp, Copy, Check, Loader2, Trash2, BookOpen, User } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { streamChatMessage } from '../../utils/chatApi';
 import type { ChatMessage } from '../../utils/chatApi';
 import { authApi } from '../../utils/authApi';
+import { chaptersApi, type Chapter } from '../../utils/chaptersApi';
+import { charactersApi, type Character } from '../../utils/charactersApi';
+import MarkdownIt from 'markdown-it';
 import './AIAssistant.css';
 
 interface AIAssistantProps {
   workId?: number | string | null;
 }
 
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  typographer: true,
+  breaks: true,
+});
+
+interface MessageWithTime extends ChatMessage {
+  timestamp?: Date;
+  mentions?: Mention[];
+}
+
+interface Mention {
+  type: 'chapter' | 'character';
+  id: number;
+  name: string;
+}
+
+interface MentionOption {
+  type: 'chapter' | 'character';
+  id: number;
+  name: string;
+  subtitle?: string;
+}
+
 export default function AIAssistant({ workId }: AIAssistantProps) {
   const [activeTab, setActiveTab] = useState<'inspiration' | 'chat'>('chat');
   const [message, setMessage] = useState('');
   const [charCount, setCharCount] = useState(0);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<MessageWithTime[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // @ 提及相关状态
+  const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([]);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const mentionMenuRef = useRef<HTMLDivElement>(null);
 
   // 检查登录状态
   useEffect(() => {
     setIsAuthenticated(authApi.isAuthenticated());
   }, []);
 
+  // 加载章节和角色列表
+  useEffect(() => {
+    if (!workId || !isAuthenticated) return;
+
+    const loadData = async () => {
+      try {
+        const workIdNum = Number(workId);
+        
+        // 加载章节列表
+        const chaptersResponse = await chaptersApi.listChapters({
+          work_id: workIdNum,
+          page: 1,
+          size: 100,
+          sort_by: 'chapter_number',
+          sort_order: 'asc',
+        });
+        setChapters(chaptersResponse.chapters);
+
+        // 加载角色列表
+        const charactersResponse = await charactersApi.listCharacters(workIdNum);
+        setCharacters(charactersResponse.characters);
+      } catch (err) {
+        console.error('加载章节/角色列表失败:', err);
+      }
+    };
+
+    loadData();
+  }, [workId, isAuthenticated]);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isSending]);
+
+  // 点击外部关闭提及菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        mentionMenuRef.current &&
+        !mentionMenuRef.current.contains(event.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(event.target as Node)
+      ) {
+        setShowMentionMenu(false);
+      }
+    };
+
+    if (showMentionMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showMentionMenu]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
     setMessage(value);
     setCharCount(value.length);
+    
+    // 检测 @ 提及
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      // 检查 @ 后面是否已经有完整的提及格式
+      const hasCompleteMention = /^(章节|角色):/.test(textAfterAt);
+      
+      // 检查 @ 后面是否有空格、换行或已完成的提及，如果有则关闭菜单
+      // 检查是否已经有完整的提及格式（@chapter:123 或 @character:456）
+      const hasCompleteMentionId = /^(chapter|character):\d+/.test(textAfterAt);
+      
+      if (textAfterAt.includes(' ') || 
+          textAfterAt.includes('\n') ||
+          hasCompleteMention ||
+          hasCompleteMentionId) {
+        setShowMentionMenu(false);
+      } else {
+        const query = textAfterAt.toLowerCase();
+        setMentionQuery(query);
+        
+        // 构建提及选项
+        const options: MentionOption[] = [];
+        
+        // 添加章节选项
+        chapters
+          .filter(ch => ch.title.toLowerCase().includes(query) || 
+                   ch.chapter_number.toString().includes(query))
+          .forEach(ch => {
+            options.push({
+              type: 'chapter',
+              id: ch.id,
+              name: ch.title,
+              subtitle: `第${ch.chapter_number}章`,
+            });
+          });
+        
+        // 添加角色选项
+        characters
+          .filter(char => char.name.toLowerCase().includes(query) ||
+                   char.display_name?.toLowerCase().includes(query))
+          .forEach(char => {
+            options.push({
+              type: 'character',
+              id: char.id,
+              name: char.display_name || char.name,
+              subtitle: char.description ? char.description.substring(0, 30) : undefined,
+            });
+          });
+        
+        setMentionOptions(options);
+        setSelectedMentionIndex(0);
+        
+        if (options.length > 0) {
+          // 计算菜单位置
+          const textarea = textareaRef.current;
+          if (textarea) {
+            const rect = textarea.getBoundingClientRect();
+            const lineHeight = 20;
+            const lines = textBeforeCursor.split('\n').length;
+            const menuHeight = 300; // 预估菜单高度
+            const menuWidth = 320; // 预估菜单宽度
+            
+            // 计算位置，确保不超出屏幕
+            let top = rect.top + (lines * lineHeight) + 30;
+            let left = rect.left + 10;
+            
+            // 如果菜单会超出底部，显示在上方
+            if (top + menuHeight > window.innerHeight) {
+              top = rect.top + (lines * lineHeight) - menuHeight - 10;
+            }
+            
+            // 如果菜单会超出右侧，调整位置
+            if (left + menuWidth > window.innerWidth) {
+              left = window.innerWidth - menuWidth - 10;
+            }
+            
+            setMentionPosition({ top, left });
+          }
+          setShowMentionMenu(true);
+        } else {
+          setShowMentionMenu(false);
+        }
+      }
+    } else {
+      setShowMentionMenu(false);
+    }
+    
+    // 自动调整高度
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showMentionMenu && mentionOptions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => 
+          prev < mentionOptions.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => prev > 0 ? prev - 1 : 0);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        handleSelectMention(mentionOptions[selectedMentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionMenu(false);
+        return;
+      }
+    }
+    
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleSelectMention = (option: MentionOption) => {
+    if (!textareaRef.current) return;
+    
+    const textarea = textareaRef.current;
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = message.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      // 使用ID格式：@chapter:123 或 @character:456
+      const mentionText = option.type === 'chapter' 
+        ? `@chapter:${option.id}`
+        : `@character:${option.id}`;
+      
+      const newMessage = 
+        message.substring(0, lastAtIndex) + 
+        mentionText + ' ' + 
+        message.substring(cursorPos);
+      
+      setMessage(newMessage);
+      setShowMentionMenu(false);
+      
+      // 设置光标位置
+      setTimeout(() => {
+        const newCursorPos = lastAtIndex + mentionText.length + 1;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }, 0);
+    }
+  };
+
+  const handleCopy = async (content: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.error('复制失败:', err);
+    }
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleClearMessages = () => {
+    if (window.confirm('确定要清空所有对话记录吗？')) {
+      setMessages([]);
+      setError(null);
+    }
+  };
+
+  // 渲染带提及的消息（解析ID格式并显示友好名称）
+  const renderMessageWithMentions = (text: string, mentions?: Mention[]) => {
+    if (!mentions || mentions.length === 0) {
+      // 即使没有mentions，也尝试渲染ID格式的提及
+      return renderMentionsFromText(text);
+    }
+
+    const parts: (string | JSX.Element)[] = [];
+    let lastIndex = 0;
+    // 匹配 @chapter:123 或 @character:456 格式
+    const regex = /(@chapter:\d+|@character:\d+)/g;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      // 添加提及前的文本
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+
+      // 添加提及标签
+      const mentionText = match[0];
+      const idMatch = mentionText.match(/(chapter|character):(\d+)/);
+      
+      if (idMatch) {
+        const type = idMatch[1] === 'chapter' ? 'chapter' : 'character';
+        const id = parseInt(idMatch[2], 10);
+        const mention = mentions.find(m => m.type === type && m.id === id);
+
+        if (mention) {
+          parts.push(
+            <span 
+              key={match.index}
+              className={`mention-tag mention-${mention.type}`}
+              title={mention.type === 'chapter' ? '章节' : '角色'}
+            >
+              {mention.type === 'chapter' ? '📖' : '👤'} {mention.name}
+            </span>
+          );
+        } else {
+          parts.push(mentionText);
+        }
+      } else {
+        parts.push(mentionText);
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // 添加剩余文本
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return <>{parts}</>;
+  };
+
+  // 从文本中解析并渲染提及（用于没有mentions的情况）
+  const renderMentionsFromText = (text: string) => {
+    const parts: (string | JSX.Element)[] = [];
+    let lastIndex = 0;
+    const regex = /(@chapter:\d+|@character:\d+)/g;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+
+      const mentionText = match[0];
+      const idMatch = mentionText.match(/(chapter|character):(\d+)/);
+      
+      if (idMatch) {
+        const type = idMatch[1] === 'chapter' ? 'chapter' : 'character';
+        const id = parseInt(idMatch[2], 10);
+        
+        let name = '';
+        if (type === 'chapter') {
+          const chapter = chapters.find(ch => ch.id === id);
+          name = chapter ? chapter.title : `章节#${id}`;
+        } else {
+          const character = characters.find(char => char.id === id);
+          name = character ? (character.display_name || character.name) : `角色#${id}`;
+        }
+
+        parts.push(
+          <span 
+            key={match.index}
+            className={`mention-tag mention-${type}`}
+            title={type === 'chapter' ? '章节' : '角色'}
+          >
+            {type === 'chapter' ? '📖' : '👤'} {name}
+          </span>
+        );
+      } else {
+        parts.push(mentionText);
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return <>{parts}</>;
+  };
+
+  // 解析消息中的提及（使用ID格式）
+  const parseMentions = (text: string): Mention[] => {
+    const mentions: Mention[] = [];
+    // 匹配 @chapter:123 或 @character:456 格式
+    const chapterRegex = /@chapter:(\d+)/g;
+    const characterRegex = /@character:(\d+)/g;
+    
+    let match;
+    while ((match = chapterRegex.exec(text)) !== null) {
+      const id = parseInt(match[1], 10);
+      const chapter = chapters.find(ch => ch.id === id);
+      if (chapter) {
+        mentions.push({ type: 'chapter', id: chapter.id, name: chapter.title });
+      }
+    }
+    
+    while ((match = characterRegex.exec(text)) !== null) {
+      const id = parseInt(match[1], 10);
+      const character = characters.find(char => char.id === id);
+      if (character) {
+        mentions.push({ type: 'character', id: character.id, name: character.display_name || character.name });
+      }
+    }
+    
+    return mentions;
   };
 
   const handleSend = async () => {
@@ -45,8 +456,18 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
     }
 
     setError(null);
+    setShowMentionMenu(false);
+    
+    // 解析提及
+    const mentions = parseMentions(content);
+    
     // 先把用户消息加入本地对话
-    const userMsg: ChatMessage = { role: 'user', content };
+    const userMsg: MessageWithTime = { 
+      role: 'user', 
+      content,
+      timestamp: new Date(),
+      mentions: mentions.length > 0 ? mentions : undefined,
+    };
     setMessages(prev => [...prev, userMsg]);
     setMessage('');
     setCharCount(0);
@@ -68,9 +489,17 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
               const next = [...prev];
               const last = next[next.length - 1];
               if (!last || last.role !== 'assistant') {
-                next.push({ role: 'assistant', content: assistantBuffer });
+                next.push({ 
+                  role: 'assistant', 
+                  content: assistantBuffer,
+                  timestamp: new Date()
+                });
               } else {
-                next[next.length - 1] = { ...last, content: assistantBuffer };
+                next[next.length - 1] = { 
+                  ...last, 
+                  content: assistantBuffer,
+                  timestamp: last.timestamp || new Date()
+                };
               }
               return next;
             });
@@ -127,43 +556,112 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
               </p>
               <p className="disclaimer">内容由AI生成,仅供参考</p>
             </div>
+            {messages.length > 0 && (
+              <button
+                className="chat-clear-btn"
+                onClick={handleClearMessages}
+                title="清空对话"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
           </div>
 
           {/* 对话消息列表 */}
           <div className="chat-messages">
             {messages.length === 0 && (
               <div className="chat-empty">
-                还没有对话，先问问蛙蛙今天写什么吧～
+                <div className="chat-empty-icon">💬</div>
+                <p>还没有对话，先问问蛙蛙今天写什么吧～</p>
               </div>
             )}
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`chat-message chat-message-${msg.role === 'user' ? 'user' : 'assistant'}`}
-              >
-                <div className="chat-message-bubble">
-                  {msg.content}
+            {messages.map((msg, idx) => {
+              const messageTime = msg.timestamp || new Date();
+              return (
+                <div
+                  key={idx}
+                  className={`chat-message chat-message-${msg.role === 'user' ? 'user' : 'assistant'}`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="chat-message-avatar">
+                      <span className="froggy-icon-small">🐸</span>
+                    </div>
+                  )}
+                  <div className="chat-message-content">
+                    <div className={`chat-message-bubble ${msg.role === 'user' ? 'user-bubble' : 'assistant-bubble'}`}>
+                      {msg.role === 'assistant' ? (
+                        <div 
+                          className="markdown-content"
+                          dangerouslySetInnerHTML={{ __html: md.render(msg.content) }}
+                        />
+                      ) : (
+                        <div className="text-content">
+                          {renderMessageWithMentions(msg.content, msg.mentions)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="chat-message-footer">
+                      <span className="chat-message-time">{formatTime(messageTime)}</span>
+                      <button
+                        className="chat-message-copy"
+                        onClick={() => handleCopy(msg.content, idx)}
+                        title="复制消息"
+                      >
+                        {copiedIndex === idx ? (
+                          <Check size={14} />
+                        ) : (
+                          <Copy size={14} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  {msg.role === 'user' && (
+                    <div className="chat-message-avatar user-avatar">
+                      <span className="user-icon">👤</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {isSending && (
               <div className="chat-message chat-message-assistant">
-                <div className="chat-message-bubble chat-message-loading">
-                  正在思考中…
+                <div className="chat-message-avatar">
+                  <span className="froggy-icon-small">🐸</span>
+                </div>
+                <div className="chat-message-content">
+                  <div className="chat-message-bubble assistant-bubble chat-message-loading">
+                    <Loader2 className="loading-spinner" size={16} />
+                    <span>正在思考中…</span>
+                  </div>
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="chat-input-area">
             <div className="input-actions">
-              <button className="input-action-btn">
-                <Upload size={14} />
-                <span>@上传文件</span>
-              </button>
-              <button className="input-action-btn">
+              <button 
+                className="input-action-btn"
+                onClick={() => {
+                  if (textareaRef.current) {
+                    const textarea = textareaRef.current;
+                    const cursorPos = textarea.selectionStart;
+                    const newMessage = 
+                      message.substring(0, cursorPos) + 
+                      '@' + 
+                      message.substring(cursorPos);
+                    setMessage(newMessage);
+                    setTimeout(() => {
+                      textarea.setSelectionRange(cursorPos + 1, cursorPos + 1);
+                      textarea.focus();
+                    }, 0);
+                  }
+                }}
+                title="插入 @ 引用章节或角色"
+              >
                 <FileText size={14} />
-                <span>@引用内容</span>
+                <span>@引用</span>
               </button>
             </div>
             {!isAuthenticated ? (
@@ -176,23 +674,88 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
               </div>
             ) : (
               <>
-                <textarea
-                  className="chat-input"
-                  placeholder="输入你的问题..."
-                  value={message}
-                  onChange={handleInputChange}
-                  rows={4}
-                  disabled={!isAuthenticated || !workId}
-                />
+                <div className="chat-input-wrapper">
+                  <textarea
+                    ref={textareaRef}
+                    className="chat-input"
+                    placeholder="输入你的问题... 使用 @ 引用章节或角色 (Ctrl+Enter 发送)"
+                    value={message}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    rows={3}
+                    disabled={!isAuthenticated || !workId || isSending}
+                  />
+                  {showMentionMenu && mentionOptions.length > 0 && (
+                    <div
+                      ref={mentionMenuRef}
+                      className="mention-menu"
+                      style={{
+                        top: `${mentionPosition.top}px`,
+                        left: `${mentionPosition.left}px`,
+                      }}
+                    >
+                      <div className="mention-menu-header">
+                        <span>选择要引用的内容</span>
+                      </div>
+                      {mentionOptions.length > 0 ? (
+                        <>
+                          <div className="mention-menu-list">
+                            {mentionOptions.map((option, idx) => (
+                              <div
+                                key={`${option.type}-${option.id}`}
+                                className={`mention-option ${idx === selectedMentionIndex ? 'selected' : ''}`}
+                                onClick={() => handleSelectMention(option)}
+                                onMouseEnter={() => setSelectedMentionIndex(idx)}
+                              >
+                                <div className="mention-option-icon">
+                                  {option.type === 'chapter' ? (
+                                    <BookOpen size={16} />
+                                  ) : (
+                                    <User size={16} />
+                                  )}
+                                </div>
+                                <div className="mention-option-content">
+                                  <div className="mention-option-name">{option.name}</div>
+                                  {option.subtitle && (
+                                    <div className="mention-option-subtitle">{option.subtitle}</div>
+                                  )}
+                                </div>
+                                <div className="mention-option-type">
+                                  {option.type === 'chapter' ? '章节' : '角色'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mention-menu-footer">
+                            <span>↑↓ 选择，Enter 确认，Esc 取消</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mention-menu-empty">
+                          <span>没有找到匹配的内容</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="input-footer">
-                  <span className="char-count">{charCount}/50000字</span>
+                  <span className="char-count">{charCount}/50000</span>
                   <button
                     className="send-button"
                     onClick={handleSend}
                     disabled={isSending || !message.trim() || !isAuthenticated || !workId}
                   >
-                    <Send size={16} />
-                    <span>{isSending ? '发送中...' : '发送'}</span>
+                    {isSending ? (
+                      <>
+                        <Loader2 className="send-spinner" size={16} />
+                        <span>发送中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} />
+                        <span>发送</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </>

@@ -2,11 +2,33 @@ import json
 import os
 import time
 import traceback
+import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from memos.api.config import APIConfig
+from memos.api.core.database import get_async_db
+from memos.api.services.mention_service import MentionService
+
+
+# 辅助函数：确保返回的是 AsyncSession 对象，而不是生成器
+async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSession:
+    """
+    确保返回的是 AsyncSession 对象，而不是生成器
+    FastAPI 的 Depends 应该已经处理了生成器，但为了安全起见，我们再次检查
+    """
+    # FastAPI 的 Depends 应该已经处理了生成器，直接返回
+    # 但如果仍然是生成器，尝试获取会话对象
+    if hasattr(db, '__aiter__') and not hasattr(db, 'execute'):
+        # 如果是生成器，尝试获取会话对象
+        try:
+            db = await db.__anext__()
+        except StopAsyncIteration:
+            raise ValueError("无法从生成器获取数据库会话")
+    
+    return db
 from memos.api.product_models import (
     BaseResponse,
     ChatCompleteRequest,
@@ -396,7 +418,7 @@ def ensure_memos_user_exists(user_id: str):
 
 
 @router.post("/chat", summary="Chat with MemOS")
-def chat(chat_req: ChatRequest):
+async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)):
     """Chat with MemOS for a specific user. Returns SSE stream."""
     try:
         mos_product = get_mos_product_instance()
@@ -404,15 +426,20 @@ def chat(chat_req: ChatRequest):
         # 确保用户存在，如果不存在则自动注册
         ensure_memos_user_exists(chat_req.user_id)
 
+        # 处理提及替换
+        mention_service = MentionService(db)
+        processed_query = await mention_service.replace_mentions_in_text(chat_req.query)
+        processed_history = await mention_service.replace_mentions_in_history(chat_req.history or [])
+
         def generate_chat_response():
             """Generate chat response as SSE stream."""
             try:
                 # Directly yield from the generator without async wrapper
                 yield from mos_product.chat_with_references(
-                    query=chat_req.query,
+                    query=processed_query,
                     user_id=chat_req.user_id,
                     cube_id=chat_req.mem_cube_id,
-                    history=chat_req.history,
+                    history=processed_history,
                     internet_search=chat_req.internet_search,
                     moscube=chat_req.moscube,
                     session_id=chat_req.session_id,
@@ -444,7 +471,7 @@ def chat(chat_req: ChatRequest):
 
 
 @router.post("/chat/complete", summary="Chat with MemOS (Complete Response)")
-def chat_complete(chat_req: ChatCompleteRequest):
+async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depends(get_db_session)):
     """Chat with MemOS for a specific user. Returns complete response (non-streaming)."""
     try:
         mos_product = get_mos_product_instance()
@@ -452,12 +479,17 @@ def chat_complete(chat_req: ChatCompleteRequest):
         # 确保用户存在，如果不存在则自动注册
         ensure_memos_user_exists(chat_req.user_id)
 
+        # 处理提及替换
+        mention_service = MentionService(db)
+        processed_query = await mention_service.replace_mentions_in_text(chat_req.query)
+        processed_history = await mention_service.replace_mentions_in_history(chat_req.history or [])
+
         # Collect all responses from the generator
         content, references = mos_product.chat(
-            query=chat_req.query,
+            query=processed_query,
             user_id=chat_req.user_id,
             cube_id=chat_req.mem_cube_id,
-            history=chat_req.history,
+            history=processed_history,
             internet_search=chat_req.internet_search,
             moscube=chat_req.moscube,
             base_prompt=chat_req.base_prompt,

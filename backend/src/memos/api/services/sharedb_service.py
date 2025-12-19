@@ -13,16 +13,21 @@ import redis.asyncio as redis
 
 from memos.api.core.config import get_settings
 from memos.api.core.redis import get_redis
+from memos.api.core.mongodb import get_mongodb_db
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
 class ShareDBService:
-    """ShareDB服务类，模拟ShareDB功能用于实时协作"""
+    """ShareDB服务类，模拟ShareDB功能用于实时协作
+    优先使用MongoDB，如果MongoDB不可用则回退到Redis
+    """
 
     def __init__(self):
         self.redis_client: Optional[redis.Redis] = None
+        self.mongodb_db = None
+        self.use_mongodb = False
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         self.document_locks: Dict[str, asyncio.Lock] = {}
         self._initialized = False
@@ -32,13 +37,25 @@ class ShareDBService:
         if self._initialized:
             return
 
+        # 优先尝试使用MongoDB
         try:
-            self.redis_client = await get_redis()
+            self.mongodb_db = await get_mongodb_db()
+            # 测试MongoDB连接
+            await self.mongodb_db.command('ping')
+            self.use_mongodb = True
             self._initialized = True
-            logger.info("ShareDB服务初始化成功")
+            logger.info("ShareDB服务初始化成功（使用MongoDB）")
         except Exception as e:
-            logger.error(f"ShareDB服务初始化失败: {e}")
-            raise
+            logger.warning(f"MongoDB连接失败，回退到Redis: {e}")
+            # 如果MongoDB不可用，回退到Redis
+            try:
+                self.redis_client = await get_redis()
+                self.use_mongodb = False
+                self._initialized = True
+                logger.info("ShareDB服务初始化成功（使用Redis）")
+            except Exception as redis_err:
+                logger.error(f"Redis连接也失败: {redis_err}")
+                raise
 
     async def create_document(self, document_id: str, initial_content: Dict[str, Any]):
         """创建新文档"""
@@ -79,9 +96,20 @@ class ShareDBService:
             await self.initialize()
 
         try:
-            document_data = await self.redis_client.get(f"doc:{document_id}")
-            if document_data:
-                return json.loads(document_data)
+            if self.use_mongodb and self.mongodb_db:
+                # 从MongoDB获取
+                collection = self.mongodb_db.documents
+                document = await collection.find_one({"id": document_id})
+                if document:
+                    # 移除MongoDB的_id字段
+                    if "_id" in document:
+                        del document["_id"]
+                    return document
+            else:
+                # 从Redis获取
+                document_data = await self.redis_client.get(f"doc:{document_id}")
+                if document_data:
+                    return json.loads(document_data)
         except Exception as e:
             logger.error(f"获取文档失败 {document_id}: {e}")
 
