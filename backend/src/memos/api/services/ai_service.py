@@ -34,7 +34,7 @@ class AIService:
 
     def __init__(self):
         """初始化AI服务"""
-        self.api_key = os.getenv("OPENAI_API_KEY","sk-5b8dc562ef4647738b008c011bbf4acc")
+        self.api_key = os.getenv("OPENAI_API_KEY",)
         self.base_url = os.getenv("OPENAI_API_BASE", "https://api.deepseek.com/v1")
         self.default_model = os.getenv("DEFAULT_AI_MODEL", "deepseek-chat")
 

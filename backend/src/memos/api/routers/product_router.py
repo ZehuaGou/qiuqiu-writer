@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import traceback
 
@@ -238,11 +239,170 @@ def search_memories(search_req: SearchRequest):
         raise HTTPException(status_code=500, detail=str(traceback.format_exc())) from err
 
 
+def ensure_memos_user_exists(user_id: str):
+    """
+    确保 MemOS 用户存在，如果不存在则自动注册。
+    如果用户已存在，确保其 cube 使用最新的配置（特别是 embedder 配置）。
+    
+    Args:
+        user_id: MemOS 用户 ID
+    
+    Raises:
+        HTTPException: 如果用户注册失败
+    """
+    try:
+        mos_product = get_mos_product_instance()
+        # 尝试获取用户信息，如果不存在会抛出 ValueError
+        mos_product.get_user_info(user_id)
+        logger.debug(f"MemOS user '{user_id}' already exists")
+        
+        # 用户已存在，但需要确保 cube 使用最新的配置
+        # 重新加载 cube 以使用新的 embedder 配置
+        try:
+            from memos.api.config import APIConfig
+            user_config, default_cube_config = APIConfig.create_user_config(
+                user_name=user_id,
+                user_id=user_id,
+            )
+            
+            # 获取用户的所有 cube 并强制重新加载以使用新配置
+            accessible_cubes = mos_product.user_manager.get_user_cubes(user_id)
+            for cube in accessible_cubes:
+                # 从内存中移除旧的 cube（如果存在）
+                if cube.cube_id in mos_product.mem_cubes:
+                    logger.info(
+                        f"🔄 Removing old cube {cube.cube_id} from memory for user {user_id} "
+                        f"to reload with latest embedder configuration"
+                    )
+                    del mos_product.mem_cubes[cube.cube_id]
+                    logger.debug(f"Removed old cube {cube.cube_id} from memory")
+                
+                # 重新加载 cube 使用新配置（register_mem_cube 会处理重新加载）
+                if cube.cube_path and os.path.exists(cube.cube_path):
+                    logger.info(
+                        f"🔄 Reloading cube {cube.cube_id} for user {user_id} "
+                        f"with new embedder configuration"
+                    )
+                    mos_product.register_mem_cube(
+                        cube.cube_path,
+                        cube.cube_id,
+                        user_id,
+                        memory_types=["act_mem"] if mos_product.config.enable_activation_memory else [],
+                        default_config=default_cube_config,  # 传递新配置以强制重新加载
+                    )
+                    logger.info(f"✅ Reloaded cube {cube.cube_id} with new configuration")
+                else:
+                    logger.warning(
+                        f"Cube path {cube.cube_path} does not exist for cube {cube.cube_id}, "
+                        f"cannot reload with new configuration"
+                    )
+        except Exception as e:
+            logger.warning(
+                f"Failed to reload cube for user {user_id} with new config: {e}. "
+                f"This is not critical, but may result in using old embedder configuration."
+            )
+        
+        return  # 用户已存在，直接返回
+    except (ValueError, KeyError) as e:
+        # 用户不存在，自动注册
+        logger.info(f"MemOS user '{user_id}' does not exist, auto-registering...")
+        try:
+            from memos.api.config import APIConfig
+            from memos.api.product_models import UserRegisterRequest
+            
+            user_req = UserRegisterRequest(
+                user_id=user_id,
+                user_name=user_id,
+                mem_cube_id=None,
+                interests=None,
+            )
+            
+            user_config, default_mem_cube = APIConfig.create_user_config(
+                user_name=user_req.user_id,
+                user_id=user_req.user_id,
+            )
+            
+            result = mos_product.user_register(
+                user_id=user_req.user_id,
+                user_name=user_req.user_name,
+                interests=user_req.interests,
+                config=user_config,
+                default_mem_cube=default_mem_cube,
+                mem_cube_id=user_req.mem_cube_id,
+            )
+            
+            if result.get("status") == "success":
+                logger.info(f"Successfully auto-registered MemOS user '{user_id}'")
+                # 验证注册是否真的成功
+                try:
+                    mos_product.get_user_info(user_id)
+                    logger.debug(f"Verified MemOS user '{user_id}' exists after registration")
+                except (ValueError, KeyError):
+                    logger.error(f"User '{user_id}' registration reported success but user still not found")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"用户注册失败：注册后无法验证用户存在"
+                    )
+            else:
+                error_msg = result.get("message", "未知错误")
+                logger.error(f"Failed to auto-register user '{user_id}': {error_msg}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"用户注册失败：{error_msg}"
+                )
+        except HTTPException:
+            # 重新抛出 HTTPException
+            raise
+        except Exception as e:
+            error_str = str(e)
+            error_type = type(e).__name__
+            logger.error(
+                f"Error auto-registering MemOS user '{user_id}': {error_type}: {error_str}",
+                exc_info=True
+            )
+            
+            # 检查是否是 Qdrant 相关错误
+            is_qdrant_error = (
+                "qdrant" in error_str.lower() or
+                "502" in error_str or
+                "503" in error_str or
+                "Bad Gateway" in error_str or
+                "UnexpectedResponse" in error_type or
+                "connection" in error_str.lower()
+            )
+            
+            if is_qdrant_error:
+                # 提供更详细的错误信息，包括如何诊断
+                detail_msg = (
+                    f"AI对话服务暂时不可用：向量数据库（Qdrant）连接失败。\n"
+                    f"错误类型: {error_type}\n"
+                    f"错误信息: {error_str[:500]}\n\n"
+                    f"请检查：\n"
+                    f"1. Qdrant 服务是否运行: docker ps | grep qdrant\n"
+                    f"2. Qdrant API 是否可访问: curl http://localhost:6333/collections\n"
+                    f"3. 查看 Qdrant 日志: docker logs --tail 50 qdrant\n"
+                    f"4. 检查后端日志中的详细错误堆栈"
+                )
+                logger.error(f"Qdrant connection error details: {detail_msg}")
+                raise HTTPException(
+                    status_code=503,
+                    detail=detail_msg
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"用户注册失败：{error_type}: {error_str[:500]}"
+                )
+
+
 @router.post("/chat", summary="Chat with MemOS")
 def chat(chat_req: ChatRequest):
     """Chat with MemOS for a specific user. Returns SSE stream."""
     try:
         mos_product = get_mos_product_instance()
+        
+        # 确保用户存在，如果不存在则自动注册
+        ensure_memos_user_exists(chat_req.user_id)
 
         def generate_chat_response():
             """Generate chat response as SSE stream."""
@@ -288,6 +448,9 @@ def chat_complete(chat_req: ChatCompleteRequest):
     """Chat with MemOS for a specific user. Returns complete response (non-streaming)."""
     try:
         mos_product = get_mos_product_instance()
+        
+        # 确保用户存在，如果不存在则自动注册
+        ensure_memos_user_exists(chat_req.user_id)
 
         # Collect all responses from the generator
         content, references = mos_product.chat(

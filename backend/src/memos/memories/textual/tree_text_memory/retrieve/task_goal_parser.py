@@ -110,8 +110,13 @@ class TaskGoalParser:
         for attempt_times in range(attempts):
             try:
                 context = kwargs.get("context", "")
+                # Clean up response: remove markdown code blocks
                 response = response.replace("```", "").replace("json", "").strip()
-                response_json = eval(response)
+                
+                # Use json.loads() instead of eval() for safe JSON parsing
+                import json
+                response_json = json.loads(response)
+                
                 return ParsedTaskGoal(
                     memories=response_json.get("memories", []),
                     keys=response_json.get("keys", []),
@@ -121,6 +126,27 @@ class TaskGoalParser:
                     goal_type=response_json.get("goal_type", "default"),
                     context=context,
                 )
+            except json.JSONDecodeError as e:
+                # If JSON parsing fails, try to extract JSON from the response
+                import re
+                json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
+                if json_match:
+                    try:
+                        response_json = json.loads(json_match.group())
+                        return ParsedTaskGoal(
+                            memories=response_json.get("memories", []),
+                            keys=response_json.get("keys", []),
+                            tags=response_json.get("tags", []),
+                            rephrased_query=response_json.get("rephrased_instruction", None),
+                            internet_search=response_json.get("internet_search", False),
+                            goal_type=response_json.get("goal_type", "default"),
+                            context=context,
+                        )
+                    except json.JSONDecodeError:
+                        pass
+                raise ValueError(
+                    f"Failed to parse LLM output as JSON: {e}\nRaw response:\n{response} retried: {attempt_times + 1}/{attempts + 1}"
+                ) from e
             except Exception as e:
                 raise ValueError(
                     f"Failed to parse LLM output: {e}\nRaw response:\n{response} retried: {attempt_times + 1}/{attempts + 1}"

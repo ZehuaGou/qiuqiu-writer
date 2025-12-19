@@ -3323,7 +3323,7 @@ export default function NovelEditorPage(){
         </div>
 
         {/* 右侧边栏 */}
-        <AIAssistant />
+        <AIAssistant workId={workId} />
       </div>
 
       {/* 章节设置弹框 */}

@@ -13,6 +13,8 @@ from memos.memories.activation.base import BaseActMemory
 from memos.memories.factory import MemoryFactory
 from memos.memories.parametric.base import BaseParaMemory
 from memos.memories.textual.base import BaseTextMemory
+from memos.embedders.factory import EmbedderFactory
+from memos.memos_tools.singleton import _factory_singleton
 
 
 logger = get_logger(__name__)
@@ -24,6 +26,23 @@ class GeneralMemCube(BaseMemCube):
     def __init__(self, config: GeneralMemCubeConfig):
         """Initialize the MemCube with a configuration."""
         self.config = config
+        
+        # Log embedder configuration for debugging and clear cache if needed
+        if config.text_mem.backend != "uninitialized":
+            text_mem_config = config.text_mem.config
+            if hasattr(text_mem_config, 'embedder') and hasattr(text_mem_config.embedder, 'backend'):
+                embedder_backend = text_mem_config.embedder.backend
+                logger.info(
+                    f"🔧 GeneralMemCube.__init__: Creating text_mem with embedder backend: {embedder_backend}"
+                )
+                # Clear embedder factory cache to ensure new config is used
+                # This is important when config changes (e.g., from ollama to universal_api)
+                try:
+                    _factory_singleton.clear_cache(EmbedderFactory)
+                    logger.debug("✅ Cleared embedder factory cache to ensure fresh instance")
+                except Exception as e:
+                    logger.warning(f"Failed to clear embedder cache: {e}")
+        
         time_start = time.time()
         self._text_mem: BaseTextMemory | None = (
             MemoryFactory.from_config(config.text_mem)
@@ -151,12 +170,39 @@ class GeneralMemCube(BaseMemCube):
             MemCube: An instance of MemCube loaded with memories from the specified directory.
         """
         config_path = os.path.join(dir, "config.json")
-        config = GeneralMemCubeConfig.from_json_file(config_path)
+        existing_config = GeneralMemCubeConfig.from_json_file(config_path)
+        
+        # Log existing embedder config
+        if existing_config.text_mem.backend != "uninitialized":
+            existing_embedder = existing_config.text_mem.config.embedder
+            logger.info(
+                f"🔧 init_from_dir: Existing embedder config: backend={existing_embedder.backend}"
+            )
 
         # Merge with default config if provided
         if default_config is not None:
-            config = merge_config_with_default(config, default_config)
-            logger.info(f"Applied default config to cube {config.cube_id}")
+            # Log default embedder config
+            if default_config.text_mem.backend != "uninitialized":
+                default_embedder = default_config.text_mem.config.embedder
+                logger.info(
+                    f"🔧 init_from_dir: Default embedder config: backend={default_embedder.backend}"
+                )
+            
+            config = merge_config_with_default(existing_config, default_config)
+            
+            # Log merged embedder config
+            if config.text_mem.backend != "uninitialized":
+                merged_embedder = config.text_mem.config.embedder
+                logger.info(
+                    f"✅ init_from_dir: Merged embedder config: backend={merged_embedder.backend}, "
+                    f"cube_id={config.cube_id}"
+                )
+        else:
+            config = existing_config
+            logger.warning(
+                f"⚠️ init_from_dir: No default_config provided, using existing config for cube {config.cube_id}"
+            )
+        
         mem_cube = GeneralMemCube(config)
         mem_cube.load(dir, memory_types)
         return mem_cube

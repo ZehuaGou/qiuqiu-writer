@@ -158,12 +158,58 @@ def merge_config_with_default(
     if preserved_graph_db and "text_mem" in merged_dict:
         merged_dict["text_mem"]["config"]["graph_db"] = preserved_graph_db
         logger.debug(f"Preserved graph_db with merged config: {preserved_graph_db}")
+    
+    # Log and ensure embedder configuration is from default (not preserved from existing)
+    if "text_mem" in merged_dict and "text_mem" in existing_dict:
+        existing_embedder = existing_dict["text_mem"].get("config", {}).get("embedder", {})
+        merged_embedder = merged_dict["text_mem"].get("config", {}).get("embedder", {})
+        existing_backend = existing_embedder.get("backend", "N/A")
+        merged_backend = merged_embedder.get("backend", "N/A")
+        if existing_backend != merged_backend:
+            logger.info(
+                f"🔄 Embedder backend changed during merge: {existing_backend} -> {merged_backend}. "
+                f"Using default embedder config."
+            )
+        else:
+            logger.debug(f"Embedder backend unchanged: {merged_backend}")
+        
+        # Ensure embedder config is from default (not from existing)
+        # This is already the case since we use default_dict as base, but log to confirm
+        if merged_embedder:
+            logger.debug(
+                f"✅ Using embedder config from default: backend={merged_backend}, "
+                f"model={merged_embedder.get('config', {}).get('model_name_or_path', 'N/A')}"
+            )
 
     # Create new config from merged dictionary
     merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
+    
+    # 强制检查：如果 embedder backend 是 ollama，强制替换为 universal_api
+    if merged_config.text_mem.backend != "uninitialized":
+        merged_embedder = merged_config.text_mem.config.embedder
+        if merged_embedder.backend == "ollama":
+            logger.warning(
+                f"⚠️ WARNING: Merged config still has 'ollama' embedder backend! "
+                f"Force replacing with 'universal_api' from default config."
+            )
+            # 强制使用 default_config 中的 embedder
+            if default_config.text_mem.backend != "uninitialized":
+                default_embedder = default_config.text_mem.config.embedder
+                logger.info(
+                    f"🔄 Force replacing embedder: ollama -> {default_embedder.backend}"
+                )
+                # 直接修改 merged_dict 中的 embedder 配置
+                if "text_mem" in merged_dict and "config" in merged_dict["text_mem"]:
+                    merged_dict["text_mem"]["config"]["embedder"] = default_embedder.model_dump()
+                    # 重新验证配置
+                    merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
+                    logger.info(
+                        f"✅ Successfully force-replaced embedder to {merged_config.text_mem.config.embedder.backend}"
+                    )
 
     logger.info(
-        f"Successfully merged cube config for user {merged_config.user_id}, cube {merged_config.cube_id}"
+        f"Successfully merged cube config for user {merged_config.user_id}, cube {merged_config.cube_id}, "
+        f"embedder_backend={merged_config.text_mem.config.embedder.backend if merged_config.text_mem.backend != 'uninitialized' else 'N/A'}"
     )
 
     return merged_config

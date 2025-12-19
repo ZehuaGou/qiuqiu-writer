@@ -13,6 +13,8 @@ import requests
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 from memos.configs.mem_cube import GeneralMemCubeConfig
 from memos.configs.mem_os import MOSConfig
 from memos.context.context import ContextThread
@@ -369,14 +371,28 @@ class APIConfig:
 
     @staticmethod
     def get_reranker_config() -> dict[str, Any]:
-        """Get embedder configuration."""
-        embedder_backend = os.getenv("MOS_RERANKER_BACKEND", "http_bge")
+        """Get reranker configuration."""
+        reranker_backend = os.getenv("MOS_RERANKER_BACKEND", "http_bge")
+        reranker_url = os.getenv("MOS_RERANKER_URL")
 
-        if embedder_backend in ["http_bge", "http_bge_strategy"]:
+        # If http_bge backend is requested but no URL is provided, fallback to cosine_local
+        if reranker_backend in ["http_bge", "http_bge_strategy"]:
+            if not reranker_url:
+                logger.warning(
+                    "MOS_RERANKER_BACKEND is set to 'http_bge' but MOS_RERANKER_URL is not set. "
+                    "Falling back to 'cosine_local' reranker."
+                )
+                return {
+                    "backend": "cosine_local",
+                    "config": {
+                        "level_weights": {"topic": 1.0, "concept": 1.0, "fact": 1.0},
+                        "level_field": "background",
+                    },
+                }
             return {
-                "backend": embedder_backend,
+                "backend": reranker_backend,
                 "config": {
-                    "url": os.getenv("MOS_RERANKER_URL"),
+                    "url": reranker_url,
                     "model": os.getenv("MOS_RERANKER_MODEL", "bge-reranker-v2-m3"),
                     "timeout": 10,
                     "headers_extra": os.getenv("MOS_RERANKER_HEADERS_EXTRA"),
@@ -384,7 +400,22 @@ class APIConfig:
                     "reranker_strategy": os.getenv("MOS_RERANKER_STRATEGY", "single_turn"),
                 },
             }
+        elif reranker_backend in ["cosine_local", "cosine"]:
+            return {
+                "backend": "cosine_local",
+                "config": {
+                    "level_weights": {"topic": 1.0, "concept": 1.0, "fact": 1.0},
+                    "level_field": "background",
+                },
+            }
+        elif reranker_backend in ["noop", "none", "disabled"]:
+            return {
+                "backend": "noop",
+                "config": {},
+            }
         else:
+            # Default to cosine_local if unknown backend
+            logger.warning(f"Unknown reranker backend '{reranker_backend}', using 'cosine_local'")
             return {
                 "backend": "cosine_local",
                 "config": {
@@ -396,21 +427,58 @@ class APIConfig:
     @staticmethod
     def get_embedder_config() -> dict[str, Any]:
         """Get embedder configuration."""
-        embedder_backend = os.getenv("MOS_EMBEDDER_BACKEND", "ollama")
+        embedder_backend = os.getenv("MOS_EMBEDDER_BACKEND", "universal_api")
+        logger.info(f"🔧 Embedder backend from env: {embedder_backend}")
 
         if embedder_backend == "universal_api":
-            return {
+            # Use OpenAI API for embeddings (reuse chat API credentials)
+            api_key = os.getenv("MOS_EMBEDDER_API_KEY") or os.getenv("OPENAI_API_KEY")
+            api_base = os.getenv("MOS_EMBEDDER_API_BASE") or os.getenv("OPENAI_API_BASE")
+            
+            logger.info(f"🔧 Embedder API key: {'SET' if api_key else 'NOT SET'}, API base: {api_base}")
+            
+            if not api_key:
+                logger.warning(
+                    "MOS_EMBEDDER_API_KEY or OPENAI_API_KEY not set. "
+                    "Falling back to sentence_transformer embedder."
+                )
+                return {
+                    "backend": "sentence_transformer",
+                    "config": {
+                        "model_name_or_path": os.getenv(
+                            "MOS_EMBEDDER_MODEL", "nomic-ai/nomic-embed-text-v1.5"
+                        ),
+                    },
+                }
+            
+            config = {
                 "backend": "universal_api",
                 "config": {
                     "provider": os.getenv("MOS_EMBEDDER_PROVIDER", "openai"),
-                    "api_key": os.getenv("MOS_EMBEDDER_API_KEY", "sk-xxxx"),
+                    "api_key": api_key,
                     "model_name_or_path": os.getenv("MOS_EMBEDDER_MODEL", "text-embedding-3-large"),
-                    "base_url": os.getenv("MOS_EMBEDDER_API_BASE", "http://openai.com"),
+                    "base_url": api_base or "https://api.openai.com/v1",
                 },
             }
-        else:  # ollama
+            logger.info(f"✅ Using universal_api embedder with provider: {config['config']['provider']}, model: {config['config']['model_name_or_path']}")
+            return config
+        elif embedder_backend == "sentence_transformer":
             return {
-                "backend": "ollama",
+                "backend": "sentence_transformer",
+                "config": {
+                    "model_name_or_path": os.getenv(
+                        "MOS_EMBEDDER_MODEL", "nomic-ai/nomic-embed-text-v1.5"
+                    ),
+                },
+            }
+        else:  # ollama or other
+            if embedder_backend == "ollama":
+                logger.warning(
+                    "Ollama embedder selected but may not be available. "
+                    "Consider using 'universal_api' or 'sentence_transformer'."
+                )
+            return {
+                "backend": embedder_backend,
                 "config": {
                     "model_name_or_path": os.getenv(
                         "MOS_EMBEDDER_MODEL", "nomic-embed-text:latest"
@@ -844,6 +912,23 @@ class APIConfig:
         graph_db_backend = os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
         if graph_db_backend in graph_db_backend_map:
             # Create MemCube config
+            # Get embedder config with logging
+            embedder_config = APIConfig.get_embedder_config()
+            embedder_backend = embedder_config.get('backend')
+            embedder_model = embedder_config.get('config', {}).get('model_name_or_path', 'N/A')
+            logger.info(
+                f"🔧 create_user_config: embedder config for user {user_id}: "
+                f"backend={embedder_backend}, model={embedder_model}"
+            )
+            
+            # 验证 embedder 配置
+            if embedder_backend != "universal_api":
+                logger.error(
+                    f"❌ ERROR: get_embedder_config() returned backend '{embedder_backend}' "
+                    f"instead of 'universal_api'! This will cause issues."
+                )
+            else:
+                logger.info(f"✅ Embedder config is correct: universal_api")
 
             default_cube_config = GeneralMemCubeConfig.model_validate(
                 {
@@ -858,7 +943,7 @@ class APIConfig:
                                 "backend": graph_db_backend,
                                 "config": graph_db_backend_map[graph_db_backend],
                             },
-                            "embedder": APIConfig.get_embedder_config(),
+                            "embedder": embedder_config,
                             "internet_retriever": internet_config,
                             "reranker": APIConfig.get_reranker_config(),
                             "reorganize": os.getenv("MOS_ENABLE_REORGANIZE", "false").lower()
@@ -886,7 +971,43 @@ class APIConfig:
             )
         else:
             raise ValueError(f"Invalid Neo4j backend: {graph_db_backend}")
+        
+        # 在创建 GeneralMemCube 之前，清除 embedder factory 缓存
+        # 确保使用最新的 embedder 配置
+        try:
+            from memos.embedders.factory import EmbedderFactory
+            from memos.memos_tools.singleton import _factory_singleton
+            _factory_singleton.clear_cache(EmbedderFactory)
+            logger.info("✅ Cleared embedder factory cache before creating GeneralMemCube")
+        except Exception as e:
+            logger.warning(f"Failed to clear embedder cache: {e}")
+        
+        # 验证 embedder 配置
+        if default_cube_config.text_mem.backend != "uninitialized":
+            embedder_backend = default_cube_config.text_mem.config.embedder.backend
+            logger.info(
+                f"🔧 Creating GeneralMemCube with embedder backend: {embedder_backend}"
+            )
+            if embedder_backend != "universal_api":
+                logger.warning(
+                    f"⚠️ WARNING: Embedder backend is '{embedder_backend}', not 'universal_api'. "
+                    f"This may cause issues if Ollama is not available."
+                )
+        
         default_mem_cube = GeneralMemCube(default_cube_config)
+        
+        # 验证创建的 cube 使用的 embedder
+        if default_mem_cube.text_mem and hasattr(default_mem_cube.text_mem, 'embedder'):
+            actual_embedder_type = type(default_mem_cube.text_mem.embedder).__name__
+            logger.info(
+                f"✅ GeneralMemCube created with embedder: {actual_embedder_type}"
+            )
+            if "Ollama" in actual_embedder_type:
+                logger.error(
+                    f"❌ ERROR: GeneralMemCube is using OllamaEmbedder instead of UniversalAPIEmbedder! "
+                    f"This will cause 502 errors. Please check embedder configuration."
+                )
+        
         return default_config, default_mem_cube
 
     @staticmethod

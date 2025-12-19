@@ -44,7 +44,14 @@ class TreeTextMemory(BaseTextMemory):
         self.dispatcher_llm: OpenAILLM | OllamaLLM | AzureLLM = LLMFactory.from_config(
             config.dispatcher_llm
         )
-        self.embedder: OllamaEmbedder = EmbedderFactory.from_config(config.embedder)
+        embedder_config = config.embedder
+        logger.info(
+            f"🔧 TreeTextMemory.__init__: Creating embedder with backend: {embedder_config.backend}"
+        )
+        self.embedder: OllamaEmbedder = EmbedderFactory.from_config(embedder_config)
+        logger.info(
+            f"✅ TreeTextMemory.__init__: Embedder created: {type(self.embedder).__name__}"
+        )
         self.graph_store: Neo4jGraphDB = GraphStoreFactory.from_config(config.graph_db)
 
         self.search_strategy = config.search_strategy

@@ -876,6 +876,13 @@ class MOSProduct(MOSCore):
             mem_cube = mem_cube_name_or_path_or_object
             if mem_cube_id is None:
                 mem_cube_id = f"cube_{id(mem_cube)}"  # Generate a unique ID
+            
+            # Log embedder configuration for debugging
+            if mem_cube.config.text_mem.backend != "uninitialized":
+                embedder_backend = mem_cube.config.text_mem.config.embedder.backend
+                logger.info(
+                    f"🔧 register_mem_cube: Using GeneralMemCube object with embedder backend: {embedder_backend}"
+                )
         else:
             # String path provided
             mem_cube_name_or_path = mem_cube_name_or_path_or_object
@@ -883,8 +890,18 @@ class MOSProduct(MOSCore):
                 mem_cube_id = mem_cube_name_or_path
 
             if mem_cube_id in self.mem_cubes:
-                logger.info(f"MemCube with ID {mem_cube_id} already in MOS, skip install.")
-                return
+                # If default_config is provided, force reload to use new configuration
+                if default_config is not None:
+                    logger.info(
+                        f"🔄 MemCube with ID {mem_cube_id} already in MOS, but default_config provided. "
+                        f"Force reloading with new configuration..."
+                    )
+                    # Remove old cube from memory
+                    del self.mem_cubes[mem_cube_id]
+                    logger.debug(f"Removed old cube {mem_cube_id} from memory")
+                else:
+                    logger.info(f"MemCube with ID {mem_cube_id} already in MOS, skip install.")
+                    return
 
             # Create MemCube from path
             time_start = time.time()
@@ -955,6 +972,20 @@ class MOSProduct(MOSCore):
             # Create a default cube for the user using MOSCore's methods
             default_cube_name = f"{user_name}_{user_id}_default_cube"
             mem_cube_name_or_path = os.path.join(CUBE_PATH, default_cube_name)
+            
+            # 如果 cube 目录已存在，先删除它以确保使用新配置
+            if os.path.exists(mem_cube_name_or_path):
+                logger.info(
+                    f"🔄 Cube directory {mem_cube_name_or_path} already exists. "
+                    f"Removing it to ensure fresh configuration..."
+                )
+                try:
+                    import shutil
+                    shutil.rmtree(mem_cube_name_or_path)
+                    logger.info(f"✅ Removed existing cube directory: {mem_cube_name_or_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove existing cube directory: {e}")
+            
             default_cube_id = self.create_cube_for_user(
                 cube_name=default_cube_name,
                 owner_id=user_id,
@@ -964,12 +995,19 @@ class MOSProduct(MOSCore):
             time_start = time.time()
             if default_mem_cube:
                 try:
+                    # 确保使用最新的配置 dump cube
+                    logger.info(
+                        f"🔧 Dumping default_mem_cube with embedder backend: "
+                        f"{default_mem_cube.config.text_mem.config.embedder.backend}"
+                    )
                     default_mem_cube.dump(mem_cube_name_or_path, memory_types=[])
+                    logger.info(f"✅ Dumped default cube to {mem_cube_name_or_path}")
                 except Exception as e:
                     logger.error(f"Failed to dump default cube: {e}")
             time_end = time.time()
             logger.info(f"time user_register: dump default cube time is: {time_end - time_start}")
             # Register the default cube with MOS
+            # 传入 default_mem_cube 对象而不是路径，确保使用内存中的配置
             self.register_mem_cube(
                 mem_cube_name_or_path_or_object=default_mem_cube,
                 mem_cube_id=default_cube_id,

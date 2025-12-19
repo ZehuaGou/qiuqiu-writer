@@ -8,6 +8,25 @@ echo "=========================================="
 echo "启动AI接口服务"
 echo "=========================================="
 
+# 获取脚本所在目录的绝对路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$SCRIPT_DIR"
+
+# 切换到 backend 目录
+cd "$BACKEND_DIR"
+
+# 加载 .env 文件（如果存在）
+if [ -f ".env" ]; then
+    echo "✅ 发现 .env 文件，正在加载环境变量..."
+    # 使用 set -a 自动导出所有变量，然后 source .env
+    # bash 会自动忽略以 # 开头的注释行和空行
+    set -a
+    source .env
+    set +a
+    echo "✅ 环境变量已加载（包括 QDRANT_HOST, QDRANT_PORT 等）"
+    echo ""
+fi
+
 # 检查环境变量
 if [ -z "$OPENAI_API_KEY" ]; then
     echo "警告: OPENAI_API_KEY 环境变量未设置"
@@ -30,9 +49,7 @@ HOST=${HOST:-0.0.0.0}
 # 设置热部署选项（默认启用，可通过环境变量 RELOAD=false 禁用）
 RELOAD=${RELOAD:-true}
 
-# 获取脚本所在目录的绝对路径
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR"
+# SCRIPT_DIR 和 BACKEND_DIR 已在上面定义
 SRC_DIR="$BACKEND_DIR/src"
 
 echo "配置信息："
@@ -63,8 +80,7 @@ fi
 # 确保 src 目录在 PYTHONPATH 中
 export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$SRC_DIR"
 
-# 切换到 backend 目录
-cd "$BACKEND_DIR"
+# 已经在 backend 目录了，不需要再次切换
 
 # 检查Python环境并启动服务
 if command -v poetry &> /dev/null; then

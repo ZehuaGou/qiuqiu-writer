@@ -33,14 +33,118 @@ class QdrantVecDB(BaseVecDB):
                 "(e.g., via Docker: https://qdrant.tech/documentation/quickstart/)."
             )
 
-        self.client = QdrantClient(
-            host=self.config.host, port=self.config.port, path=self.config.path
+        # Log configuration for debugging
+        logger.info(
+            f"Initializing Qdrant client: host={self.config.host}, "
+            f"port={self.config.port}, path={self.config.path}"
         )
-        self.create_collection()
+        
+        # Initialize Qdrant client with timeout settings
+        # Note: If both host/port and path are provided, path takes precedence (local mode)
+        # We want to use remote mode, so only pass host/port if both are set
+        if self.config.host and self.config.port:
+            # Remote mode: use host and port
+            # Ensure port is an integer
+            port = int(self.config.port) if isinstance(self.config.port, str) else self.config.port
+            # Use 127.0.0.1 instead of localhost to avoid IPv6 issues
+            host = "127.0.0.1" if self.config.host.lower() in ("localhost", "127.0.0.1") else self.config.host
+            try:
+                self.client = QdrantClient(
+                    host=host,
+                    port=port,
+                    timeout=60.0,  # Increased timeout to 60 seconds
+                    prefer_grpc=False,  # Use HTTP instead of gRPC for better compatibility
+                    check_compatibility=False,  # Skip version check to avoid 502 errors
+                )
+                logger.info(f"Qdrant client initialized in remote mode: http://{host}:{port}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize QdrantClient with check_compatibility=False: {e}, trying without it")
+                # Fallback: try without check_compatibility parameter (for older qdrant-client versions)
+                self.client = QdrantClient(
+                    host=host,
+                    port=port,
+                    timeout=60.0,
+                    prefer_grpc=False,
+                )
+                logger.info(f"Qdrant client initialized (fallback mode): http://{host}:{port}")
+        elif self.config.path:
+            # Local mode: use path
+            self.client = QdrantClient(
+                path=self.config.path,
+                timeout=30.0,
+            )
+            logger.info(f"Qdrant client initialized in local mode: {self.config.path}")
+        else:
+            raise ValueError("Qdrant configuration error: must provide either (host and port) or path")
+        
+        # Skip connection check during initialization to avoid blocking startup
+        # Connection will be verified lazily when actually needed (first operation)
+        logger.info("Qdrant client created. Connection will be verified on first use.")
+        
+        # Don't create collection during initialization - do it lazily
+        self._collection_created = False
+    
+    def _ensure_connection(self, max_retries: int = 5, retry_delay: float = 2.0):
+        """Ensure Qdrant connection is available with retry logic."""
+        import time
+        
+        connection_info = f"host={self.config.host}, port={self.config.port}" if self.config.host else f"path={self.config.path}"
+        
+        for attempt in range(max_retries):
+            try:
+                # Simple health check: try to list collections
+                collections = self.client.get_collections()
+                logger.info(
+                    f"✅ Qdrant connection verified (attempt {attempt + 1}/{max_retries}) "
+                    f"at {connection_info}. Found {len(collections.collections)} collections."
+                )
+                return
+            except Exception as e:
+                error_str = str(e)
+                error_type = type(e).__name__
+                
+                if attempt < max_retries - 1:
+                    # Longer delay for 502 errors (service might be restarting)
+                    current_delay = retry_delay * (2 ** attempt) if "502" in error_str or "Bad Gateway" in error_str else retry_delay * (1.5 ** attempt)
+                    logger.warning(
+                        f"⚠️ Qdrant connection check failed (attempt {attempt + 1}/{max_retries}) "
+                        f"at {connection_info}: {error_type}: {error_str[:200]}. "
+                        f"Retrying in {current_delay:.1f}s..."
+                    )
+                    time.sleep(current_delay)
+                else:
+                    logger.error(
+                        f"❌ Failed to connect to Qdrant after {max_retries} attempts "
+                        f"at {connection_info}: {error_type}: {error_str}"
+                    )
+                    # Provide helpful error message
+                    if "502" in error_str or "Bad Gateway" in error_str:
+                        raise ConnectionError(
+                            f"Qdrant service returned 502 Bad Gateway after {max_retries} retries. "
+                            f"This usually means the Qdrant service is temporarily unavailable or restarting. "
+                            f"Connection info: {connection_info}. "
+                            f"Please check: docker ps | grep qdrant && curl http://{self.config.host or 'localhost'}:{self.config.port or 6333}/collections"
+                        ) from e
+                    raise
 
+    def _lazy_ensure_connection(self):
+        """Lazily ensure connection and collection exist when first needed."""
+        if not hasattr(self, '_connection_verified') or not self._connection_verified:
+            try:
+                self._ensure_connection()
+                self._connection_verified = True
+            except Exception as e:
+                logger.warning(f"Lazy connection check failed: {e}. Will retry on next operation.")
+                self._connection_verified = False
+                raise
+    
     def create_collection(self) -> None:
         """Create a new collection with specified parameters."""
         from qdrant_client.http import models
+        import time
+
+        # Lazy connection check
+        self._lazy_ensure_connection()
 
         if self.collection_exists(self.config.collection_name):
             collection_info = self.client.get_collection(self.config.collection_name)
@@ -57,17 +161,45 @@ class QdrantVecDB(BaseVecDB):
             "dot": models.Distance.DOT,
         }
 
-        self.client.create_collection(
-            collection_name=self.config.collection_name,
-            vectors_config=models.VectorParams(
-                size=self.config.vector_dimension,
-                distance=distance_map[self.config.distance_metric],
-            ),
-        )
+        # Retry logic for collection creation
+        max_retries = 3
+        retry_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                self.client.create_collection(
+                    collection_name=self.config.collection_name,
+                    vectors_config=models.VectorParams(
+                        size=self.config.vector_dimension,
+                        distance=distance_map[self.config.distance_metric],
+                    ),
+                )
 
-        logger.info(
-            f"Collection '{self.config.collection_name}' created with {self.config.vector_dimension} dimensions."
-        )
+                logger.info(
+                    f"Collection '{self.config.collection_name}' created with {self.config.vector_dimension} dimensions."
+                )
+                return
+            except Exception as e:
+                error_str = str(e)
+                if attempt < max_retries - 1:
+                    # Check if it's a transient error (502, 503, connection issues)
+                    if "502" in error_str or "503" in error_str or "Bad Gateway" in error_str or "connection" in error_str.lower():
+                        logger.warning(
+                            f"Failed to create collection '{self.config.collection_name}' (attempt {attempt + 1}/{max_retries}): {e}. "
+                            f"Retrying in {retry_delay}s..."
+                        )
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        # Non-transient error, re-raise immediately
+                        raise
+                else:
+                    # Last attempt failed
+                    logger.error(
+                        f"Failed to create collection '{self.config.collection_name}' after {max_retries} attempts: {e}"
+                    )
+                    raise
 
     def list_collections(self) -> list[str]:
         """List all collections."""
@@ -81,6 +213,7 @@ class QdrantVecDB(BaseVecDB):
     def collection_exists(self, name: str) -> bool:
         """Check if a collection exists."""
         try:
+            self._lazy_ensure_connection()
             self.client.get_collection(collection_name=name)
             return True
         except Exception:
@@ -100,6 +233,7 @@ class QdrantVecDB(BaseVecDB):
         Returns:
             List of search results with distance scores and payloads.
         """
+        self._lazy_ensure_connection()
         qdrant_filter = self._dict_to_filter(filter) if filter else None
         response = self.client.search(
             collection_name=self.config.collection_name,
@@ -137,6 +271,7 @@ class QdrantVecDB(BaseVecDB):
 
     def get_by_id(self, id: str) -> VecDBItem | None:
         """Get a single item by ID."""
+        self._lazy_ensure_connection()
         response = self.client.retrieve(
             collection_name=self.config.collection_name,
             ids=[id],
@@ -156,6 +291,7 @@ class QdrantVecDB(BaseVecDB):
 
     def get_by_ids(self, ids: list[str]) -> list[VecDBItem]:
         """Get multiple items by their IDs."""
+        self._lazy_ensure_connection()
         response = self.client.retrieve(
             collection_name=self.config.collection_name,
             ids=ids,
@@ -186,6 +322,7 @@ class QdrantVecDB(BaseVecDB):
         Returns:
             List of items including vectors and payload that match the filter
         """
+        self._lazy_ensure_connection()
         qdrant_filter = self._dict_to_filter(filter) if filter else None
         all_points = []
         offset = None
@@ -226,6 +363,7 @@ class QdrantVecDB(BaseVecDB):
 
     def count(self, filter: dict[str, Any] | None = None) -> int:
         """Count items in the database, optionally with filter."""
+        self._lazy_ensure_connection()
         qdrant_filter = None
         if filter:
             qdrant_filter = self._dict_to_filter(filter)
@@ -248,6 +386,7 @@ class QdrantVecDB(BaseVecDB):
                 - 'vector': embedding vector
                 - 'payload': additional fields for filtering/retrieval
         """
+        self._lazy_ensure_connection()
         points = []
         for item in data:
             if isinstance(item, dict):
@@ -311,6 +450,7 @@ class QdrantVecDB(BaseVecDB):
         from qdrant_client.http import models
 
         """Delete items from the vector database."""
+        self._lazy_ensure_connection()
         point_ids: list[str | int] = ids
         self.client.delete(
             collection_name=self.config.collection_name,
