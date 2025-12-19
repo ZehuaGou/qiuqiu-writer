@@ -80,14 +80,27 @@ class ShareDBService:
             "updated_at": datetime.utcnow().isoformat()
         }
 
-        # 存储到Redis
-        await self.redis_client.setex(
-            f"doc:{document_id}",
-            settings.SHAREDB_DOCUMENT_TTL or 86400,  # 24小时默认TTL
-            json.dumps(document)
-        )
+        # 根据配置选择存储方式
+        if self.use_mongodb and self.mongodb_db is not None:
+            # 存储到MongoDB
+            collection = self.mongodb_db.documents
+            await collection.replace_one(
+                {"id": document_id},
+                document,
+                upsert=True  # 如果不存在则创建
+            )
+            logger.info(f"创建ShareDB文档到MongoDB: {document_id}, 内容长度: {len(content)}")
+        else:
+            # 存储到Redis
+            if not self.redis_client:
+                raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
+            await self.redis_client.setex(
+                f"doc:{document_id}",
+                settings.SHAREDB_DOCUMENT_TTL or 86400,  # 24小时默认TTL
+                json.dumps(document)
+            )
+            logger.info(f"创建ShareDB文档到Redis: {document_id}, 内容长度: {len(content)}")
 
-        logger.info(f"创建ShareDB文档: {document_id}, 内容长度: {len(content)}")
         return document
 
     async def get_document(self, document_id: str) -> Optional[Dict[str, Any]]:
@@ -96,7 +109,7 @@ class ShareDBService:
             await self.initialize()
 
         try:
-            if self.use_mongodb and self.mongodb_db:
+            if self.use_mongodb and self.mongodb_db is not None:
                 # 从MongoDB获取
                 collection = self.mongodb_db.documents
                 document = await collection.find_one({"id": document_id})
@@ -107,6 +120,8 @@ class ShareDBService:
                     return document
             else:
                 # 从Redis获取
+                if not self.redis_client:
+                    raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
                 document_data = await self.redis_client.get(f"doc:{document_id}")
                 if document_data:
                     return json.loads(document_data)
@@ -140,12 +155,24 @@ class ShareDBService:
             document["version"] += 1
             document["updated_at"] = datetime.utcnow().isoformat()
 
-            # 保存到Redis
-            await self.redis_client.setex(
-                f"doc:{document_id}",
-                settings.SHAREDB_DOCUMENT_TTL or 86400,
-                json.dumps(document)
-            )
+            # 根据配置选择存储方式
+            if self.use_mongodb and self.mongodb_db is not None:
+                # 保存到MongoDB
+                collection = self.mongodb_db.documents
+                await collection.replace_one(
+                    {"id": document_id},
+                    document,
+                    upsert=True
+                )
+            else:
+                # 保存到Redis
+                if not self.redis_client:
+                    raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
+                await self.redis_client.setex(
+                    f"doc:{document_id}",
+                    settings.SHAREDB_DOCUMENT_TTL or 86400,
+                    json.dumps(document)
+                )
 
             # 广播更新给所有连接的客户端
             await self._broadcast_update(document_id, {
@@ -163,8 +190,16 @@ class ShareDBService:
         if not self._initialized:
             await self.initialize()
 
-        # 删除Redis中的文档
-        await self.redis_client.delete(f"doc:{document_id}")
+        # 根据配置选择删除方式
+        if self.use_mongodb and self.mongodb_db:
+            # 从MongoDB删除
+            collection = self.mongodb_db.documents
+            await collection.delete_one({"id": document_id})
+        else:
+            # 从Redis删除
+            if not self.redis_client:
+                raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
+            await self.redis_client.delete(f"doc:{document_id}")
 
         # 断开所有连接
         if document_id in self.active_connections:
@@ -208,12 +243,24 @@ class ShareDBService:
             }
             document["operations"].append(operation_record)
 
-            # 保存到Redis
-            await self.redis_client.setex(
-                f"doc:{document_id}",
-                settings.SHAREDB_DOCUMENT_TTL or 86400,
-                json.dumps(document)
-            )
+            # 根据配置选择存储方式
+            if self.use_mongodb and self.mongodb_db is not None:
+                # 保存到MongoDB
+                collection = self.mongodb_db.documents
+                await collection.replace_one(
+                    {"id": document_id},
+                    document,
+                    upsert=True
+                )
+            else:
+                # 保存到Redis
+                if not self.redis_client:
+                    raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
+                await self.redis_client.setex(
+                    f"doc:{document_id}",
+                    settings.SHAREDB_DOCUMENT_TTL or 86400,
+                    json.dumps(document)
+                )
 
             # 广播操作给其他用户
             await self._broadcast_operation(document_id, {
@@ -1543,13 +1590,26 @@ class ShareDBService:
                     if user_id:
                         document["last_editor_id"] = user_id
 
-                # 保存到Redis
-                await self.redis_client.setex(
-                    f"doc:{document_id}",
-                    settings.SHAREDB_DOCUMENT_TTL or 86400,  # 24小时默认TTL
-                    json.dumps(document)
-                )
-                logger.info(f"✅ [ShareDB] 已保存到Redis: {document_id}, 版本 {document.get('version')}, 内容长度 {len(document.get('content', ''))}")
+                # 根据配置选择存储方式
+                if self.use_mongodb and self.mongodb_db is not None:
+                    # 保存到MongoDB
+                    collection = self.mongodb_db.documents
+                    await collection.replace_one(
+                        {"id": document_id},
+                        document,
+                        upsert=True
+                    )
+                    logger.info(f"✅ [ShareDB] 已保存到MongoDB: {document_id}, 版本 {document.get('version')}, 内容长度 {len(document.get('content', ''))}")
+                else:
+                    # 保存到Redis
+                    if not self.redis_client:
+                        raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
+                    await self.redis_client.setex(
+                        f"doc:{document_id}",
+                        settings.SHAREDB_DOCUMENT_TTL or 86400,  # 24小时默认TTL
+                        json.dumps(document)
+                    )
+                    logger.info(f"✅ [ShareDB] 已保存到Redis: {document_id}, 版本 {document.get('version')}, 内容长度 {len(document.get('content', ''))}")
 
                 # 关键改进：如果 create_version 为 True 或表不存在，创建版本历史记录
                 # 使用当前合并后的内容作为版本历史

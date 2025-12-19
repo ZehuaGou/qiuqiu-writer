@@ -82,9 +82,15 @@ class Settings(BaseSettings):
     @property
     def MONGODB_URL(self) -> str:
         if self.MONGODB_USERNAME and self.MONGODB_PASSWORD:
+            # URL 编码用户名和密码，处理特殊字符
+            from urllib.parse import quote_plus
+            encoded_username = quote_plus(self.MONGODB_USERNAME)
+            encoded_password = quote_plus(self.MONGODB_PASSWORD)
+            # 添加 authSource=admin，MongoDB 默认使用 admin 数据库进行认证
             return (
-                f"mongodb://{self.MONGODB_USERNAME}:{self.MONGODB_PASSWORD}@"
+                f"mongodb://{encoded_username}:{encoded_password}@"
                 f"{self.MONGODB_HOST}:{self.MONGODB_PORT}/{self.MONGODB_DATABASE}"
+                f"?authSource=admin"
             )
         return f"mongodb://{self.MONGODB_HOST}:{self.MONGODB_PORT}/{self.MONGODB_DATABASE}"
 

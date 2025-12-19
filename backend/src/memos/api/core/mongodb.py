@@ -34,16 +34,53 @@ async def get_mongodb_client() -> AsyncIOMotorClient:
     if _mongodb_client is None:
         settings = get_settings()
         try:
+            # 构建连接 URL（隐藏密码用于日志）
+            log_url = settings.MONGODB_URL
+            if settings.MONGODB_USERNAME and settings.MONGODB_PASSWORD:
+                # 在日志中隐藏密码
+                log_url = log_url.replace(settings.MONGODB_PASSWORD, "***")
+            
             _mongodb_client = AsyncIOMotorClient(
                 settings.MONGODB_URL,
                 serverSelectionTimeoutMS=5000,
             )
             # 测试连接
             await _mongodb_client.admin.command('ping')
-            logger.info(f"MongoDB连接成功: {settings.MONGODB_URL}")
+            logger.info(f"MongoDB连接成功: {log_url}")
         except Exception as e:
-            logger.error(f"MongoDB连接失败: {e}")
-            raise
+            error_str = str(e)
+            # 如果认证失败，可能是 MongoDB 没有启用访问控制
+            # 尝试使用无认证连接
+            if "Authentication failed" in error_str or "AuthenticationFailed" in error_str:
+                logger.warning(f"MongoDB认证失败，尝试无认证连接: {error_str}")
+                try:
+                    # 构建无认证的连接 URL
+                    no_auth_url = f"mongodb://{settings.MONGODB_HOST}:{settings.MONGODB_PORT}/{settings.MONGODB_DATABASE}"
+                    _mongodb_client = AsyncIOMotorClient(
+                        no_auth_url,
+                        serverSelectionTimeoutMS=5000,
+                    )
+                    # 测试连接
+                    await _mongodb_client.admin.command('ping')
+                    logger.info(f"MongoDB连接成功（无认证模式）: {no_auth_url}")
+                    logger.warning(
+                        "MongoDB 未启用访问控制，使用无认证连接。"
+                        "建议在生产环境中启用 MongoDB 访问控制以提高安全性。"
+                    )
+                except Exception as retry_err:
+                    logger.error(f"MongoDB无认证连接也失败: {retry_err}")
+                    logger.error(
+                        "MongoDB连接失败，请检查：\n"
+                        "1. MongoDB 服务是否正在运行\n"
+                        "2. 连接地址和端口是否正确\n"
+                        "3. 如果启用了访问控制，请确认用户名和密码正确\n"
+                        "4. 用户是否在 admin 数据库中有权限\n"
+                        "5. 密码中是否包含特殊字符（已自动进行URL编码）"
+                    )
+                    raise
+            else:
+                logger.error(f"MongoDB连接失败: {error_str}")
+                raise
     
     return _mongodb_client
 
