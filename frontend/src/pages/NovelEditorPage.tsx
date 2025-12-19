@@ -431,9 +431,33 @@ const documentCache = {
         }
       }
       
+      // 将纯文本转换为 HTML 格式（保留换行符）
+      const convertTextToHtml = (text: string): string => {
+        if (!text || text.trim() === '') {
+          return '<p></p>';
+        }
+        // 如果已经是 HTML 格式（包含标签），直接返回
+        if (text.includes('<') && text.includes('>')) {
+          return text;
+        }
+        // 将纯文本转换为 HTML：换行符转换为段落
+        return text
+          .split(/\n\s*\n/) // 按双换行符分割段落
+          .map(para => para.trim())
+          .filter(para => para.length > 0)
+          .map(para => {
+            // 段落内的单换行符转换为 <br>
+            return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+          })
+          .join('') || '<p></p>';
+      };
+      
+      // 确保内容是字符串，并转换为 HTML 格式
+      const htmlContent = convertTextToHtml(typeof content === 'string' ? content : (content || ''));
+      
       return {
         document_id: documentId,
-        content: content || '',
+        content: htmlContent,
         version: result.chapter_info?.id || chapterId,
         metadata: {
           work_id: result.chapter_info?.work_id,
@@ -1345,12 +1369,35 @@ export default function NovelEditorPage(){
         try {
           serverDoc = await documentCache.forcePullFromServer(documentId);
           if (serverDoc && serverDoc.content) {
-            const serverContent = typeof serverDoc.content === 'string' 
-              ? serverDoc.content 
-              : JSON.stringify(serverDoc.content);
-            
-            if (serverContent && serverContent.trim().length > 0) {
-              content = serverContent;
+              let serverContent = typeof serverDoc.content === 'string' 
+                ? serverDoc.content 
+                : JSON.stringify(serverDoc.content);
+              
+              // 将纯文本转换为 HTML 格式（保留换行符）
+              const convertTextToHtml = (text: string): string => {
+                if (!text || text.trim() === '') {
+                  return '<p></p>';
+                }
+                // 如果已经是 HTML 格式（包含标签），直接返回
+                if (text.includes('<') && text.includes('>')) {
+                  return text;
+                }
+                // 将纯文本转换为 HTML：换行符转换为段落
+                return text
+                  .split(/\n\s*\n/) // 按双换行符分割段落
+                  .map(para => para.trim())
+                  .filter(para => para.length > 0)
+                  .map(para => {
+                    // 段落内的单换行符转换为 <br>
+                    return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+                  })
+                  .join('') || '<p></p>';
+              };
+              
+              serverContent = convertTextToHtml(serverContent);
+              
+              if (serverContent && serverContent.trim().length > 0) {
+                content = serverContent;
               
               
               // 更新本地缓存
@@ -1833,7 +1880,29 @@ export default function NovelEditorPage(){
 
           // 关键修复：防止频闪 - 检查是否与上次设置的内容相同
           // 但在章节切换时，即使内容相同也要设置，因为这是新章节的内容
-          const normalizedContent = content || '<p></p>';
+          // 将纯文本转换为 HTML 格式（保留换行符）
+          const convertTextToHtml = (text: string): string => {
+            if (!text || text.trim() === '') {
+              return '<p></p>';
+            }
+            // 如果已经是 HTML 格式（包含标签），直接返回
+            if (text.includes('<') && text.includes('>')) {
+              return text;
+            }
+            // 将纯文本转换为 HTML：换行符转换为段落
+            // 多个连续换行符转换为段落分隔
+            return text
+              .split(/\n\s*\n/) // 按双换行符分割段落
+              .map(para => para.trim())
+              .filter(para => para.length > 0)
+              .map(para => {
+                // 段落内的单换行符转换为 <br>
+                return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+              })
+              .join('') || '<p></p>';
+          };
+          
+          const normalizedContent = convertTextToHtml(content || '');
           const shouldSetContent = lastSetContentRef.current !== normalizedContent || 
                                    (currentChapterIdRef.current !== chapterId);
           
@@ -1940,6 +2009,30 @@ export default function NovelEditorPage(){
                 return;
               }
               
+              // 将纯文本转换为 HTML 格式（保留换行符）
+              const convertTextToHtml = (text: string): string => {
+                if (!text || text.trim() === '') {
+                  return '<p></p>';
+                }
+                // 如果已经是 HTML 格式（包含标签），直接返回
+                if (text.includes('<') && text.includes('>')) {
+                  return text;
+                }
+                // 将纯文本转换为 HTML：换行符转换为段落
+                return text
+                  .split(/\n\s*\n/) // 按双换行符分割段落
+                  .map(para => para.trim())
+                  .filter(para => para.length > 0)
+                  .map(para => {
+                    // 段落内的单换行符转换为 <br>
+                    return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+                  })
+                  .join('') || '<p></p>';
+              };
+              
+              // 确保服务器内容是 HTML 格式
+              const htmlServerContent = convertTextToHtml(serverContent);
+              
               // 如果服务器内容与当前编辑器内容不同，更新编辑器
               const currentContent = editor.getHTML();
               
@@ -1949,19 +2042,19 @@ export default function NovelEditorPage(){
               };
               
               const normalizedCurrent = normalizeContent(currentContent);
-              const normalizedServer = normalizeContent(serverContent);
+              const normalizedServer = normalizeContent(htmlServerContent);
               
               if (normalizedCurrent !== normalizedServer) {
                 console.log('✅ [自动拉取] 检测到服务器有新内容，更新编辑器:', {
                   serverVersion: serverDoc.version,
-                  serverContentLength: serverContent.length,
+                  serverContentLength: htmlServerContent.length,
                   currentContentLength: currentContent.length
                 });
                 // 关键修复：从服务器拉取内容时，先清除历史再设置内容
                 // 这样可以避免撤销到旧内容
                 editor.commands.setContent('<p></p>', { emitUpdate: false });
                 setTimeout(() => {
-                  editor.commands.setContent(serverContent, { emitUpdate: false });
+                  editor.commands.setContent(htmlServerContent, { emitUpdate: false });
                 }, 0);
                 lastSetContentRef.current = serverContent; // 记录已设置的内容
               } else {
