@@ -12,6 +12,23 @@ from memos.api.core.security import get_current_user_id
 from memos.api.services.template_service import TemplateService
 from memos.api.models.template import WorkTemplate, TemplateField, WorkInfoExtended
 
+# 辅助函数：确保返回的是 AsyncSession 对象，而不是生成器
+async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSession:
+    """
+    确保返回的是 AsyncSession 对象，而不是生成器
+    FastAPI 的 Depends 应该已经处理了生成器，但为了安全起见，我们再次检查
+    """
+    # FastAPI 的 Depends 应该已经处理了生成器，直接返回
+    # 但如果仍然是生成器，尝试获取会话对象
+    if hasattr(db, '__aiter__') and not hasattr(db, 'execute'):
+        # 如果是生成器，尝试获取会话对象
+        try:
+            db = await db.__anext__()
+        except StopAsyncIteration:
+            raise ValueError("无法从生成器获取数据库会话")
+    
+    return db
+
 # Temporary schemas - will be replaced with proper schema files
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -66,7 +83,7 @@ router = APIRouter(prefix="/api/v1/templates", tags=["作品模板管理"])
 @router.post("/", response_model=WorkTemplateResponse)
 async def create_template(
     template_data: WorkTemplateCreate,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -105,7 +122,7 @@ async def list_templates(
     sort_by: str = Query("created_at", description="排序字段"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
     include_fields: bool = Query(False, description="是否包含字段信息"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> List[Dict[str, Any]]:
     """
@@ -150,7 +167,7 @@ async def get_public_templates(
     sort_by: str = Query("usage_count", description="排序字段"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
     include_fields: bool = Query(False, description="是否包含字段信息"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db_session)
 ) -> List[Dict[str, Any]]:
     """
     获取公开模板列表
@@ -183,7 +200,7 @@ async def get_public_templates(
 async def get_template(
     template_id: int,
     include_fields: bool = Query(True, description="是否包含字段信息"),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -215,7 +232,7 @@ async def get_template(
 async def update_template(
     template_id: int,
     template_update: WorkTemplateUpdate,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -264,7 +281,7 @@ async def update_template(
 @router.delete("/{template_id}")
 async def delete_template(
     template_id: int,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -309,7 +326,7 @@ async def delete_template(
 async def add_template_field(
     template_id: int,
     field_data: TemplateFieldCreate,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -356,7 +373,7 @@ async def update_template_field(
     template_id: int,
     field_id: int,
     field_update: TemplateFieldUpdate,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -404,7 +421,7 @@ async def update_template_field(
 async def delete_template_field(
     template_id: int,
     field_id: int,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -450,7 +467,7 @@ async def delete_template_field(
 async def create_work_extended_info(
     work_id: int,
     extended_data: WorkInfoExtendedCreate,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -494,7 +511,7 @@ async def create_work_extended_info(
 @router.get("/works/{work_id}/extended", response_model=WorkInfoExtendedResponse)
 async def get_work_extended_info(
     work_id: int,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -526,7 +543,7 @@ async def get_work_extended_info(
 async def update_work_extended_info(
     work_id: int,
     extended_update: WorkInfoExtendedUpdate,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
@@ -574,7 +591,7 @@ async def update_work_extended_info(
 async def apply_template_to_work(
     work_id: int,
     template_id: int,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """

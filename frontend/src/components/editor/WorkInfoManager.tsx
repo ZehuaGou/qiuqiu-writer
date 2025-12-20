@@ -2498,14 +2498,13 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                   alert('保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
                 }
               }}
-              title="手动保存"
+              title="保存"
             >
               <Save size={16} />
             </button>
           )}
           <button className={`edit-btn ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>
             {isEditMode ? <Check size={16} /> : <Settings size={16} />}
-            <span>{isEditMode ? '完成' : '编辑'}</span>
           </button>
         </div>
       </div>

@@ -754,7 +754,11 @@ class BookAnalysisService:
             
             # 更新work的metadata
             work.work_metadata = work_metadata
+            # 使用 flag_modified 明确标记 JSON 字段已被修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(work, "work_metadata")
             await self.db.commit()
+            await self.db.refresh(work)
             
             # 处理章节（更新章节的大纲和细纲）
             chapters_created = 0

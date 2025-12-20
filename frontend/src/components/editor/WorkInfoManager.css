@@ -45,7 +45,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  gap: 6px;
+  min-width: auto;
+  width: auto;
+  padding: 8px 14px;
   height: 36px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
@@ -53,11 +56,23 @@
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-base);
+  font-size: 14px;
+}
+
+.save-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  flex-shrink: 0;
 }
 
 .save-btn:hover {
   background: var(--accent-light);
   border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.save-btn:hover svg {
   color: var(--accent-primary);
 }
 

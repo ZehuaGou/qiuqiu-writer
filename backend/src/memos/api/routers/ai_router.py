@@ -58,9 +58,9 @@ async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSessi
 @router.post(
     "/analyze-chapter",
     summary="章节分析接口",
-    description="对小说章节内容进行AI分析，返回结构化的章节分析结果（JSON格式）。如果提供了work_id，分析完成后会将角色信息保存到作品的metainfo中。",
+    description="对小说章节内容进行AI分析，返回结构化的章节分析结果（流式响应）。会进行两次分析：1. 常规章节分析（大纲、细纲等）；2. 角色信息和状态提取。如果提供了work_id，分析完成后会将角色信息保存到作品的metainfo中。",
     responses={
-        200: {"description": "分析成功，返回JSON响应"},
+        200: {"description": "分析成功，返回流式响应"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
         429: {"model": ErrorResponse, "description": "请求过于频繁"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
@@ -73,14 +73,14 @@ async def analyze_chapter(
     current_user_id: int = Depends(get_current_user_id),
 ):
     """
-    对章节内容进行AI分析
+    对章节内容进行AI分析（流式响应）
 
     Args:
         request: 章节分析请求
         db: 数据库会话
 
     Returns:
-        JSONResponse: JSON格式的分析结果
+        StreamingResponse: 流式响应，实时返回分析进度和结果
     """
     try:
         # 验证请求参数
@@ -133,59 +133,256 @@ async def analyze_chapter(
             f"work_id={request.work_id}"
         )
 
-        try:
-            # 直接获取完整响应
-            full_response = await ai_service.analyze_chapter_stream(
-                content=request.content,
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                model=settings.model,
-                temperature=settings.temperature,
-                max_tokens=settings.max_tokens,
-            )
-            
-            # 解析分析结果
-            book_analysis_service = BookAnalysisService(db)
-            parsed_data = book_analysis_service.parse_single_chapter_response(full_response)
-            
-            if not parsed_data:
-                raise HTTPException(status_code=500, detail="无法解析AI响应")
-            
-            # 如果提供了work_id，保存角色信息到作品的 metainfo 中
-            characters_saved = False
-            characters_count = 0
-            save_error = None
-            
-            if request.work_id and parsed_data.get("characters"):
+        # 执行流式分析
+        async def generate_analysis():
+            """生成分析响应"""
+            try:
+                import json
+                
+                # 发送开始消息
+                start_msg = json.dumps({
+                    "type": "start",
+                    "message": "开始分析章节内容..."
+                })
+                yield f"data: {start_msg}\n\n"
+                
+                # 第一次调用：常规章节分析
+                analysis_msg = json.dumps({
+                    "type": "analysis_start",
+                    "message": "正在进行章节分析（大纲、细纲等）..."
+                })
+                yield f"data: {analysis_msg}\n\n"
+                
+                full_response = await ai_service.analyze_chapter_stream(
+                    content=request.content,
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    model=settings.model,
+                    temperature=settings.temperature,
+                    max_tokens=settings.max_tokens,
+                )
+                
+                # 解析分析结果
+                book_analysis_service = BookAnalysisService(db)
+                parsed_data = book_analysis_service.parse_single_chapter_response(full_response)
+                
+                if not parsed_data:
+                    raise ValueError("无法解析AI响应")
+                
+                # 发送第一次分析完成消息
+                analysis_complete_msg = json.dumps({
+                    "type": "analysis_complete",
+                    "message": "章节分析完成"
+                })
+                yield f"data: {analysis_complete_msg}\n\n"
+                
+                # 第二次调用：提取角色信息和状态
+                character_status_data = None
+                character_status_error = None
                 try:
-                    result = await book_analysis_service.incremental_insert_to_work(
-                        work_id=request.work_id,
-                        analysis_data={"characters": parsed_data.get("characters", [])},
-                        user_id=current_user_id,
+                    # 发送角色提取开始消息
+                    character_start_msg = json.dumps({
+                        "type": "character_extraction_start",
+                        "message": "正在提取角色信息和状态..."
+                    })
+                    yield f"data: {character_start_msg}\n\n"
+                    
+                    # 获取角色状态提取的提示词模板
+                    character_status_template = await book_analysis_service.get_default_prompt_template("character_status_extraction")
+                    
+                    if character_status_template:
+                        # 从模板的 metadata 中提取 system_prompt 和 user_prompt
+                        template_metadata = character_status_template.template_metadata or {}
+                        character_system_prompt = template_metadata.get("system_prompt")
+                        character_user_prompt = template_metadata.get("user_prompt")
+                        
+                        # 如果 metadata 中没有，则使用 prompt_content 作为 user_prompt
+                        if not character_user_prompt:
+                            character_user_prompt = character_status_template.format_prompt(content=request.content)
+                        else:
+                            # 如果 user_prompt 中有 {content} 变量，需要替换
+                            character_user_prompt = character_user_prompt.replace("{content}", request.content)
+                    else:
+                        # 使用默认的角色状态提取提示词
+                        character_system_prompt = """# 角色
+你是一位专业的小说分析专家，擅长从章节内容中提取角色信息和他们的当前状态。
+
+# 任务
+请仔细分析以下章节内容，提取出所有出现的角色信息，包括：
+1. 角色的姓名、特征、性格
+2. 角色在本章中的状态（情绪、身体状况、心理状态等）
+3. 角色之间的关系和互动
+4. 角色的行为、动作、对话等
+
+# 输出格式要求
+**必须严格按照以下JSON格式输出，不要添加任何其他文字：**
+
+```json
+{
+  "characters": [
+    {
+      "name": "角色名称",
+      "display_name": "显示名称",
+      "description": "角色描述",
+      "status": {
+        "emotion": "情绪状态",
+        "physical": "身体状况",
+        "mental": "心理状态",
+        "location": "所在位置",
+        "relationships": "与其他角色的关系状态"
+      },
+      "actions": ["角色在本章中的主要行为"],
+      "dialogue": ["角色的重要对话或内心独白"],
+      "appearance": "角色在本章中的外貌描述",
+      "personality_traits": ["性格特征"]
+    }
+  ]
+}
+```
+
+# 重要提示
+1. **必须输出有效的JSON格式**，不要添加任何Markdown代码块标记外的文字
+2. 只提取本章中实际出现的角色
+3. 状态信息要具体、准确，反映角色在本章中的实际情况
+4. 如果某个角色在本章中没有出现，不要包含在结果中
+
+# 章节内容
+{content}
+
+# 开始分析
+请严格按照上述JSON格式输出角色信息和状态："""
+                        character_user_prompt = character_system_prompt.replace("{content}", request.content)
+                    
+                    logger.info("开始提取角色信息和状态...")
+                    
+                    # 调用AI服务提取角色信息
+                    character_status_response = await ai_service.analyze_chapter_stream(
+                        content=request.content,
+                        prompt=character_user_prompt,
+                        system_prompt=character_system_prompt,
+                        model=settings.model,
+                        temperature=settings.temperature,
+                        max_tokens=settings.max_tokens,
                     )
-                    characters_count = result.get("characters_processed", 0)
-                    characters_saved = characters_count > 0
-                    if characters_saved:
-                        logger.info(f"✅ 成功保存 {characters_count} 个角色信息到作品 {request.work_id} 的 metainfo 中")
+                    
+                    # 解析角色状态信息
+                    character_status_data = book_analysis_service.parse_single_chapter_response(character_status_response)
+                    
+                    if character_status_data and character_status_data.get("characters"):
+                        logger.info(f"✅ 成功提取 {len(character_status_data.get('characters', []))} 个角色的状态信息")
+                        # 合并角色信息到主分析结果中
+                        if "characters" in parsed_data:
+                            # 合并角色信息，以角色状态提取的结果为准（更详细）
+                            existing_characters = {char.get("name"): char for char in parsed_data.get("characters", [])}
+                            new_characters = character_status_data.get("characters", [])
+                            
+                            # 合并逻辑：如果角色已存在，更新状态信息；如果不存在，添加新角色
+                            for new_char in new_characters:
+                                char_name = new_char.get("name")
+                                if char_name in existing_characters:
+                                    # 更新现有角色的状态信息
+                                    existing_char = existing_characters[char_name]
+                                    existing_char.update(new_char)
+                                else:
+                                    # 添加新角色
+                                    parsed_data.setdefault("characters", []).append(new_char)
+                        else:
+                            # 如果主分析结果中没有角色信息，直接使用提取的结果
+                            parsed_data["characters"] = character_status_data.get("characters", [])
+                        
+                        # 发送角色提取完成消息
+                        character_complete_msg = json.dumps({
+                            "type": "character_extraction_complete",
+                            "message": f"成功提取 {len(character_status_data.get('characters', []))} 个角色的状态信息",
+                            "characters_count": len(character_status_data.get('characters', []))
+                        })
+                        yield f"data: {character_complete_msg}\n\n"
+                
                 except Exception as e:
-                    logger.error(f"保存角色信息到作品 metainfo 失败: {e}")
-                    save_error = str(e)
-            
-            # 返回JSON响应
-            from fastapi.responses import JSONResponse
-            return JSONResponse({
-                "success": True,
-                "data": parsed_data,
-                "characters_saved": characters_saved,
-                "characters_count": characters_count,
-                "save_error": save_error,
-                "message": f"分析完成，已保存 {characters_count} 个角色信息到作品" if characters_saved else "分析完成"
-            })
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"章节分析失败: {traceback.format_exc()}")
-            raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
+                    logger.error(f"提取角色状态信息失败: {traceback.format_exc()}")
+                    character_status_error = str(e)
+                    # 发送角色提取错误消息
+                    character_error_msg = json.dumps({
+                        "type": "character_extraction_error",
+                        "message": f"提取角色状态信息失败: {str(e)}"
+                    })
+                    yield f"data: {character_error_msg}\n\n"
+                    # 角色状态提取失败不影响主分析结果，继续执行
+                
+                # 如果提供了work_id，保存角色信息到作品的 metainfo 中
+                characters_saved = False
+                characters_count = 0
+                save_error = None
+                
+                if request.work_id and parsed_data.get("characters"):
+                    try:
+                        save_start_msg = json.dumps({
+                            "type": "save_start",
+                            "message": "正在保存角色信息到作品..."
+                        })
+                        yield f"data: {save_start_msg}\n\n"
+                        
+                        result = await book_analysis_service.incremental_insert_to_work(
+                            work_id=request.work_id,
+                            analysis_data={"characters": parsed_data.get("characters", [])},
+                            user_id=current_user_id,
+                        )
+                        characters_count = result.get("characters_processed", 0)
+                        characters_saved = characters_count > 0
+                        if characters_saved:
+                            logger.info(f"✅ 成功保存 {characters_count} 个角色信息到作品 {request.work_id} 的 metainfo 中")
+                            save_success_msg = json.dumps({
+                                "type": "save_complete",
+                                "message": f"已保存 {characters_count} 个角色信息到作品",
+                                "characters_count": characters_count
+                            })
+                            yield f"data: {save_success_msg}\n\n"
+                    except Exception as e:
+                        logger.error(f"保存角色信息到作品 metainfo 失败: {e}")
+                        save_error = str(e)
+                        save_error_msg = json.dumps({
+                            "type": "save_error",
+                            "message": f"保存角色信息失败: {str(e)}"
+                        })
+                        yield f"data: {save_error_msg}\n\n"
+                
+                # 发送结构化数据消息
+                structured_msg = json.dumps({
+                    "type": "structured_data",
+                    "data": parsed_data
+                })
+                yield f"data: {structured_msg}\n\n"
+                
+                # 发送完成消息
+                done_msg = json.dumps({
+                    "type": "done",
+                    "message": f"分析完成，已保存 {characters_count} 个角色信息到作品" if characters_saved else "分析完成",
+                    "characters_saved": characters_saved,
+                    "characters_count": characters_count,
+                    "character_status_extracted": character_status_data is not None,
+                    "character_status_error": character_status_error,
+                    "save_error": save_error
+                })
+                yield f"data: {done_msg}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Error in analysis stream: {traceback.format_exc()}")
+                import json
+                error_data = json.dumps({"type": "error", "message": str(e)})
+                yield f"data: {error_data}\n\n"
+
+        return StreamingResponse(
+            generate_analysis(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "*",
+            },
+        )
 
     except HTTPException:
         raise
@@ -965,7 +1162,7 @@ async def analyze_chapter_by_file(
     summary="逐章生成大纲和细纲接口",
     description="为作品的所有章节（或指定章节）逐章生成大纲和细纲，从work的metadata中获取characters和locations信息",
     responses={
-        200: {"description": "生成成功，返回流式响应"},
+        200: {"description": "生成成功，返回JSON格式结果"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
         503: {"model": ErrorResponse, "description": "AI服务不可用"},
@@ -991,11 +1188,13 @@ async def generate_chapter_outlines(
         current_user_id: 当前用户ID
     
     Returns:
-        StreamingResponse: 服务器发送事件流
+        JSONResponse: JSON格式的生成结果
     """
     try:
         # 验证作品是否存在
         from memos.api.services.work_service import WorkService
+        from fastapi.responses import JSONResponse
+        
         work_service = WorkService(db)
         work = await work_service.get_work_by_id(work_id)
         if not work:
@@ -1036,103 +1235,256 @@ async def generate_chapter_outlines(
             f"章节数量: {len(chapter_id_list) if chapter_id_list else '全部'}"
         )
         
-        # 执行流式生成
-        # 注意：在异步生成器中创建独立的数据库会话，避免使用依赖注入的会话
-        # 这样可以防止会话生命周期冲突
-        async def generate_outlines():
-            """生成大纲和细纲响应"""
-            # 创建独立的数据库会话用于生成器内部操作
-            from memos.api.core.database import AsyncSessionLocal
-            async_session = AsyncSessionLocal()
-            try:
-                import json
-                
-                # 发送开始消息
-                start_msg = json.dumps({
-                    "type": "start",
-                    "message": f"开始为作品《{work.title}》生成章节大纲和细纲"
-                })
-                yield f"data: {start_msg}\n\n"
-                
-                # 使用独立会话创建服务实例
-                book_analysis_service_internal = BookAnalysisService(async_session)
-                
-                # 逐章生成大纲和细纲
-                async for result in book_analysis_service_internal.generate_outlines_for_all_chapters(
-                    work_id=work_id,
-                    ai_service=ai_service,
-                    prompt=prompt,
-                    settings=analysis_settings,
-                    chapter_ids=chapter_id_list
-                ):
-                    if "error" in result:
-                        # 发送错误消息
-                        error_msg = json.dumps({
-                            "type": "chapter_error",
-                            "chapter_id": result.get("chapter_id"),
-                            "chapter_number": result.get("chapter_number"),
-                            "index": result.get("index"),
-                            "total": result.get("total"),
-                            "message": result.get("error")
-                        })
-                        yield f"data: {error_msg}\n\n"
-                    else:
-                        # 发送成功消息
-                        success_msg = json.dumps({
-                            "type": "chapter_complete",
-                            "chapter_id": result.get("chapter_id"),
-                            "chapter_number": result.get("chapter_number"),
-                            "title": result.get("title"),
-                            "index": result.get("index"),
-                            "total": result.get("total"),
-                            "outline": result.get("outline", {}),
-                            "detailed_outline": result.get("detailed_outline", {}),
-                            "message": f"第 {result.get('chapter_number')} 章《{result.get('title')}》大纲和细纲生成完成"
-                        })
-                        yield f"data: {success_msg}\n\n"
-                
-                # 提交所有更改
-                await async_session.commit()
-                
-                # 发送完成消息
-                done_msg = json.dumps({
-                    "type": "done",
-                    "message": "所有章节的大纲和细纲生成完成"
-                })
-                yield f"data: {done_msg}\n\n"
-                
-            except Exception as e:
-                logger.error(f"生成大纲和细纲过程出错: {traceback.format_exc()}")
-                # 回滚事务
-                try:
-                    await async_session.rollback()
-                except Exception as rollback_error:
-                    logger.error(f"回滚事务失败: {rollback_error}")
-                
-                error_msg = json.dumps({
-                    "type": "error",
-                    "message": f"服务器错误: {str(e)}"
-                })
-                yield f"data: {error_msg}\n\n"
-            finally:
-                # 确保会话被正确关闭
-                try:
-                    await async_session.close()
-                except Exception as close_error:
-                    logger.error(f"关闭数据库会话失败: {close_error}")
+        # 收集所有章节的处理结果
+        results = []
+        total_chapters = 0
+        success_count = 0
+        error_count = 0
         
-        return StreamingResponse(
-            generate_outlines(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*",
-            },
-        )
+        # 收集所有章节的角色信息
+        all_characters = []
+        characters_extraction_errors = []
+        
+        try:
+            # 逐章生成大纲和细纲
+            async for result in book_analysis_service.generate_outlines_for_all_chapters(
+                work_id=work_id,
+                ai_service=ai_service,
+                prompt=prompt,
+                settings=analysis_settings,
+                chapter_ids=chapter_id_list
+            ):
+                if "error" in result:
+                    error_count += 1
+                    results.append({
+                        "chapter_id": result.get("chapter_id"),
+                        "chapter_number": result.get("chapter_number"),
+                        "index": result.get("index"),
+                        "total": result.get("total"),
+                        "error": result.get("error"),
+                        "success": False
+                    })
+                else:
+                    success_count += 1
+                    chapter_id = result.get("chapter_id")
+                    chapter_number = result.get("chapter_number")
+                    
+                    # 提取该章节的角色信息
+                    chapter_characters = []
+                    try:
+                        # 获取章节内容
+                        chapter_content = await book_analysis_service.get_chapter_content(chapter_id)
+                        
+                        if chapter_content:
+                            logger.info(f"开始为章节 {chapter_id} 提取角色信息...")
+                            
+                            # 获取角色状态提取的提示词模板
+                            character_status_template = await book_analysis_service.get_default_prompt_template("character_status_extraction")
+                            
+                            if character_status_template:
+                                # 从模板的 metadata 中提取 system_prompt 和 user_prompt
+                                template_metadata = character_status_template.template_metadata or {}
+                                character_system_prompt = template_metadata.get("system_prompt")
+                                character_user_prompt = template_metadata.get("user_prompt")
+                                
+                                # 如果 metadata 中没有，则使用 prompt_content 作为 user_prompt
+                                if not character_user_prompt:
+                                    character_user_prompt = character_status_template.format_prompt(content=chapter_content)
+                                else:
+                                    # 如果 user_prompt 中有 {content} 变量，需要替换
+                                    character_user_prompt = character_user_prompt.replace("{content}", chapter_content)
+                            else:
+                                # 使用默认的角色状态提取提示词
+                                character_system_prompt = """# 角色
+                                    你是一位专业的小说分析专家，擅长从章节内容中提取角色信息和他们的当前状态。
+
+                                    # 任务
+                                    请仔细分析以下章节内容，提取出所有出现的角色信息，包括：
+                                    1. 角色的姓名、特征、性格
+                                    2. 角色在本章中的状态（情绪、身体状况、心理状态等）
+                                    3. 角色之间的关系和互动
+                                    4. 角色的行为、动作、对话等
+
+                                    # 输出格式要求
+                                    **必须严格按照以下JSON格式输出，不要添加任何其他文字：**
+
+                                    ```json
+                                    {
+                                    "characters": [
+                                        {
+                                        "name": "角色名称",
+                                        "display_name": "显示名称",
+                                        "description": "角色描述",
+                                        "status": {
+                                            "emotion": "情绪状态",
+                                            "physical": "身体状况",
+                                            "mental": "心理状态",
+                                            "location": "所在位置",
+                                            "relationships": "与其他角色的关系状态"
+                                        },
+                                        "actions": ["角色在本章中的主要行为"],
+                                        "dialogue": ["角色的重要对话或内心独白"],
+                                        "appearance": "角色在本章中的外貌描述",
+                                        "personality_traits": ["性格特征"]
+                                        }
+                                    ]
+                                    }
+                                    ```
+
+                                    # 重要提示
+                                    1. **必须输出有效的JSON格式**，不要添加任何Markdown代码块标记外的文字
+                                    2. 只提取本章中实际出现的角色
+                                    3. 状态信息要具体、准确，反映角色在本章中的实际情况
+                                    4. 如果某个角色在本章中没有出现，不要包含在结果中
+
+                                    # 章节内容
+                                    {content}
+                                    # 开始分析
+                                    请严格按照上述JSON格式输出角色信息和状态："""
+                                character_user_prompt = character_system_prompt.replace("{content}", chapter_content)
+                            
+                            # 调用AI服务提取角色信息
+                            character_status_response = await ai_service.analyze_chapter_stream(
+                                content=chapter_content,
+                                prompt=character_user_prompt,
+                                system_prompt=character_system_prompt,
+                                model=analysis_settings.get("model"),
+                                temperature=analysis_settings.get("temperature", 0.7),
+                                max_tokens=analysis_settings.get("max_tokens", 4000),
+                            )
+                            
+                            # 解析角色状态信息
+                            character_status_data = book_analysis_service.parse_single_chapter_response(character_status_response)
+                            
+                            if character_status_data and character_status_data.get("characters"):
+                                chapter_characters = character_status_data.get("characters", [])
+                                all_characters.extend(chapter_characters)
+                                logger.info(f"✅ 成功为章节 {chapter_id} 提取 {len(chapter_characters)} 个角色的状态信息")
+                            else:
+                                logger.warning(f"⚠️ 章节 {chapter_id} 未提取到角色信息")
+                        else:
+                            logger.warning(f"⚠️ 章节 {chapter_id} 内容为空，跳过角色提取")
+                    except Exception as e:
+                        logger.error(f"提取章节 {chapter_id} 的角色信息失败: {traceback.format_exc()}")
+                        characters_extraction_errors.append({
+                            "chapter_id": chapter_id,
+                            "chapter_number": chapter_number,
+                            "error": str(e)
+                        })
+                        # 角色提取失败不影响主流程，继续执行
+                    
+                    results.append({
+                        "chapter_id": chapter_id,
+                        "chapter_number": chapter_number,
+                        "title": result.get("title"),
+                        "index": result.get("index"),
+                        "total": result.get("total"),
+                        "outline": result.get("outline", {}),
+                        "detailed_outline": result.get("detailed_outline", {}),
+                        "characters_count": len(chapter_characters),
+                        "success": True
+                    })
+                    total_chapters = result.get("total", 0)
+            
+            # 合并并保存角色信息到作品
+            characters_saved = False
+            characters_count = 0
+            save_error = None
+            
+            if all_characters:
+                try:
+                    logger.info(f"开始保存 {len(all_characters)} 个角色信息到作品 {work_id}...")
+                    
+                    # 合并角色信息（去重）
+                    character_map = {}
+                    for char_data in all_characters:
+                        if not isinstance(char_data, dict):
+                            continue
+                        char_name = char_data.get("name", "")
+                        if char_name:
+                            if char_name in character_map:
+                                # 合并现有角色
+                                existing_char = character_map[char_name]
+                                # 深度合并
+                                for key, value in char_data.items():
+                                    if key in existing_char and isinstance(existing_char[key], dict) and isinstance(value, dict):
+                                        existing_char[key].update(value)
+                                    else:
+                                        existing_char[key] = value
+                            else:
+                                # 添加新角色
+                                character_map[char_name] = char_data
+                    
+                    characters_count = len(character_map)
+                    
+                    if characters_count > 0:
+                        # 保存角色信息到作品的 metainfo 中
+                        logger.info(f"准备保存 {characters_count} 个角色到作品 {work_id} 的 metainfo 中")
+                        save_result = await book_analysis_service.incremental_insert_to_work(
+                            work_id=work_id,
+                            analysis_data={"characters": list(character_map.values())},
+                            user_id=current_user_id,
+                        )
+                        characters_count = save_result.get("characters_processed", characters_count)
+                        characters_saved = characters_count > 0
+                        
+                        # 验证角色信息是否已保存到 work.work_metadata 中
+                        if characters_saved:
+                            # 重新查询 work 对象以获取最新数据（因为 incremental_insert_to_work 已经提交并刷新了）
+                            from memos.api.services.work_service import WorkService
+                            work_service = WorkService(db)
+                            updated_work = await work_service.get_work_by_id(work_id)
+                            if updated_work:
+                                work_metadata = updated_work.work_metadata or {}
+                                saved_characters = work_metadata.get("characters", [])
+                                logger.info(
+                                    f"✅ 成功保存 {characters_count} 个角色信息到作品 {work_id} 的 metainfo 中，"
+                                    f"当前 work_metadata 中共有 {len(saved_characters)} 个角色"
+                                )
+                                # 更新 work 对象引用
+                                work = updated_work
+                            else:
+                                logger.error(f"❌ 无法重新查询作品 {work_id}，无法验证保存结果")
+                        else:
+                            logger.warning(f"⚠️ 保存角色信息到作品 {work_id} 失败，可能没有新角色（characters_processed=0）")
+                except Exception as e:
+                    logger.error(f"保存角色信息到作品 metainfo 失败: {traceback.format_exc()}")
+                    save_error = str(e)
+            
+            # 提交所有更改
+            await db.commit()
+            
+            message_parts = [f"所有章节的大纲和细纲生成完成，成功: {success_count}，失败: {error_count}"]
+            if characters_saved:
+                message_parts.append(f"已保存 {characters_count} 个角色信息到作品")
+            elif all_characters:
+                message_parts.append(f"提取了 {len(all_characters)} 个角色信息，但保存失败")
+            
+            return JSONResponse({
+                "success": True,
+                "message": "；".join(message_parts),
+                "work_id": work_id,
+                "work_title": work.title,
+                "total_chapters": total_chapters,
+                "success_count": success_count,
+                "error_count": error_count,
+                "characters_extracted": len(all_characters),
+                "characters_saved": characters_saved,
+                "characters_count": characters_count,
+                "characters_extraction_errors": characters_extraction_errors,
+                "save_error": save_error,
+                "results": results
+            })
+            
+        except Exception as e:
+            logger.error(f"生成大纲和细纲过程出错: {traceback.format_exc()}")
+            # 回滚事务
+            try:
+                await db.rollback()
+            except Exception as rollback_error:
+                logger.error(f"回滚事务失败: {rollback_error}")
+            
+            raise HTTPException(status_code=500, detail=f"生成过程出错: {str(e)}")
     
     except HTTPException:
         raise
