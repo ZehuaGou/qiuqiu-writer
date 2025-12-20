@@ -58,9 +58,9 @@ async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSessi
 @router.post(
     "/analyze-chapter",
     summary="章节分析接口",
-    description="对小说章节内容进行AI分析，返回结构化的章节分析结果（流式响应）",
+    description="对小说章节内容进行AI分析，返回结构化的章节分析结果（JSON格式）。如果提供了work_id，分析完成后会将角色信息保存到作品的metainfo中。",
     responses={
-        200: {"description": "分析成功，返回流式响应"},
+        200: {"description": "分析成功，返回JSON响应"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
         429: {"model": ErrorResponse, "description": "请求过于频繁"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
@@ -70,6 +70,7 @@ async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSessi
 async def analyze_chapter(
     request: AnalyzeChapterRequest,
     db: AsyncSession = Depends(get_db_session),
+    current_user_id: int = Depends(get_current_user_id),
 ):
     """
     对章节内容进行AI分析
@@ -79,7 +80,7 @@ async def analyze_chapter(
         db: 数据库会话
 
     Returns:
-        StreamingResponse: 服务器发送事件流
+        JSONResponse: JSON格式的分析结果
     """
     try:
         # 验证请求参数
@@ -128,70 +129,63 @@ async def analyze_chapter(
             f"content_length={len(request.content)}, "
             f"model={settings.model}, "
             f"temperature={settings.temperature}, "
-            f"max_tokens={settings.max_tokens}"
+            f"max_tokens={settings.max_tokens}, "
+            f"work_id={request.work_id}"
         )
 
-        # 执行流式分析
-        async def generate_analysis():
-            """生成分析响应"""
-            try:
-                full_response = ""
-                async for message in ai_service.analyze_chapter_stream(
-                    content=request.content,
-                    prompt=user_prompt,
-                    system_prompt=system_prompt,
-                    model=settings.model,  # 如果为None，AI服务会使用默认模型
-                    temperature=settings.temperature,
-                    max_tokens=settings.max_tokens,
-                ):
-                    # 如果是chunk消息，累积内容用于后续解析
-                    if message.startswith("data: "):
-                        import json
-                        try:
-                            data = json.loads(message[6:])
-                            if data.get("type") == "chunk":
-                                full_response += data.get("content", "")
-                        except:
-                            pass
-                    
-                    yield message
-                
-                # 尝试解析JSON格式的响应（如果prompt返回JSON）
-                if full_response:
-                    try:
-                        book_analysis_service = BookAnalysisService(db)
-                        parsed_data = book_analysis_service.parse_single_chapter_response(full_response)
-                        
-                        if parsed_data:
-                            # 发送结构化数据消息
-                            import json
-                            structured_msg = json.dumps({
-                                "type": "structured_data",
-                                "data": parsed_data
-                            })
-                            yield f"data: {structured_msg}\n\n"
-                            logger.info("✅ 成功解析章节结构化数据（包含大纲和细纲）")
-                    except Exception as e:
-                        logger.debug(f"解析结构化数据失败（可能是Markdown格式）: {e}")
-                        
-            except Exception as e:
-                logger.error(f"Error in analysis stream: {traceback.format_exc()}")
-                import json
-                error_data = json.dumps({"type": "error", "message": str(e)})
-                yield f"data: {error_data}\n\n"
-
-        return StreamingResponse(
-            generate_analysis(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",  # 禁用nginx缓冲
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*",
-            },
-        )
+        try:
+            # 直接获取完整响应
+            full_response = await ai_service.analyze_chapter_stream(
+                content=request.content,
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                model=settings.model,
+                temperature=settings.temperature,
+                max_tokens=settings.max_tokens,
+            )
+            
+            # 解析分析结果
+            book_analysis_service = BookAnalysisService(db)
+            parsed_data = book_analysis_service.parse_single_chapter_response(full_response)
+            
+            if not parsed_data:
+                raise HTTPException(status_code=500, detail="无法解析AI响应")
+            
+            # 如果提供了work_id，保存角色信息到作品的 metainfo 中
+            characters_saved = False
+            characters_count = 0
+            save_error = None
+            
+            if request.work_id and parsed_data.get("characters"):
+                try:
+                    result = await book_analysis_service.incremental_insert_to_work(
+                        work_id=request.work_id,
+                        analysis_data={"characters": parsed_data.get("characters", [])},
+                        user_id=current_user_id,
+                    )
+                    characters_count = result.get("characters_processed", 0)
+                    characters_saved = characters_count > 0
+                    if characters_saved:
+                        logger.info(f"✅ 成功保存 {characters_count} 个角色信息到作品 {request.work_id} 的 metainfo 中")
+                except Exception as e:
+                    logger.error(f"保存角色信息到作品 metainfo 失败: {e}")
+                    save_error = str(e)
+            
+            # 返回JSON响应
+            from fastapi.responses import JSONResponse
+            return JSONResponse({
+                "success": True,
+                "data": parsed_data,
+                "characters_saved": characters_saved,
+                "characters_count": characters_count,
+                "save_error": save_error,
+                "message": f"分析完成，已保存 {characters_count} 个角色信息到作品" if characters_saved else "分析完成"
+            })
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"章节分析失败: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
 
     except HTTPException:
         raise
@@ -205,7 +199,7 @@ async def analyze_chapter(
     summary="逐章渐进式分析接口",
     description="逐章分析小说内容，每分析完一章就立即插入到目标作品中（包括角色、地点、章节）",
     responses={
-        200: {"description": "分析成功，返回流式响应"},
+        200: {"description": "分析成功，返回JSON响应"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
         503: {"model": ErrorResponse, "description": "AI服务不可用"},
@@ -227,7 +221,7 @@ async def analyze_chapters_incremental(
         current_user_id: 当前用户ID
     
     Returns:
-        StreamingResponse: 服务器发送事件流
+        JSONResponse: JSON格式的分析结果
     """
     try:
         # 验证请求参数
@@ -272,13 +266,14 @@ async def analyze_chapters_incremental(
             f"model={settings.model}"
         )
 
-        # 执行流式分析
-        async def generate_analysis():
-            """生成分析响应"""
-            try:
-                accumulated_content = ""  # 累积的章节内容
-                
-                for idx, chapter_content in enumerate(chapters_content, 1):
+        # 执行非流式分析
+        try:
+            accumulated_content = ""  # 累积的章节内容
+            results = []  # 存储每章的分析结果
+            errors = []  # 存储错误信息
+            
+            for idx, chapter_content in enumerate(chapters_content, 1):
+                try:
                     # 累积当前章节内容
                     accumulated_content += chapter_content + "\n\n"
                     
@@ -286,96 +281,62 @@ async def analyze_chapters_incremental(
                     # 使用 replace 而不是 format，避免 JSON 示例中的大括号被误解析
                     full_prompt = enhanced_prompt_template.replace("{content}", accumulated_content)
                     
-                    # 发送章节开始分析的消息
-                    import json
-                    chapter_start_msg = json.dumps({
-                        "type": "chapter_start",
-                        "message": f"开始分析第 {idx} 章",
-                        "chapter_index": idx,
-                        "total_chapters": len(chapters_content)
-                    })
-                    yield f"data: {chapter_start_msg}\n\n"
+                    logger.info(f"开始分析第 {idx} 章")
                     
                     # 分析当前累积的内容
-                    full_response = ""
-                    async for message in ai_service.analyze_chapter_stream(
+                    full_response = await ai_service.analyze_chapter_stream(
                         content=accumulated_content,
                         prompt=full_prompt,
                         system_prompt=None,  # 使用默认 system_prompt
                         model=settings.model,
                         temperature=settings.temperature,
                         max_tokens=settings.max_tokens * 2,
-                    ):
-                        # 如果是chunk消息，累积内容
-                        if message.startswith("data: "):
-                            try:
-                                data = json.loads(message[6:])
-                                if data.get("type") == "chunk":
-                                    full_response += data.get("content", "")
-                            except:
-                                pass
-                        
-                        yield message
+                    )
                     
                     # 解析AI响应并渐进式插入
-                    try:
-                        analysis_data = book_analysis_service.parse_ai_response(full_response)
+                    analysis_data = book_analysis_service.parse_ai_response(full_response)
+                    
+                    if not analysis_data:
+                        raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
+                    
+                    # 渐进式插入到作品
+                    result = await book_analysis_service.incremental_insert_to_work(
+                        work_id=work_id,
+                        analysis_data=analysis_data,
+                        user_id=current_user_id,
+                        chapter_index=idx
+                    )
+                    
+                    results.append({
+                        "chapter_index": idx,
+                        "message": f"第 {idx} 章分析完成并已插入作品",
+                        "data": result
+                    })
+                    logger.info(f"✅ 第 {idx} 章分析完成并已插入作品")
+                    
+                except Exception as e:
+                    logger.error(f"渐进式插入失败 (章节 {idx}): {traceback.format_exc()}")
+                    errors.append({
+                        "chapter_index": idx,
+                        "message": f"第 {idx} 章插入失败: {str(e)}",
+                        "error": str(e)
+                    })
+            
+            # 返回JSON响应
+            from fastapi.responses import JSONResponse
+            return JSONResponse({
+                "success": True,
+                "message": f"所有章节分析完成，共 {len(chapters_content)} 章",
+                "total_chapters": len(chapters_content),
+                "results": results,
+                "errors": errors,
+                "success_count": len(results),
+                "error_count": len(errors)
+            })
                         
-                        if not analysis_data:
-                            raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
-                        
-                        # 渐进式插入到作品
-                        result = await book_analysis_service.incremental_insert_to_work(
-                            work_id=work_id,
-                            analysis_data=analysis_data,
-                            user_id=current_user_id,
-                            chapter_index=idx
-                        )
-                        
-                        # 发送插入成功的消息
-                        insert_success_msg = json.dumps({
-                            "type": "chapter_inserted",
-                            "message": f"第 {idx} 章分析完成并已插入作品",
-                            "chapter_index": idx,
-                            "data": result
-                        })
-                        yield f"data: {insert_success_msg}\n\n"
-                        
-                    except Exception as e:
-                        logger.error(f"渐进式插入失败 (章节 {idx}): {traceback.format_exc()}")
-                        error_msg = json.dumps({
-                            "type": "chapter_insert_error",
-                            "message": f"第 {idx} 章插入失败: {str(e)}",
-                            "chapter_index": idx
-                        })
-                        yield f"data: {error_msg}\n\n"
-                
-                # 发送完成消息
-                complete_msg = json.dumps({
-                    "type": "all_chapters_complete",
-                    "message": "所有章节分析完成",
-                    "total_chapters": len(chapters_content)
-                })
-                yield f"data: {complete_msg}\n\n"
-                        
-            except Exception as e:
-                logger.error(f"Error in incremental analysis stream: {traceback.format_exc()}")
-                import json
-                error_data = json.dumps({"type": "error", "message": str(e)})
-                yield f"data: {error_data}\n\n"
-
-        return StreamingResponse(
-            generate_analysis(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*",
-            },
-        )
+        except Exception as e:
+            logger.error(f"Error in incremental analysis: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
 
     except HTTPException:
         raise
@@ -387,9 +348,9 @@ async def analyze_chapters_incremental(
 @router.post(
     "/analyze-work-chapters",
     summary="分析作品所有章节接口",
-    description="直接分析作品的所有章节，后端自动获取章节内容并逐章处理（流式响应）",
+    description="直接分析作品的所有章节，后端自动获取章节内容并逐章处理（非流式响应）",
     responses={
-        200: {"description": "分析成功，返回流式响应"},
+        200: {"description": "分析成功，返回JSON响应"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
         503: {"model": ErrorResponse, "description": "AI服务不可用"},
@@ -411,7 +372,7 @@ async def analyze_work_chapters(
         current_user_id: 当前用户ID
     
     Returns:
-        StreamingResponse: 服务器发送事件流
+        JSONResponse: JSON格式的分析结果
     """
     try:
         # 获取AI服务
@@ -466,71 +427,63 @@ async def analyze_work_chapters(
             f"model={analysis_settings.model}"
         )
 
-        # 执行流式分析
-        async def generate_analysis():
-            """生成分析响应"""
-            try:
-                import json
-                
-                # 发送开始消息
-                start_msg = json.dumps({
-                    "type": "start",
-                    "message": f"开始分析作品《{work.title}》的所有章节，共 {total} 章",
-                    "total_chapters": total
-                })
-                yield f"data: {start_msg}\n\n"
-                
-                accumulated_content = ""  # 累积的章节内容
-                
-                for idx, chapter in enumerate(chapters, 1):
-                    # 获取章节内容
-                    chapter_content = ""
-                    try:
-                        # 优先从 ShareDB 获取
-                        document_id_new = f"work_{work_id}_chapter_{chapter.id}"
-                        document_id_old = f"chapter_{chapter.id}"
-                        
-                        document = await sharedb_service.get_document(document_id_new)
-                        if not document:
-                            document = await sharedb_service.get_document(document_id_old)
-                        
-                        if document:
-                            content = document.get("content", "")
-                            if isinstance(content, dict):
-                                # 如果是对象，尝试提取内容
-                                content = content.get("content", "") or json.dumps(content, ensure_ascii=False)
-                            elif not isinstance(content, str):
-                                content = str(content)
-                            chapter_content = content
-                        else:
-                            # 如果 ShareDB 没有，尝试从章节元数据获取
-                            if chapter.chapter_metadata and isinstance(chapter.chapter_metadata, dict):
-                                chapter_content = chapter.chapter_metadata.get("content", "")
-                            
-                            if not chapter_content:
-                                logger.warning(f"章节 {chapter.id} 没有找到内容，跳过")
-                                # 发送跳过消息
-                                skip_msg = json.dumps({
-                                    "type": "chapter_skipped",
-                                    "message": f"第 {idx} 章《{chapter.title}》没有内容，跳过",
-                                    "chapter_index": idx,
-                                    "chapter_id": chapter.id,
-                                    "chapter_title": chapter.title
-                                })
-                                yield f"data: {skip_msg}\n\n"
-                                continue
-                    except Exception as e:
-                        logger.error(f"获取章节 {chapter.id} 内容失败: {traceback.format_exc()}")
-                        # 发送错误消息但继续处理下一章
-                        error_msg = json.dumps({
-                            "type": "chapter_error",
-                            "message": f"第 {idx} 章《{chapter.title}》获取内容失败: {str(e)}",
-                            "chapter_index": idx,
-                            "chapter_id": chapter.id
-                        })
-                        yield f"data: {error_msg}\n\n"
-                        continue
+        # 执行非流式分析
+        try:
+            import json
+            
+            logger.info(f"开始分析作品《{work.title}》的所有章节，共 {total} 章")
+            
+            accumulated_content = ""  # 累积的章节内容
+            results = []  # 存储每章的分析结果
+            skipped = []  # 存储跳过的章节
+            errors = []  # 存储错误信息
+            
+            for idx, chapter in enumerate(chapters, 1):
+                # 获取章节内容
+                chapter_content = ""
+                try:
+                    # 优先从 ShareDB 获取
+                    document_id_new = f"work_{work_id}_chapter_{chapter.id}"
+                    document_id_old = f"chapter_{chapter.id}"
                     
+                    document = await sharedb_service.get_document(document_id_new)
+                    if not document:
+                        document = await sharedb_service.get_document(document_id_old)
+                    
+                    if document:
+                        content = document.get("content", "")
+                        if isinstance(content, dict):
+                            # 如果是对象，尝试提取内容
+                            content = content.get("content", "") or json.dumps(content, ensure_ascii=False)
+                        elif not isinstance(content, str):
+                            content = str(content)
+                        chapter_content = content
+                    else:
+                        # 如果 ShareDB 没有，尝试从章节元数据获取
+                        if chapter.chapter_metadata and isinstance(chapter.chapter_metadata, dict):
+                            chapter_content = chapter.chapter_metadata.get("content", "")
+                        
+                        if not chapter_content:
+                            logger.warning(f"章节 {chapter.id} 没有找到内容，跳过")
+                            skipped.append({
+                                "chapter_index": idx,
+                                "chapter_id": chapter.id,
+                                "chapter_number": chapter.chapter_number,
+                                "chapter_title": chapter.title,
+                                "message": f"第 {idx} 章《{chapter.title}》没有内容，跳过"
+                            })
+                            continue
+                except Exception as e:
+                    logger.error(f"获取章节 {chapter.id} 内容失败: {traceback.format_exc()}")
+                    errors.append({
+                        "chapter_index": idx,
+                        "chapter_id": chapter.id,
+                        "message": f"第 {idx} 章《{chapter.title}》获取内容失败: {str(e)}",
+                        "error": str(e)
+                    })
+                    continue
+                
+                try:
                     # 累积当前章节内容
                     accumulated_content += f"第{chapter.chapter_number}章 {chapter.title}\n\n{chapter_content}\n\n"
                     
@@ -538,102 +491,68 @@ async def analyze_work_chapters(
                     # 使用 replace 而不是 format，避免 JSON 示例中的大括号被误解析
                     full_prompt = enhanced_prompt_template.replace("{content}", accumulated_content)
                     
-                    # 发送章节开始分析的消息
-                    chapter_start_msg = json.dumps({
-                        "type": "chapter_start",
-                        "message": f"开始分析第 {idx} 章《{chapter.title}》",
-                        "chapter_index": idx,
-                        "total_chapters": total,
-                        "chapter_id": chapter.id,
-                        "chapter_number": chapter.chapter_number,
-                        "chapter_title": chapter.title
-                    })
-                    yield f"data: {chapter_start_msg}\n\n"
+                    logger.info(f"开始分析第 {idx} 章《{chapter.title}》")
                     
                     # 分析当前累积的内容
-                    full_response = ""
-                    async for message in ai_service.analyze_chapter_stream(
+                    full_response = await ai_service.analyze_chapter_stream(
                         content=accumulated_content,
                         prompt=full_prompt,
                         system_prompt=None,  # 使用默认 system_prompt
                         model=analysis_settings.model,
                         temperature=analysis_settings.temperature,
                         max_tokens=analysis_settings.max_tokens * 2,
-                    ):
-                        # 如果是chunk消息，累积内容
-                        if message.startswith("data: "):
-                            try:
-                                data = json.loads(message[6:])
-                                if data.get("type") == "chunk":
-                                    full_response += data.get("content", "")
-                            except:
-                                pass
-                        
-                        yield message
+                    )
                     
                     # 解析AI响应并渐进式插入
-                    try:
-                        analysis_data = book_analysis_service.parse_ai_response(full_response)
+                    analysis_data = book_analysis_service.parse_ai_response(full_response)
+                    
+                    if not analysis_data:
+                        raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
+                    
+                    # 渐进式插入到作品
+                    result = await book_analysis_service.incremental_insert_to_work(
+                        work_id=work_id,
+                        analysis_data=analysis_data,
+                        user_id=current_user_id,
+                        chapter_index=idx
+                    )
+                    
+                    results.append({
+                        "chapter_index": idx,
+                        "chapter_id": chapter.id,
+                        "chapter_number": chapter.chapter_number,
+                        "chapter_title": chapter.title,
+                        "message": f"第 {idx} 章《{chapter.title}》分析完成并已插入作品",
+                        "data": result
+                    })
+                    logger.info(f"✅ 第 {idx} 章《{chapter.title}》分析完成并已插入作品")
+                    
+                except Exception as e:
+                    logger.error(f"渐进式插入失败 (章节 {idx}): {traceback.format_exc()}")
+                    errors.append({
+                        "chapter_index": idx,
+                        "chapter_id": chapter.id,
+                        "message": f"第 {idx} 章《{chapter.title}》插入失败: {str(e)}",
+                        "error": str(e)
+                    })
+            
+            # 返回JSON响应
+            from fastapi.responses import JSONResponse
+            return JSONResponse({
+                "success": True,
+                "message": f"所有章节分析完成，共 {total} 章",
+                "total_chapters": total,
+                "results": results,
+                "skipped": skipped,
+                "errors": errors,
+                "success_count": len(results),
+                "skipped_count": len(skipped),
+                "error_count": len(errors)
+            })
                         
-                        if not analysis_data:
-                            raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
-                        
-                        # 渐进式插入到作品
-                        result = await book_analysis_service.incremental_insert_to_work(
-                            work_id=work_id,
-                            analysis_data=analysis_data,
-                            user_id=current_user_id,
-                            chapter_index=idx
-                        )
-                        
-                        # 发送插入成功的消息
-                        insert_success_msg = json.dumps({
-                            "type": "chapter_inserted",
-                            "message": f"第 {idx} 章《{chapter.title}》分析完成并已插入作品",
-                            "chapter_index": idx,
-                            "chapter_id": chapter.id,
-                            "chapter_number": chapter.chapter_number,
-                            "chapter_title": chapter.title,
-                            "data": result
-                        })
-                        yield f"data: {insert_success_msg}\n\n"
-                        
-                    except Exception as e:
-                        logger.error(f"渐进式插入失败 (章节 {idx}): {traceback.format_exc()}")
-                        error_msg = json.dumps({
-                            "type": "chapter_insert_error",
-                            "message": f"第 {idx} 章《{chapter.title}》插入失败: {str(e)}",
-                            "chapter_index": idx,
-                            "chapter_id": chapter.id
-                        })
-                        yield f"data: {error_msg}\n\n"
-                
-                # 发送完成消息
-                complete_msg = json.dumps({
-                    "type": "all_chapters_complete",
-                    "message": "所有章节分析完成",
-                    "total_chapters": total
-                })
-                yield f"data: {complete_msg}\n\n"
-                        
-            except Exception as e:
-                logger.error(f"Error in work chapters analysis stream: {traceback.format_exc()}")
-                import json
-                error_data = json.dumps({"type": "error", "message": str(e)})
-                yield f"data: {error_data}\n\n"
-
-        return StreamingResponse(
-            generate_analysis(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*",
-            },
-        )
+        except Exception as e:
+            logger.error(f"Error in work chapters analysis: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
 
     except HTTPException:
         raise
@@ -731,9 +650,9 @@ async def get_default_prompt():
 @router.post(
     "/analyze-book",
     summary="增强拆书分析接口",
-    description="对小说内容进行增强分析，识别角色、地图、章节大纲和细纲，并可直接创建作品（流式响应）",
+    description="对小说内容进行增强分析，识别角色、地图、章节大纲和细纲，并可直接创建作品（非流式响应）",
     responses={
-        200: {"description": "分析成功，返回流式响应"},
+        200: {"description": "分析成功，返回JSON响应"},
         400: {"model": ErrorResponse, "description": "请求参数错误"},
         500: {"model": ErrorResponse, "description": "服务器内部错误"},
         503: {"model": ErrorResponse, "description": "AI服务不可用"},
@@ -755,7 +674,7 @@ async def analyze_book(
         current_user_id: 当前用户ID
     
     Returns:
-        StreamingResponse: 服务器发送事件流
+        JSONResponse: JSON格式的分析结果
     """
     try:
         # 验证请求参数
@@ -793,82 +712,53 @@ async def analyze_book(
             f"model={settings.model}"
         )
 
-        # 执行流式分析
-        async def generate_analysis():
-            """生成分析响应"""
-            try:
-                full_response = ""
-                async for message in ai_service.analyze_chapter_stream(
-                    content=request.content,
-                    prompt=enhanced_prompt,
-                    system_prompt=None,  # 使用默认 system_prompt
-                    model=settings.model,
-                    temperature=settings.temperature,
-                    max_tokens=settings.max_tokens * 2,  # 增强分析需要更多tokens
-                ):
-                    # 如果是chunk消息，累积内容
-                    if message.startswith("data: "):
-                        import json
-                        try:
-                            data = json.loads(message[6:])
-                            if data.get("type") == "chunk":
-                                full_response += data.get("content", "")
-                        except:
-                            pass
-                    
-                    yield message
-                
-                # 如果启用了自动创建作品，解析响应并创建作品
-                if auto_create_work:
-                    try:
-                        # 解析AI响应
-                        analysis_data = book_analysis_service.parse_ai_response(full_response)
+        # 执行非流式分析
+        try:
+            # 直接获取完整响应
+            full_response = await ai_service.analyze_chapter_stream(
+                content=request.content,
+                prompt=enhanced_prompt,
+                system_prompt=None,  # 使用默认 system_prompt
+                model=settings.model,
+                temperature=settings.temperature,
+                max_tokens=settings.max_tokens * 2,  # 增强分析需要更多tokens
+            )
+            
+            # 解析AI响应
+            analysis_data = book_analysis_service.parse_ai_response(full_response)
+            
+            if not analysis_data:
+                raise ValueError("无法解析AI响应，可能返回的不是有效的JSON格式")
+            
+            # 如果启用了自动创建作品，解析响应并创建作品
+            work_result = None
+            work_creation_error = None
+            if auto_create_work:
+                try:
+                    # 创建作品
+                    work_result = await book_analysis_service.create_work_from_analysis(
+                        analysis_data=analysis_data,
+                        user_id=current_user_id
+                    )
+                    logger.info("✅ 作品创建成功")
+                except Exception as e:
+                    logger.error(f"自动创建作品失败: {traceback.format_exc()}")
+                    work_creation_error = str(e)
+            
+            # 返回JSON响应
+            from fastapi.responses import JSONResponse
+            return JSONResponse({
+                "success": True,
+                "message": "分析完成" + ("，作品已创建" if work_result else ""),
+                "data": analysis_data,
+                "work_created": work_result is not None,
+                "work_result": work_result,
+                "work_creation_error": work_creation_error
+            })
                         
-                        if not analysis_data:
-                            raise ValueError("无法解析AI响应，可能返回的不是有效的JSON格式")
-                        
-                        # 创建作品
-                        result = await book_analysis_service.create_work_from_analysis(
-                            analysis_data=analysis_data,
-                            user_id=current_user_id
-                        )
-                        
-                        # 发送创建成功的消息
-                        import json
-                        success_msg = json.dumps({
-                            "type": "work_created",
-                            "message": "作品创建成功",
-                            "data": result
-                        })
-                        yield f"data: {success_msg}\n\n"
-                        
-                    except Exception as e:
-                        logger.error(f"自动创建作品失败: {traceback.format_exc()}")
-                        import json
-                        error_msg = json.dumps({
-                            "type": "work_creation_error",
-                            "message": f"自动创建作品失败: {str(e)}"
-                        })
-                        yield f"data: {error_msg}\n\n"
-                        
-            except Exception as e:
-                logger.error(f"Error in analysis stream: {traceback.format_exc()}")
-                import json
-                error_data = json.dumps({"type": "error", "message": str(e)})
-                yield f"data: {error_data}\n\n"
-
-        return StreamingResponse(
-            generate_analysis(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "*",
-            },
-        )
+        except Exception as e:
+            logger.error(f"Error in book analysis: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
 
     except HTTPException:
         raise
@@ -1346,26 +1236,21 @@ async def generate_chapter_content(
                 })
                 yield f"data: {start_msg}\n\n"
                 
-                # 流式生成内容
+                # 流式生成内容（真正的流式响应）
                 full_content = ""
-                async for message in ai_service.analyze_chapter_stream(
-                    content="",  # 这里不需要内容，因为我们在prompt中已经包含了所有信息
+                async for content_chunk in ai_service.generate_content_stream(
                     prompt=user_prompt,
                     system_prompt=system_prompt,
                     model=analysis_settings.get("model"),
                     temperature=analysis_settings.get("temperature", 0.7),
                     max_tokens=analysis_settings.get("max_tokens", 8000),
                 ):
-                    # 转发AI服务的消息
-                    if message.startswith("data: "):
-                        try:
-                            data = json.loads(message[6:])
-                            if data.get("type") == "chunk":
-                                full_content += data.get("content", "")
-                        except:
-                            pass
+                    # 累积内容
+                    full_content += content_chunk
                     
-                    yield message
+                    # 实时发送内容块
+                    chunk_msg = json.dumps({"type": "chunk", "content": content_chunk})
+                    yield f"data: {chunk_msg}\n\n"
                 
                 # 发送完成消息
                 done_msg = json.dumps({

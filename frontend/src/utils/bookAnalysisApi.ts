@@ -23,6 +23,11 @@ export interface AnalysisSettings {
 export interface AnalysisProgress {
   text?: string;
   error?: string;
+  message?: string;
+  structuredData?: any;
+  characters?: any[];
+  charactersSaved?: boolean;
+  charactersCount?: number;
   metadata?: {
     model?: string;
     temperature?: number;
@@ -108,20 +113,21 @@ function getDefaultAnalysisPrompt(): string {
 }
 
 /**
- * 调用 memos 后端的章节分析 API
+ * 调用 memos 后端的章节分析 API（非流式响应）
  * 
  * @param content 章节内容
  * @param onProgress 进度回调函数
  * @param settings 分析设置
+ * @param work_id 作品ID（可选，如果提供，分析完成后会将角色信息保存到作品的metainfo中）
  * @returns 分析结果
  */
 export async function analyzeChapterContent(
   content: string,
   onProgress?: (progress: AnalysisProgress) => void,
-  settings?: AnalysisSettings
+  settings?: AnalysisSettings,
+  work_id?: number
 ): Promise<string> {
   try {
-    
     // 获取认证token
     const token = localStorage.getItem('access_token');
     const headers: HeadersInit = {
@@ -131,6 +137,7 @@ export async function analyzeChapterContent(
       headers['Authorization'] = `Bearer ${token}`;
     }
     
+    // 调用API（非流式响应）
     const response = await fetch(`${API_BASE_URL}/ai/analyze-chapter`, {
       method: 'POST',
       headers: headers,
@@ -138,100 +145,35 @@ export async function analyzeChapterContent(
         content,
         // prompt 由后端从数据库获取，不在这里传递
         settings: settings || {},
+        work_id: work_id, // 如果提供了 work_id，分析完成后会将角色信息保存到作品的 metainfo 中
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`API 调用失败: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`API 调用失败: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    // 处理流式响应 (SSE)
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('无法获取响应流');
-    }
-
-    const decoder = new TextDecoder();
-    let result = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      // 解码数据块
-      buffer += decoder.decode(value, { stream: true });
-      
-      // 按行分割
-      const lines = buffer.split('\n');
-      
-      // 保留最后一个不完整的行
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        // 处理 SSE 格式: "data: {...}"
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          
-          if (!data) continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            const msgType = parsed.type;
-
-            switch (msgType) {
-              case 'start':
-                // 传递开始时的元数据
-                if (parsed.metadata && onProgress) {
-                  onProgress({ metadata: parsed.metadata });
-                }
-                break;
-              
-              case 'chunk':
-                // 累积内容
-                const chunkContent = parsed.content || '';
-                if (chunkContent) {
-                  result += chunkContent;
-                  onProgress?.({ text: chunkContent });
-                  // 调试：每100个字符打印一次
-                  if (result.length % 500 === 0) {
-                    
-                  }
-                }
-                break;
-              
-              case 'done':
-                
-                
-                // 传递完成时的元数据
-                if (parsed.metadata && onProgress) {
-                  onProgress({ metadata: parsed.metadata });
-                }
-                break;
-              
-              case 'error':
-                throw new Error(parsed.message || '分析过程中出错');
-              
-              default:
-                console.warn('未知的消息类型:', msgType, parsed);
-            }
-          } catch (e) {
-            if (e instanceof Error && e.message !== '分析过程中出错') {
-              console.warn('解析 SSE 消息失败:', e, 'Line:', data);
-            } else {
-              throw e;
-            }
-          }
-        }
-      }
-    }
-
-    if (!result) {
-      throw new Error('未收到任何分析结果');
-    }
-
+    // 直接解析JSON响应
+      const result = await response.json();
     
-    return result;
+    if (!result.success) {
+      throw new Error(result.message || '分析失败');
+    }
+
+        // 通知进度回调
+        if (onProgress) {
+          onProgress({ 
+            message: result.message || '分析完成',
+            structuredData: result.data,
+            characters: result.data?.characters || [],
+            charactersSaved: result.characters_saved,
+            charactersCount: result.characters_count
+          });
+        }
+
+        // 返回分析结果文本（用于兼容性）
+        return JSON.stringify(result.data, null, 2);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';

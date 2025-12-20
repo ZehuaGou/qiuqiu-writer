@@ -2821,15 +2821,20 @@ export default function NovelEditorPage(){
       return;
     }
 
+    // 显示开始分析提示
+    const chapterTitle = chaptersData[chapterId]?.title || `第${chapterIdNum}章`;
+    alert(`开始分析章节：${chapterTitle}\n正在生成大纲和细纲，请稍候...`);
+
     try {
-      
-      
       // 调用分析API
       const result = await analyzeChapter(
         Number(workId),
         chapterIdNum,
         (progress) => {
-          
+          // 可以在这里显示进度信息（如果需要）
+          if (progress.message) {
+            console.log('分析进度:', progress.message);
+          }
         }
       );
 
@@ -2896,10 +2901,11 @@ export default function NovelEditorPage(){
         });
       }
 
-      alert('章节分析完成！大纲和细纲已保存到章节信息中。');
+      alert(`章节分析完成！\n章节：${chapterTitle}\n大纲和细纲已保存到章节信息中。`);
     } catch (error) {
       console.error('分析章节失败:', error);
-      alert(error instanceof Error ? error.message : '分析章节失败');
+      const errorMessage = error instanceof Error ? error.message : '分析章节失败';
+      alert(`分析失败：${errorMessage}\n请检查网络连接或稍后重试。`);
       throw error;
     }
   };

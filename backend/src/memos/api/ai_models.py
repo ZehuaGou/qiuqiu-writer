@@ -63,6 +63,11 @@ class AnalyzeChapterRequest(BaseModel):
         default_factory=AnalysisSettings,
         description="AI分析设置",
     )
+    work_id: Optional[int] = Field(
+        None,
+        description="作品ID（可选，如果提供则在分析完成后将角色信息保存到作品的metainfo中）",
+        json_schema_extra={"example": 1},
+    )
 
 
 class ChapterData(BaseModel):

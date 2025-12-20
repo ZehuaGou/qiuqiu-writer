@@ -6,8 +6,8 @@ AI服务层
 import json
 import os
 from datetime import datetime, timezone
-from typing import AsyncGenerator
 
+from typing import AsyncGenerator
 from openai import AsyncOpenAI, OpenAIError
 
 from memos.log import get_logger
@@ -82,9 +82,10 @@ class AIService:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 20000,
-    ) -> AsyncGenerator[str, None]:
+        use_json_format: bool = True,
+    ) -> str:
         """
-        流式分析章节内容
+        分析章节内容（非流式）
 
         Args:
             content: 章节内容
@@ -93,35 +94,21 @@ class AIService:
             model: AI模型名称
             temperature: 生成温度
             max_tokens: 最大token数
+            use_json_format: 是否使用JSON格式响应（默认True，用于分析接口；False用于生成文本内容）
 
-        Yields:
-            SSE格式的消息字符串
+        Returns:
+            完整的AI响应文本内容
         """
         try:
             # 检查API密钥
             if not self.api_key:
-                error_msg = json.dumps(
-                    {"type": "error", "message": "未配置OPENAI_API_KEY，无法使用AI服务"}
-                )
-                yield f"data: {error_msg}\n\n"
-                return
+                raise ValueError("未配置OPENAI_API_KEY，无法使用AI服务")
 
             # 如果没有显式传入模型，使用服务的默认模型，避免向接口发送 null
             model_name = model or self.default_model
 
-            # 发送开始消息（包含配置信息）
+            # 记录开始时间
             start_time = datetime.now(timezone.utc)
-            start_msg = json.dumps({
-                "type": "start", 
-                "message": "开始分析章节内容...",
-                "metadata": {
-                    "model": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "start_time": start_time.isoformat()
-                }
-            })
-            yield f"data: {start_msg}\n\n"
 
             # 获取系统提示词（从外部获取或使用默认值）
             system_content = system_prompt or self.get_default_system_prompt()
@@ -137,40 +124,42 @@ class AIService:
             )
             logger.debug(f"System prompt length: {len(system_content)}, User prompt length: {len(user_content)}")
 
-            # 调用OpenAI/DeepSeek 兼容 API 进行流式生成
-            response = await self.client.chat.completions.create(
-                model=model_name,
-                messages=[
+            # 调用OpenAI/DeepSeek 兼容 API 进行非流式生成
+            create_params = {
+                "model": model_name,
+                "messages": [
                     {
                         "role": "system",
                         "content": system_content,
                     },
                     {"role": "user", "content": user_content},
                 ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-            )
-            print(response)
-            # 用于统计
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False,
+            }
+            
+            # 只有在需要JSON格式时才添加response_format参数
+            if use_json_format:
+                create_params["response_format"] = {
+                    'type': 'json_object'
+                }
+            
+            response = await self.client.chat.completions.create(**create_params)
+            
+            # 从非流式响应中获取完整内容
+            if not response.choices or len(response.choices) == 0:
+                raise ValueError("AI服务返回空响应")
+            
+            # 获取完整文本内容
+            full_text = response.choices[0].message.content or ""
+            
+            # 获取token使用信息
             total_tokens = 0
             completion_tokens = 0
-            # 收集完整内容，方便调试 DeepSeek 返回格式问题
-            full_text = ""
-            
-            # 流式返回生成的内容
-            async for chunk in response:
-                if chunk.choices and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        chunk_msg = json.dumps({"type": "chunk", "content": delta.content})
-                        yield f"data: {chunk_msg}\n\n"
-                        completion_tokens += 1  # 粗略估算
-                        full_text += delta.content
-                
-                # 尝试获取usage信息（部分API会在最后一个chunk返回）
-                if hasattr(chunk, 'usage') and chunk.usage:
-                    total_tokens = chunk.usage.total_tokens or 0
+            if hasattr(response, 'usage') and response.usage:
+                total_tokens = response.usage.total_tokens or 0
+                completion_tokens = response.usage.completion_tokens or 0
 
             # 计算耗时
             end_time = datetime.now(timezone.utc)
@@ -182,34 +171,94 @@ class AIService:
                 logger.info(
                     f"Full AI response text (truncated to 2000 chars): {preview}"
                 )
-                print(preview)
-
-            # 发送完成消息（包含统计信息）
-            done_msg = json.dumps({
-                "type": "done", 
-                "message": "分析完成",
-                "metadata": {
-                    "model": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "duration": round(duration, 2),
-                    "estimated_tokens": completion_tokens if total_tokens == 0 else total_tokens,
-                    "end_time": end_time.isoformat()
-                }
-            })
-            yield f"data: {done_msg}\n\n"
+                logger.debug(f"Total tokens: {total_tokens}, Completion tokens: {completion_tokens}")
 
             logger.info(f"Chapter analysis completed successfully in {duration:.2f}s")
 
+            return full_text
+
         except OpenAIError as e:
             logger.error(f"OpenAI API error during chapter analysis: {str(e)}")
-            error_msg = json.dumps({"type": "error", "message": f"AI服务调用失败: {str(e)}"})
-            yield f"data: {error_msg}\n\n"
+            raise ValueError(f"AI服务调用失败: {str(e)}")
 
         except Exception as e:
             logger.error(f"Unexpected error during chapter analysis: {str(e)}")
-            error_msg = json.dumps({"type": "error", "message": f"服务器内部错误: {str(e)}"})
-            yield f"data: {error_msg}\n\n"
+            raise ValueError(f"服务器内部错误: {str(e)}")
+
+    async def generate_content_stream(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 8000,
+    ) -> AsyncGenerator[str, None]:
+        """
+        流式生成内容（真正的流式响应）
+
+        Args:
+            prompt: 用户提示词
+            system_prompt: 系统提示词（可选）
+            model: AI模型名称
+            temperature: 生成温度
+            max_tokens: 最大token数
+
+        Yields:
+            内容块字符串
+        """
+        try:
+            # 检查API密钥
+            if not self.api_key:
+                raise ValueError("未配置OPENAI_API_KEY，无法使用AI服务")
+
+            # 如果没有显式传入模型，使用服务的默认模型
+            model_name = model or self.default_model
+
+            # 记录开始时间
+            start_time = datetime.now(timezone.utc)
+
+            # 获取系统提示词
+            system_content = system_prompt or self.get_default_system_prompt()
+
+            logger.info(
+                f"Starting content generation with model: {model_name}, "
+                f"temperature: {temperature}, max_tokens: {max_tokens}"
+            )
+
+            # 调用OpenAI/DeepSeek 兼容 API 进行流式生成
+            stream = await self.client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_content,
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,  # 启用真正的流式响应
+            )
+            
+            # 流式返回内容
+            async for chunk in stream:
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
+
+            # 计算耗时
+            end_time = datetime.now(timezone.utc)
+            duration = (end_time - start_time).total_seconds()
+            logger.info(f"Content generation completed successfully in {duration:.2f}s")
+
+        except OpenAIError as e:
+            logger.error(f"OpenAI API error during content generation: {str(e)}")
+            raise ValueError(f"AI服务调用失败: {str(e)}")
+
+        except Exception as e:
+            logger.error(f"Unexpected error during content generation: {str(e)}")
+            raise ValueError(f"服务器内部错误: {str(e)}")
 
 
 # 全局AI服务实例

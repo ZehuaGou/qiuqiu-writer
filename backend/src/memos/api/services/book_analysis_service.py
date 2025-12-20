@@ -516,24 +516,15 @@ class BookAnalysisService:
             temperature = settings.get("temperature", 0.7)
             max_tokens = settings.get("max_tokens", 4000)
             
-            # 收集AI响应
-            full_response = ""
-            async for chunk in ai_service.analyze_chapter_stream(
+            # 直接获取完整AI响应
+            full_response = await ai_service.analyze_chapter_stream(
                 content=chapter_content,
                 prompt=enhanced_prompt,
                 system_prompt=None,
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens
-            ):
-                # 解析SSE消息
-                if chunk.startswith("data: "):
-                    try:
-                        data = json.loads(chunk[6:])
-                        if data.get("type") == "chunk":
-                            full_response += data.get("content", "")
-                    except:
-                        pass
+            )
             
             # 解析AI响应
             parsed_data = self.parse_single_chapter_response(full_response)
