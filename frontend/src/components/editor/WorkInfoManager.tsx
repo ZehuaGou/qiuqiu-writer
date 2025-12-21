@@ -1197,6 +1197,38 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   }, []);
 
   // 将简化格式的组件数据写入模板格式（按 dataKey 匹配，并注入依赖数据）
+  // 清理模板结构，移除所有组件的 value，只保留结构（包括 dataKey 和 dataDependencies）
+  const cleanTemplateStructure = useCallback((modules: ModuleConfig[]): ModuleConfig[] => {
+    const cleanComponents = (components: ComponentConfig[]): ComponentConfig[] => {
+      return components.map(comp => {
+        if (comp.type === 'tabs' && comp.config?.tabs) {
+          return {
+            ...comp,
+            config: {
+              ...comp.config,
+              tabs: comp.config.tabs.map(tab => ({
+                ...tab,
+                components: tab.components ? cleanComponents(tab.components) : []
+              }))
+            },
+            value: undefined // 清理 value
+          };
+        } else {
+          // 保留所有结构信息（id, type, label, config, dataKey, dataDependencies 等），但清理 value
+          return {
+            ...comp,
+            value: undefined // 清理 value，只保留结构
+          };
+        }
+      });
+    };
+    
+    return modules.map(module => ({
+      ...module,
+      components: cleanComponents(module.components)
+    }));
+  }, []);
+
   const writeComponentDataToTemplate = useCallback((modules: ModuleConfig[], componentData: { [dataKey: string]: any }): ModuleConfig[] => {
     if (!componentData || Object.keys(componentData).length === 0) return modules;
     
@@ -1476,13 +1508,13 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       
       // 构建要更新的 metadata
       const metadataUpdate: any = {
-        // 保存模板配置（包含所有组件数据，包括 dataKey 和 dataDependencies）
+        // 保存模板配置（只保存 templateId，指向 work_template 表）
+        // modules 结构从 work_template 表获取，不在这里保存
         template_config: {
-          templateId: template.id,
-          modules: modulesWithData,
+          templateId: template.id, // 指向 work_template 的 ID（如 db-1 表示 work_template 表中 id=1）
           lastModified: Date.now()
         },
-        // 保存简化格式的组件数据（按组件ID组织）
+        // 保存简化格式的组件数据（使用 dataKey 作为键）
         component_data: mergedComponentData,
         // 向后兼容：同时保存角色数据到 characters 字段
         characters: characters.map((char: any) => ({
@@ -1503,11 +1535,11 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         metadata: metadataUpdate
       });
 
-      console.log('✅ 作品信息已保存：模板格式保存在 template_config.modules，组件数据保存在 component_data');
+      console.log('✅ 作品信息已保存：模板结构（含 dataKey）保存在 template_config.modules，组件数据保存在 component_data');
     } catch (error) {
       console.error('❌ 保存作品信息到 metadata 失败:', error);
     }
-  }, [workId, extractComponentDataFromTemplate, writeComponentDataToTemplate]);
+  }, [workId, extractComponentDataFromTemplate, writeComponentDataToTemplate, cleanTemplateStructure]);
 
   // 自动保存到数据库和缓存（防抖，基于 workId）
   useEffect(() => {
@@ -1699,13 +1731,16 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         const componentData = workData.metadata?.component_data || {};
         const charactersFromMetadata = workData.metadata?.characters || []; // 向后兼容
         
-        if (templateConfig && 
-            templateConfig.templateId === newTemplate.id &&
-            templateConfig.modules &&
-            Array.isArray(templateConfig.modules) &&
-            templateConfig.modules.length > 0) {
-          // 如果作品 metadata 中有该模板的保存内容，使用保存的内容
-          let modules = templateConfig.modules;
+        if (templateConfig && templateConfig.templateId === newTemplate.id) {
+          // 从 work_template 获取结构（modules 应该只包含结构，不包含数据）
+          // 如果 newTemplate.id 是 db-1 格式，从 work_template 表获取
+          let modules = newTemplate.modules; // 从 work_template 获取结构
+          
+          // 向后兼容：如果 template_config 中有 modules，使用它（但应该从 work_template 获取）
+          if (templateConfig.modules && Array.isArray(templateConfig.modules) && templateConfig.modules.length > 0) {
+            // 向后兼容：使用保存的 modules（但未来应该从 work_template 获取）
+            modules = templateConfig.modules;
+          }
           
           // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
           const dataToWrite = { ...componentData };
@@ -1713,10 +1748,11 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             dataToWrite['characters'] = charactersFromMetadata;
           }
           
-          // 将简化格式的组件数据写入模板格式
+          // 从 work_template 获取结构（modules 应该只包含结构，不包含数据）
+          // 从 work 的 component_data 获取数据，然后合并到结构中
           if (Object.keys(dataToWrite).length > 0) {
             modules = writeComponentDataToTemplate(modules, dataToWrite);
-            console.log('✅ 从 metadata 将', Object.keys(dataToWrite).length, '个组件的数据写入模板格式');
+            console.log('✅ 从 work 的 component_data 将', Object.keys(dataToWrite).length, '个组件的数据写入模板结构');
           }
           
           newTemplate.modules = modules;
@@ -1797,26 +1833,44 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             
             
             
+            // 从 work 的 metadata 加载数据
+            const workData = await worksApi.getWork(Number(workId));
+            const componentData = workData.metadata?.component_data || {};
+            const charactersFromMetadata = workData.metadata?.characters || [];
+            
+            // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
+            const dataToWrite = { ...componentData };
+            if (charactersFromMetadata.length > 0 && !dataToWrite['characters']) {
+              dataToWrite['characters'] = charactersFromMetadata;
+            }
+            
+            // 从 work_template 获取结构（modules 应该只包含结构，不包含数据）
+            let modules = newTemplate.modules; // 从模板获取结构
+            
+            // 如果有保存的 template_config，使用它（但应该只包含结构）
             if (response.template_config && 
                 response.template_config.templateId === newTemplate.id &&
                 response.template_config.modules &&
                 Array.isArray(response.template_config.modules) &&
                 response.template_config.modules.length > 0) {
-              // 如果数据库中有该模板的保存内容，使用保存的内容
-              
-              newTemplate.modules = response.template_config.modules;
-              // 同时保存到本地缓存
-              saveToCache({
-                templateId: response.template_config.templateId,
-                modules: response.template_config.modules,
-                lastModified: Date.now()
-              }, workId, newTemplate.id);
-            } else {
-              
-              if (response.template_config) {
-                
-              }
+              // 使用保存的结构（应该不包含数据）
+              modules = response.template_config.modules;
             }
+            
+            // 从 work 的 component_data 获取数据，然后合并到结构中
+            if (Object.keys(dataToWrite).length > 0) {
+              modules = writeComponentDataToTemplate(modules, dataToWrite);
+              console.log('✅ 从 work 的 component_data 将', Object.keys(dataToWrite).length, '个组件的数据写入模板结构');
+            }
+            
+            newTemplate.modules = modules;
+            
+            // 同时保存到本地缓存
+            saveToCache({
+              templateId: newTemplate.id,
+              modules: modules,
+              lastModified: Date.now()
+            }, workId, newTemplate.id);
           }
         } catch (error) {
           console.error('加载保存的模板内容失败:', error);
@@ -1874,6 +1928,9 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         validateTemplateConfig(module.components);
       }
       
+      // 清理模板结构，移除所有 value，只保留结构（包括 dataKey 和 dataDependencies）
+      const cleanModules = cleanTemplateStructure(template.modules);
+      
       const templateData = {
         name: createTemplateForm.name,
         description: createTemplateForm.description || undefined,
@@ -1882,7 +1939,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         is_public: createTemplateForm.is_public,
         template_config: {
           templateId: `custom-${Date.now()}`,
-          modules: template.modules  // 这里应该包含完整的组件配置，包括 dataKey 和 dataDependencies
+          modules: cleanModules  // 只保存结构（包括 dataKey 和 dataDependencies），不保存数据
         },
         settings: {},
         tags: []
