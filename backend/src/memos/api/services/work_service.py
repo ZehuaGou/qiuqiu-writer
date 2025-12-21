@@ -192,6 +192,12 @@ class WorkService:
                                 if k in target and isinstance(target[k], list) and len(target[k]) > 0:
                                     # 保留现有的角色数据，不覆盖为空数组
                                     continue
+                            # 特殊处理：template_config 应该完全替换，而不是深度合并（因为前端已经发送了完整的配置）
+                            if k == "template_config" and isinstance(v, dict):
+                                # template_config 包含完整的模板配置，包括 modules 中的 dataKey 和 dataDependencies
+                                # 应该完全替换，确保保存完整的配置
+                                target[k] = v
+                                continue
                             if k in target and isinstance(target[k], dict) and isinstance(v, dict):
                                 deep_merge(target[k], v)
                             else:

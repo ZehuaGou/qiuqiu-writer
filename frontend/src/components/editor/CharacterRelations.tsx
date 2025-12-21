@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Plus, ArrowRight, User, Trash2 } from 'lucide-react';
 import { ExtensionCategory, Graph, register } from '@antv/g6';
 import { ReactNode } from '@antv/g6-extension-react';
@@ -48,32 +48,66 @@ const CharacterNode = ({ data }: { data: any }) => {
   );
 };
 
-export default function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
+// 创建稳定的数据字符串用于比较
+// 注意：只比较角色的 name 和 gender，不比较 id（因为 id 可能包含时间戳，不稳定）
+function getDataId(data?: CharacterRelationsData): string {
+  if (!data) return '';
+  // 对数组进行排序，确保相同内容的数据生成相同的ID
+  // 使用 name 作为排序键，因为 name 是稳定的
+  const sortedCharacters = [...(data.characters || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const sortedRelations = [...(data.relations || [])].sort((a, b) => {
+    // 关系排序：先按 from，再按 to
+    const fromCompare = (a.from || '').localeCompare(b.from || '');
+    if (fromCompare !== 0) return fromCompare;
+    return (a.to || '').localeCompare(b.to || '');
+  });
+  
+  return JSON.stringify({
+    // 只比较 name 和 gender，不比较 id（避免时间戳导致的变化）
+    characters: sortedCharacters.map(c => ({ name: c.name, gender: c.gender })),
+    // 关系使用 from 和 to 的 name（如果可能），或者使用 id
+    relations: sortedRelations.map(r => ({ from: r.from, to: r.to, type: r.type })),
+  });
+}
+
+function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
   // 使用外部传入的数据，如果没有则使用空数组
   const [characters, setCharacters] = useState<Character[]>(data?.characters || []);
   const [relations, setRelations] = useState<Relation[]>(data?.relations || []);
 
-  // 同步外部数据变化
-  useEffect(() => {
-    if (data) {
-      setCharacters(data.characters || []);
-      setRelations(data.relations || []);
-    }
-  }, [data]);
+  // 使用稳定的数据ID来检测数据变化
+  const dataId = useMemo(() => getDataId(data), [data]);
+  const prevDataIdRef = useRef<string>('');
 
-  // 数据变化时通知父组件
+  // 同步外部数据变化 - 使用深度比较避免不必要的更新
   useEffect(() => {
-    if (onChange) {
-      onChange({ characters, relations });
+    // 只有当数据ID真正改变时才更新状态
+    if (dataId !== prevDataIdRef.current && dataId !== '') {
+      prevDataIdRef.current = dataId;
+      if (data) {
+        // 标记这是外部数据更新，不要触发 onChange
+        isExternalUpdateRef.current = true;
+        setCharacters(data.characters || []);
+        setRelations(data.relations || []);
+        // 重置标志
+        setTimeout(() => {
+          isExternalUpdateRef.current = false;
+        }, 0);
+      }
     }
-  }, [characters, relations, onChange]);
-  const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
+  }, [dataId]); // 只依赖 dataId，不依赖 data 对象引用
+
+  // 使用 useRef 存储 onChange 回调，避免依赖变化导致重新渲染
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  // 使用 ref 标记是否是外部数据更新（避免循环）
+  const isExternalUpdateRef = useRef(false);
   const [editingRelation, setEditingRelation] = useState<string | null>(null);
-  const [addingCharacter, setAddingCharacter] = useState(false);
   const [addingRelation, setAddingRelation] = useState(false);
   const [editForm, setEditForm] = useState<{
-    name?: string;
-    gender?: '男' | '女';
     relationType?: string;
     relationDescription?: string;
     relationFrom?: string;
@@ -86,16 +120,27 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
   const graphData = useMemo(() => {
     // 计算初始位置，让节点均匀分布在一个圆形上
     const nodeCount = characters.length;
-    const radius = Math.max(200, nodeCount * 50); // 根据节点数量调整半径
-    const centerX = 400; // 中心点 x
-    const centerY = 300; // 中心点 y
+    
+    // 如果没有节点，返回空数据
+    if (nodeCount === 0) {
+      return { nodes: [], edges: [] } as GraphData;
+    }
+    
+    // 使用固定尺寸计算位置，避免依赖容器尺寸导致重新计算
+    // 容器尺寸会在初始化时动态获取
+    const containerWidth = 800;
+    const containerHeight = 600;
+    const centerX = containerWidth / 2;
+    const centerY = containerHeight / 2;
+    const radius = Math.max(150, nodeCount * 40); // 根据节点数量调整半径
     
     const nodes = characters.map((char, index) => {
       // 计算节点在圆形上的位置
-      const angle = (index * 2 * Math.PI) / nodeCount - Math.PI / 2; // 从顶部开始
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
-      
+      const angle = nodeCount === 1 
+        ? 0 // 如果只有一个节点，放在中心
+        : (index * 2 * Math.PI) / nodeCount - Math.PI / 2; // 从顶部开始
+      const x = nodeCount === 1 ? centerX : centerX + radius * Math.cos(angle);
+      const y = nodeCount === 1 ? centerY : centerY + radius * Math.sin(angle);
       
       return {
         id: char.id,
@@ -133,21 +178,50 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
     return { nodes, edges } as GraphData;
   }, [characters, relations]);
 
-  // 创建数据 ID 字符串用于依赖比较
-  const dataId = useMemo(() => {
+  // 创建数据 ID 字符串用于 G6 初始化依赖比较
+  const graphDataId = useMemo(() => {
     return JSON.stringify({
       characters: characters.map(c => ({ id: c.id, name: c.name })),
       relations: relations.map(r => ({ id: r.id, from: r.from, to: r.to })),
     });
   }, [characters, relations]);
 
+  // 使用 ref 存储上一次的 graphDataId，确保不会重复初始化
+  const prevGraphDataIdRef = useRef<string>('');
+  const isInitializingRef = useRef(false);
+
   // 初始化 G6 图
   useEffect(() => {
-    if (!containerRef.current) {
-      console.warn('Container ref is null');
+    // 如果 graphDataId 没有变化，不重新初始化
+    if (graphDataId === prevGraphDataIdRef.current && graphDataId !== '') {
+      // 不返回清理函数，保持图实例
       return;
     }
 
+    // 如果正在初始化，不重复初始化
+    if (isInitializingRef.current) {
+      return;
+    }
+
+    if (!containerRef.current) {
+      return;
+    }
+
+    // 如果 graphDataId 变化了，先清理旧的图实例
+    if (graphDataId !== prevGraphDataIdRef.current && prevGraphDataIdRef.current !== '' && graphRef.current) {
+      try {
+        graphRef.current.destroy();
+      } catch (e) {
+        // 忽略清理错误
+      }
+      graphRef.current = null;
+    }
+
+    // 标记正在初始化
+    isInitializingRef.current = true;
+    prevGraphDataIdRef.current = graphDataId;
+
+    // 使用当前的 graphData（在 useMemo 中已经稳定）
     const data = graphData;
 
     // 确保容器有尺寸，如果没有则等待
@@ -157,107 +231,204 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
 
     // 如果容器尺寸为 0，等待一下再初始化
     if (width === 0 || height === 0) {
-      console.warn('Container size is 0, waiting for layout...', { width, height });
       const timer = setTimeout(() => {
+        // 再次检查 graphDataId 是否变化
+        if (graphDataId !== prevGraphDataIdRef.current) {
+          isInitializingRef.current = false;
+          return;
+        }
         width = container.offsetWidth || 800;
         height = container.offsetHeight || 600;
         if (width > 0 && height > 0) {
           initializeGraph(width, height, data);
+        } else {
+          initializeGraph(800, 600, data);
         }
-      }, 100);
-      return () => clearTimeout(timer);
+      }, 200);
+      return () => {
+        clearTimeout(timer);
+        // 如果组件卸载，重置标志
+        isInitializingRef.current = false;
+      };
     }
 
     initializeGraph(width, height, data);
 
     function initializeGraph(width: number, height: number, data: GraphData) {
-
-    // 如果图已存在，先销毁
-    if (graphRef.current) {
-      try {
-        graphRef.current.destroy();
-      } catch (e) {
-        console.warn('Error destroying existing graph:', e);
-      }
-      graphRef.current = null;
-    }
-
-    if (!containerRef.current) return;
-
-    // 创建图实例 - G6 5.0 方式（按照官方文档）
-    const graph = new Graph({
-      container: containerRef.current,
-      width,
-      height,
-      data,
-      node: {
-        type: 'react', // 使用 react 节点类型
-        style: {
-          size: [80, 80] as [number, number], // 节点大小 [width, height]
-          component: (data: any) => <CharacterNode data={data} />, // React 组件
-        },
-      } as any,
-      edge: {
-        style: {
-          stroke: '#10b981',
-          lineWidth: 2,
-          endArrow: {
-            type: 'vee',
-            size: 8,
-            fill: '#10b981',
-          },
-        },
-        labelText: (d: any) => d.data?.label || '',
-        labelFill: '#10b981',
-        labelFontSize: 11,
-        labelFontWeight: 500,
-        labelBackground: true,
-        labelBackgroundFill: 'white',
-        labelBackgroundOpacity: 0.8,
-        labelPlacement: 'center', // 标签居中
-      } as any,
-      // 不使用布局，使用节点初始位置
-      // layout: {
-      //   type: 'force',
-      //   ...
-      // },
-      behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
-    });
-
-    // G6 5.0 需要显式调用 render（按照官方文档）
-    graph.render();
-
-    graphRef.current = graph;
-
-    // 节点点击事件
-    graph.on('node:click', (e: any) => {
-      const nodeId = e.item?.getID?.() || e.target?.id || e.item?.id;
-      if (nodeId) {
-        setEditingCharacter(nodeId);
-        const character = characters.find((c) => c.id === nodeId);
-        if (character) {
-          setEditForm({
-            name: character.name,
-            gender: character.gender,
-          });
+      // 在初始化前再次检查 graphDataId 是否仍然匹配
+      const currentGraphDataId = graphDataId;
+      
+      // 如果图已存在，先销毁
+      if (graphRef.current) {
+        try {
+          graphRef.current.destroy();
+        } catch (e) {
+          // 忽略清理错误
         }
+        graphRef.current = null;
       }
-    });
 
-      // 边点击事件 - 直接进入编辑界面
-      graph.on('edge:click', (e: any) => {
-        const edgeId = e.item?.getID?.() || e.target?.id || e.item?.id;
-        if (edgeId) {
-          const relation = relations.find((r) => r.id === edgeId);
-          if (relation) {
-            setEditingRelation(edgeId);
-            setEditForm({
-              relationType: relation.type,
-              relationDescription: relation.description,
+      if (!containerRef.current) {
+        isInitializingRef.current = false;
+        return;
+      }
+
+      // 确保容器有最小尺寸
+      if (width < 100) width = 800;
+      if (height < 100) height = 600;
+
+      let graph: Graph | null = null;
+      
+      try {
+        // 创建图实例 - G6 5.0 方式（按照官方文档）
+        graph = new Graph({
+          container: containerRef.current,
+          width,
+          height,
+          data,
+          node: {
+            type: 'react', // 使用 react 节点类型
+            style: {
+              size: [80, 80] as [number, number], // 节点大小 [width, height]
+              component: (data: any) => <CharacterNode data={data} />, // React 组件
+            },
+          } as any,
+          edge: {
+            style: {
+              stroke: '#10b981',
+              lineWidth: 2,
+              endArrow: {
+                type: 'vee',
+                size: 8,
+                fill: '#10b981',
+              },
+            },
+            labelText: (d: any) => d.data?.label || '',
+            labelFill: '#10b981',
+            labelFontSize: 11,
+            labelFontWeight: 500,
+            labelBackground: true,
+            labelBackgroundFill: 'white',
+            labelBackgroundOpacity: 0.8,
+            labelPlacement: 'center', // 标签居中
+          } as any,
+          behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
+        });
+
+        // 在 render 之前再次检查 graphDataId 是否仍然匹配
+        if (currentGraphDataId !== prevGraphDataIdRef.current) {
+          // graphDataId 已经变化，销毁刚创建的图实例
+          try {
+            graph.destroy();
+          } catch (e) {
+            // 忽略清理错误
+          }
+          isInitializingRef.current = false;
+          return;
+        }
+
+        // G6 5.0 需要显式调用 render（按照官方文档）
+        // render() 可能返回 Promise，但即使不是 Promise 也安全
+        const renderResult = graph.render();
+        
+        // 如果 render() 返回 Promise，等待它完成
+        if (renderResult && typeof renderResult.then === 'function') {
+          renderResult
+            .then(() => {
+              // render 完成后再次检查 graphDataId 是否仍然匹配
+              if (currentGraphDataId === prevGraphDataIdRef.current && graph) {
+                graphRef.current = graph;
+                
+                // 标记初始化完成
+                isInitializingRef.current = false;
+
+                // 节点点击事件已移除 - 角色不允许编辑
+
+                // 边点击事件 - 直接进入编辑界面
+                graph.on('edge:click', (e: any) => {
+                  const edgeId = e.item?.getID?.() || e.target?.id || e.item?.id;
+                  if (edgeId) {
+                    const relation = relations.find((r) => r.id === edgeId);
+                    if (relation) {
+                      setEditingRelation(edgeId);
+                      setEditForm({
+                        relationType: relation.type,
+                        relationDescription: relation.description,
+                      });
+                    }
+                  }
+                });
+              } else {
+                // graphDataId 已经变化，销毁图实例
+                if (graph) {
+                  try {
+                    graph.destroy();
+                  } catch (e) {
+                    // 忽略清理错误
+                  }
+                }
+                isInitializingRef.current = false;
+              }
+            })
+            .catch((error) => {
+              // render 失败，清理图实例
+              if (graph) {
+                try {
+                  graph.destroy();
+                } catch (e) {
+                  // 忽略清理错误
+                }
+              }
+              isInitializingRef.current = false;
             });
+        } else {
+          // render() 不是 Promise，直接设置
+          if (currentGraphDataId === prevGraphDataIdRef.current && graph) {
+            graphRef.current = graph;
+            
+            // 标记初始化完成
+            isInitializingRef.current = false;
+
+            // 节点点击事件 - 必须在 graph 创建成功后注册
+            // 节点点击事件已移除 - 角色不允许编辑
+
+            // 边点击事件 - 直接进入编辑界面
+            graph.on('edge:click', (e: any) => {
+              const edgeId = e.item?.getID?.() || e.target?.id || e.item?.id;
+              if (edgeId) {
+                const relation = relations.find((r) => r.id === edgeId);
+                if (relation) {
+                  setEditingRelation(edgeId);
+                  setEditForm({
+                    relationType: relation.type,
+                    relationDescription: relation.description,
+                  });
+                }
+              }
+            });
+          } else {
+            // graphDataId 已经变化，销毁图实例
+            if (graph) {
+              try {
+                graph.destroy();
+              } catch (e) {
+                // 忽略清理错误
+              }
+            }
+            isInitializingRef.current = false;
           }
         }
-      });
+      } catch (error) {
+        if (graph) {
+          try {
+            graph.destroy();
+          } catch (e) {
+            // 忽略清理错误
+          }
+        }
+        // 即使失败也要重置标志
+        isInitializingRef.current = false;
+      }
 
     }
 
@@ -276,54 +447,31 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      // 注意：只在组件真正卸载时才清理图实例
+      // 如果只是 graphDataId 变化，清理逻辑在上面已经处理了
+      // 这里只重置标志，不销毁图实例（因为图实例需要在组件卸载时才销毁）
+      isInitializingRef.current = false;
+    };
+  }, [graphDataId]); // 只使用稳定的 graphDataId 作为依赖，避免 graphData 对象引用变化导致循环
+
+  // 组件卸载时清理图实例
+  useEffect(() => {
+    return () => {
       if (graphRef.current) {
         try {
           graphRef.current.destroy();
         } catch (e) {
-          console.warn('Error destroying graph:', e);
+          // 忽略清理错误
         }
         graphRef.current = null;
       }
     };
-  }, [dataId, graphData]); // 使用稳定的 dataId 和 graphData
+  }, []); // 只在组件卸载时执行
 
   // 数据更新已经在第一个 useEffect 中处理，这里不需要单独的更新逻辑
 
 
-  const handleSaveCharacter = () => {
-    if (editingCharacter) {
-      setCharacters((prev) =>
-        prev.map((c) =>
-          c.id === editingCharacter
-            ? { ...c, name: editForm.name || c.name, gender: editForm.gender || c.gender }
-            : c
-        )
-      );
-      setEditingCharacter(null);
-      setEditForm({});
-    }
-  };
-
-  const handleAddCharacter = () => {
-    setAddingCharacter(true);
-    setEditForm({
-      name: '新角色',
-      gender: '男',
-    });
-  };
-
-  const handleSaveNewCharacter = () => {
-    if (editForm.name) {
-      const newCharacter: Character = {
-        id: String(Date.now()),
-        name: editForm.name,
-        gender: editForm.gender || '男',
-      };
-      setCharacters((prev) => [...prev, newCharacter]);
-      setAddingCharacter(false);
-      setEditForm({});
-    }
-  };
+  // 角色编辑和添加功能已移除 - 角色只能从角色列表中获取
 
   const handleAddRelation = () => {
     if (characters.length < 2) {
@@ -362,33 +510,51 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
       setRelations((prev) => [...prev, newRelation]);
       setAddingRelation(false);
       setEditForm({});
+      // 用户操作后通知父组件
+      setTimeout(() => {
+        if (onChangeRef.current) {
+          onChangeRef.current({ 
+            characters, 
+            relations: [...relations, newRelation] 
+          });
+        }
+      }, 0);
     }
   };
 
-  const handleDeleteCharacter = (characterId: string) => {
-    setCharacters((prev) => prev.filter((c) => c.id !== characterId));
-    setRelations((prev) => prev.filter((r) => r.from !== characterId && r.to !== characterId));
-  };
+  // 角色删除功能已移除 - 角色只能从角色列表中管理
 
   const handleDeleteRelation = (relationId: string) => {
-    setRelations((prev) => prev.filter((r) => r.id !== relationId));
+    const newRelations = relations.filter((r) => r.id !== relationId);
+    setRelations(newRelations);
+    // 用户操作后通知父组件
+    setTimeout(() => {
+      if (onChangeRef.current) {
+        onChangeRef.current({ characters, relations: newRelations });
+      }
+    }, 0);
   };
 
   const handleSaveRelation = () => {
     if (editingRelation) {
-      setRelations((prev) =>
-        prev.map((r) =>
-          r.id === editingRelation
-            ? {
-                ...r,
-                type: editForm.relationType || r.type,
-                description: editForm.relationDescription || r.description,
-              }
-            : r
-        )
+      const newRelations = relations.map((r) =>
+        r.id === editingRelation
+          ? {
+              ...r,
+              type: editForm.relationType || r.type,
+              description: editForm.relationDescription || r.description,
+            }
+          : r
       );
+      setRelations(newRelations);
       setEditingRelation(null);
       setEditForm({});
+      // 用户操作后通知父组件
+      setTimeout(() => {
+        if (onChangeRef.current) {
+          onChangeRef.current({ characters, relations: newRelations });
+        }
+      }, 0);
     }
   };
 
@@ -397,10 +563,6 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
       <div className="relations-header">
         <h3>人物关系网</h3>
         <div className="header-actions">
-          <button className="action-btn" onClick={handleAddCharacter}>
-            <Plus size={16} />
-            <span>添加角色</span>
-          </button>
           <button className="action-btn" onClick={handleAddRelation}>
             <Plus size={16} />
             <span>添加关系</span>
@@ -413,7 +575,7 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
           <div className="relations-empty">
             <User size={48} />
             <h4>暂无角色</h4>
-            <p>点击"添加角色"开始创建人物关系网</p>
+            <p>请在角色列表中添加角色，然后在此创建关系</p>
           </div>
         ) : (
           <div className="relations-canvas" ref={containerRef}></div>
@@ -425,35 +587,16 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
             <h4>角色列表 ({characters.length})</h4>
             <div className="character-list">
               {characters.length === 0 && (
-                <div className="list-empty">点击上方按钮添加角色</div>
+                <div className="list-empty">请在角色列表中添加角色</div>
               )}
               {characters.map((character) => (
                 <div
                   key={character.id}
-                  className={`character-item ${editingCharacter === character.id ? 'active' : ''}`}
-                  onClick={() => {
-                    setEditingCharacter(character.id);
-                    setEditForm({
-                      name: character.name,
-                      gender: character.gender,
-                    });
-                  }}
+                  className="character-item"
                 >
                   <div className="character-info">
                     <div className="character-name">{character.name}</div>
                     <div className="character-gender">{character.gender}</div>
-                  </div>
-                  <div className="character-actions">
-                    <button
-                      className="action-icon-btn"
-                      title="删除"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCharacter(character.id);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 </div>
               ))}
@@ -515,100 +658,6 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
           </div>
         </div>
       </div>
-
-      {/* 编辑角色的模态框 */}
-      {editingCharacter && (
-        <div className="edit-modal-overlay" onClick={() => { setEditingCharacter(null); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>编辑角色</h4>
-            <div className="modal-form">
-              <label>
-                <span>角色名称</span>
-                <input
-                  type="text"
-                  value={editForm.name || ''}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="edit-input"
-                  placeholder="角色名称"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>性别</span>
-                <select
-                  value={editForm.gender || '男'}
-                  onChange={(e) => setEditForm({ ...editForm, gender: e.target.value as '男' | '女' })}
-                  className="edit-select"
-                >
-                  <option value="男">男</option>
-                  <option value="女">女</option>
-                </select>
-              </label>
-              <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveCharacter}>
-                  保存
-                </button>
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setEditingCharacter(null);
-                    setEditForm({});
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 添加角色弹窗 */}
-      {addingCharacter && (
-        <div className="edit-modal-overlay" onClick={() => { setAddingCharacter(false); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>添加角色</h4>
-            <div className="modal-form">
-              <label>
-                <span>角色名称</span>
-                <input
-                  type="text"
-                  value={editForm.name || ''}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="edit-input"
-                  placeholder="角色名称"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>性别</span>
-                <select
-                  value={editForm.gender || '男'}
-                  onChange={(e) => setEditForm({ ...editForm, gender: e.target.value as '男' | '女' })}
-                  className="edit-select"
-                >
-                  <option value="男">男</option>
-                  <option value="女">女</option>
-                </select>
-              </label>
-              <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveNewCharacter}>
-                  保存
-                </button>
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setAddingCharacter(false);
-                    setEditForm({});
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 添加关系弹窗 */}
       {addingRelation && (
@@ -746,3 +795,14 @@ export default function CharacterRelations({ data, onChange }: CharacterRelation
     </div>
   );
 }
+
+// 使用 memo 包装组件，自定义比较函数
+// 只比较 data，忽略 onChange（因为 onChange 在组件内部用 useRef 存储，变化不影响行为）
+export default memo(CharacterRelations, (prevProps, nextProps) => {
+  // 只比较 data，忽略 onChange
+  const prevDataId = getDataId(prevProps.data);
+  const nextDataId = getDataId(nextProps.data);
+  
+  // 如果数据ID相同，不重新渲染（即使 onChange 引用不同）
+  return prevDataId === nextDataId; // 返回 true 表示 props 相同，不需要重新渲染
+});

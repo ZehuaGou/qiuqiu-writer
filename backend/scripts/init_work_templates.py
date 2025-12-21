@@ -99,6 +99,7 @@ DEFAULT_TEMPLATES = [
                                                 "id": "char-cards",
                                                 "type": "character-card",
                                                 "label": "角色卡片",
+                                                "dataKey": "characters",  # 数据存储键
                                                 "config": {},
                                                 "value": []
                                             }
@@ -112,6 +113,8 @@ DEFAULT_TEMPLATES = [
                                                 "id": "char-relations",
                                                 "type": "relation-graph",
                                                 "label": "人物关系",
+                                                "dataKey": "character_relations",  # 数据存储键
+                                                "dataDependencies": ["characters"],  # 依赖角色列表数据
                                                 "config": {
                                                     "nodeTypes": [
                                                         {"type": "protagonist", "label": "主角", "color": "#ef4444"},
@@ -137,6 +140,8 @@ DEFAULT_TEMPLATES = [
                                                 "id": "char-timeline",
                                                 "type": "timeline",
                                                 "label": "角色时间线",
+                                                "dataKey": "character_timeline",  # 数据存储键
+                                                "dataDependencies": ["characters"],  # 依赖角色列表数据
                                                 "config": {},
                                                 "value": []
                                             }
@@ -309,6 +314,8 @@ DEFAULT_TEMPLATES = [
                                                 "id": "stages",
                                                 "type": "timeline",
                                                 "label": "感情发展",
+                                                "dataKey": "love_timeline",  # 数据存储键
+                                                "dataDependencies": [],  # 可以依赖其他组件的数据，这里暂时为空
                                                 "config": {},
                                                 "value": []
                                             },
@@ -322,6 +329,8 @@ DEFAULT_TEMPLATES = [
                                                 "id": "cp-relations",
                                                 "type": "relation-graph",
                                                 "label": "CP关系",
+                                                "dataKey": "cp_relations",  # 数据存储键
+                                                "dataDependencies": [],  # 可以依赖其他组件的数据，这里暂时为空
                                                 "config": {
                                                     "nodeTypes": [
                                                         {"type": "female", "label": "女性", "color": "#ec4899"},

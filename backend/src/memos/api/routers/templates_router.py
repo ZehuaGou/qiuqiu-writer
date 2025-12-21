@@ -38,10 +38,19 @@ class WorkTemplateCreate(BaseModel):
     description: Optional[str] = None
     work_type: str
     category: Optional[str] = None
+    template_config: Optional[Dict[str, Any]] = None  # 模板配置，包含 modules（组件配置，包括 dataKey 和 dataDependencies）
+    settings: Optional[Dict[str, Any]] = None
+    is_public: Optional[bool] = False
+    tags: Optional[List[str]] = None
 
 class WorkTemplateUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    template_config: Optional[Dict[str, Any]] = None  # 模板配置，包含 modules（组件配置，包括 dataKey 和 dataDependencies）
+    settings: Optional[Dict[str, Any]] = None
+    category: Optional[str] = None
+    is_public: Optional[bool] = None
+    tags: Optional[List[str]] = None
 
 class WorkTemplateResponse(BaseModel):
     id: int
@@ -89,12 +98,43 @@ async def create_template(
     """
     创建作品模板
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # 验证 template_config 中是否包含 dataKey 和 dataDependencies
+    if template_data.template_config and "modules" in template_data.template_config:
+        modules = template_data.template_config["modules"]
+        logger.info(f"📥 创建模板: {template_data.name}, 包含 {len(modules)} 个模块")
+        
+        def validate_modules(components, path=""):
+            for comp in components:
+                current_path = f"{path} > {comp.get('label', comp.get('id', 'unknown'))}"
+                if comp.get("dataKey"):
+                    data_key = comp.get("dataKey")
+                    data_deps = comp.get("dataDependencies", [])
+                    logger.info(f"✅ 组件 {current_path}: dataKey='{data_key}', dataDependencies={data_deps}")
+                # 递归检查 tabs 中的组件
+                if comp.get("type") == "tabs" and comp.get("config", {}).get("tabs"):
+                    for tab in comp["config"]["tabs"]:
+                        if tab.get("components"):
+                            validate_modules(tab["components"], f"{current_path} > {tab.get('label', tab.get('id', 'unknown'))}")
+        
+        for module in modules:
+            module_name = module.get("name", module.get("id", "unknown"))
+            logger.info(f"📦 模块: {module_name}")
+            if "components" in module:
+                validate_modules(module["components"], module_name)
+    
     template_service = TemplateService(db)
 
     template = await template_service.create_template(
         creator_id=current_user_id,
         **template_data.dict()
     )
+    
+    # 验证保存后的数据
+    if template.template_config and "modules" in template.template_config:
+        logger.info(f"✅ 模板已保存，ID: {template.id}, template_config 包含 {len(template.template_config.get('modules', []))} 个模块")
 
     # 记录审计日志
     await template_service.create_audit_log(
@@ -142,7 +182,7 @@ async def list_templates(
     if search:
         filters["search"] = search
 
-    templates = await template_service.get_templates(
+    templates, total = await template_service.get_templates(
         user_id=current_user_id,
         filters=filters,
         page=page,

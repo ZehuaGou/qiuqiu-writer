@@ -48,6 +48,10 @@ interface ComponentConfig {
   id: string;
   type: ComponentType;
   label: string;
+  // 数据存储键（用于在 component_data 中存储数据）
+  dataKey?: string;
+  // 数据依赖（组件需要引用其他组件的数据，如时间线需要角色列表）
+  dataDependencies?: string[]; // 依赖的其他组件的 dataKey 列表
   // 组件特定配置
   config: {
     placeholder?: string;
@@ -350,25 +354,48 @@ const presetTemplates: TemplateConfig[] = [
           { id: 'char-tabs', type: 'tabs', label: '角色管理', config: {
             tabs: [
               { id: 'list', label: '角色列表', components: [
-                { id: 'char-cards', type: 'character-card', label: '角色卡片', config: {}, value: [] }
+                { 
+                  id: 'char-cards', 
+                  type: 'character-card', 
+                  label: '角色卡片', 
+                  dataKey: 'characters', // 数据存储键
+                  config: {}, 
+                  value: [] 
+                }
               ]},
               { id: 'relations', label: '关系图谱', components: [
-                { id: 'char-relations', type: 'relation-graph', label: '人物关系', config: {
-                  nodeTypes: [
-                    { type: 'protagonist', label: '主角', color: '#ef4444' },
-                    { type: 'supporting', label: '配角', color: '#3b82f6' },
-                    { type: 'antagonist', label: '反派', color: '#6b7280' },
-                  ],
-                  relationTypes: [
-                    { type: 'family', label: '亲属', color: '#ec4899' },
-                    { type: 'friend', label: '朋友', color: '#10b981' },
-                    { type: 'enemy', label: '敌对', color: '#ef4444' },
-                    { type: 'lover', label: '恋人', color: '#f472b6' },
-                  ]
-                }, value: { characters: [], relations: [] } }
+                { 
+                  id: 'char-relations', 
+                  type: 'relation-graph', 
+                  label: '人物关系', 
+                  dataKey: 'character_relations', // 数据存储键
+                  dataDependencies: ['characters'], // 依赖角色列表数据
+                  config: {
+                    nodeTypes: [
+                      { type: 'protagonist', label: '主角', color: '#ef4444' },
+                      { type: 'supporting', label: '配角', color: '#3b82f6' },
+                      { type: 'antagonist', label: '反派', color: '#6b7280' },
+                    ],
+                    relationTypes: [
+                      { type: 'family', label: '亲属', color: '#ec4899' },
+                      { type: 'friend', label: '朋友', color: '#10b981' },
+                      { type: 'enemy', label: '敌对', color: '#ef4444' },
+                      { type: 'lover', label: '恋人', color: '#f472b6' },
+                    ]
+                  }, 
+                  value: { characters: [], relations: [] } 
+                }
               ]},
               { id: 'timeline', label: '时间线', components: [
-                { id: 'char-timeline', type: 'timeline', label: '角色时间线', config: {}, value: [] }
+                { 
+                  id: 'char-timeline', 
+                  type: 'timeline', 
+                  label: '角色时间线', 
+                  dataKey: 'character_timeline', // 数据存储键
+                  dataDependencies: ['characters'], // 依赖角色列表数据
+                  config: {}, 
+                  value: [] 
+                }
               ]},
             ]
           }, value: null },
@@ -503,10 +530,11 @@ interface TabsComponentProps {
   renderComponent: (comp: ComponentConfig, moduleId: string, tabsComponentId?: string, tabId?: string) => React.ReactNode;
   onUpdateTabs?: (tabs: { id: string; label: string; components: ComponentConfig[] }[]) => void;
   onAddComponentToTab?: (tabId: string) => void;
+  onEditComponentInTab?: (comp: ComponentConfig, tabId: string) => void;
   isEditMode?: boolean;  // 是否处于编辑模式
 }
 
-function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpdateTabs, onAddComponentToTab, isEditMode = false }: TabsComponentProps) {
+function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpdateTabs, onAddComponentToTab, onEditComponentInTab, isEditMode = false }: TabsComponentProps) {
   const [activeTab, setActiveTab] = useState(tabs[0]?.id || '');
 
   if (tabs.length === 0) {
@@ -552,22 +580,35 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
                         </button>
                       )}
                       {isEditMode && (
-                        <button
-                          className="comp-delete-btn"
-                          onClick={() => {
-                            if (onUpdateTabs && activeTabData) {
-                              const newTabs = [...tabs];
-                              newTabs[activeTabIndex] = {
-                                ...activeTabData,
-                                components: activeTabData.components.filter(c => c.id !== subComp.id)
-                              };
-                              onUpdateTabs(newTabs);
-                            }
-                          }}
-                          title="删除组件"
-                        >
-                          <X size={14} />
-                        </button>
+                        <>
+                          <button
+                            className="comp-edit-btn"
+                            onClick={() => {
+                              if (onEditComponentInTab) {
+                                onEditComponentInTab(subComp, activeTab);
+                              }
+                            }}
+                            title="编辑组件"
+                          >
+                            <Settings size={14} />
+                          </button>
+                          <button
+                            className="comp-delete-btn"
+                            onClick={() => {
+                              if (onUpdateTabs && activeTabData) {
+                                const newTabs = [...tabs];
+                                newTabs[activeTabIndex] = {
+                                  ...activeTabData,
+                                  components: activeTabData.components.filter(c => c.id !== subComp.id)
+                                };
+                                onUpdateTabs(newTabs);
+                              }
+                            }}
+                            title="删除组件"
+                          >
+                            <X size={14} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -590,6 +631,147 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ============ 数据依赖选择器组件 ============
+
+interface DataDependenciesSelectorProps {
+  value: string[];
+  onChange: (deps: string[]) => void;
+  template: TemplateConfig;
+  currentComponentId?: string;
+}
+
+function DataDependenciesSelector({ value, onChange, template, currentComponentId }: DataDependenciesSelectorProps) {
+  // 收集所有组件的 dataKey（排除当前组件）
+  const availableDataKeys = useCallback(() => {
+    const keys: { key: string; label: string; componentId: string }[] = [];
+    
+    const collectFromComponents = (components: ComponentConfig[], moduleName: string) => {
+      for (const comp of components) {
+        if (comp.dataKey && comp.id !== currentComponentId) {
+          keys.push({
+            key: comp.dataKey,
+            label: `${moduleName} - ${comp.label} (${comp.dataKey})`,
+            componentId: comp.id
+          });
+        }
+        
+        // 递归处理 tabs 中的组件
+        if (comp.type === 'tabs' && comp.config?.tabs) {
+          for (const tab of comp.config.tabs) {
+            if (tab.components) {
+              collectFromComponents(tab.components, `${moduleName} > ${tab.label}`);
+            }
+          }
+        }
+      }
+    };
+    
+    for (const module of template.modules) {
+      collectFromComponents(module.components, module.name);
+    }
+    
+    return keys;
+  }, [template, currentComponentId]);
+  
+  const dataKeys = availableDataKeys();
+  const [newDepKey, setNewDepKey] = useState('');
+  
+  const handleAddDep = () => {
+    if (newDepKey.trim() && !value.includes(newDepKey.trim())) {
+      onChange([...value, newDepKey.trim()]);
+      setNewDepKey('');
+    }
+  };
+  
+  const handleRemoveDep = (key: string) => {
+    onChange(value.filter(k => k !== key));
+  };
+  
+  return (
+    <div className="data-dependencies-selector">
+      <div className="deps-list">
+        {value.map((key) => {
+          const keyInfo = dataKeys.find(k => k.key === key);
+          return (
+            <div key={key} className="dep-tag">
+              <span className="dep-key">{key}</span>
+              {keyInfo && <span className="dep-label">{keyInfo.label}</span>}
+              <button
+                className="dep-remove"
+                onClick={() => handleRemoveDep(key)}
+                title="移除依赖"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      
+      <div className="deps-add-row">
+        {dataKeys.length > 0 ? (
+          <select
+            value={newDepKey}
+            onChange={(e) => setNewDepKey(e.target.value)}
+            className="deps-select"
+          >
+            <option value="">选择数据键...</option>
+            {dataKeys
+              .filter(k => !value.includes(k.key))
+              .map(k => (
+                <option key={k.key} value={k.key}>
+                  {k.label}
+                </option>
+              ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={newDepKey}
+            onChange={(e) => setNewDepKey(e.target.value)}
+            placeholder="手动输入 dataKey"
+            className="deps-input"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newDepKey.trim() && !value.includes(newDepKey.trim())) {
+                handleAddDep();
+              }
+            }}
+          />
+        )}
+        {dataKeys.length > 0 && (
+          <span className="deps-separator">或</span>
+        )}
+        {dataKeys.length > 0 && (
+          <input
+            type="text"
+            value={newDepKey}
+            onChange={(e) => setNewDepKey(e.target.value)}
+            placeholder="手动输入 dataKey"
+            className="deps-input"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newDepKey.trim() && !value.includes(newDepKey.trim())) {
+                handleAddDep();
+              }
+            }}
+          />
+        )}
+        <button
+          className="deps-add-btn"
+          onClick={handleAddDep}
+          disabled={!newDepKey.trim() || value.includes(newDepKey.trim())}
+        >
+          <Plus size={14} />
+          添加
+        </button>
+      </div>
+      
+      {dataKeys.length === 0 && (
+        <div className="deps-hint">暂无其他组件定义了 dataKey</div>
+      )}
     </div>
   );
 }
@@ -630,6 +812,10 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   const [showAddModule, setShowAddModule] = useState(false);
   const [showAddComponent, setShowAddComponent] = useState(false);
   const [addingToTab, setAddingToTab] = useState<{ tabId: string; componentId: string } | null>(null);
+  // 跟踪每个时间线组件中正在编辑的事件ID：key 是组件ID，value 是正在编辑的事件ID
+  const [editingTimelineEvents, setEditingTimelineEvents] = useState<{ [componentId: string]: string | null }>({});
+  // 跟踪每个时间线事件的编辑表单数据：key 是 "组件ID-事件ID"，value 是编辑表单数据
+  const [timelineEditForms, setTimelineEditForms] = useState<{ [key: string]: any }>({});
   const [newModuleForm, setNewModuleForm] = useState({ name: '', icon: 'LayoutGrid', color: '#64748b' });
   const [newComponentForm, setNewComponentForm] = useState<{
     type: ComponentType;
@@ -639,9 +825,15 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     validatePrompt: string;
     tabsConfig: { id: string; label: string }[];
     cardFields: { key: string; label: string; type: 'text' | 'textarea' | 'image' }[];
-  }>({ type: 'text', label: '', config: {}, generatePrompt: '', validatePrompt: '', tabsConfig: [], cardFields: [] });
+    dataKey: string;
+    dataDependencies: string[];
+  }>({ type: 'text', label: '', config: {}, generatePrompt: '', validatePrompt: '', tabsConfig: [], cardFields: [], dataKey: '', dataDependencies: [] });
   const [addComponentStep, setAddComponentStep] = useState<'type' | 'config'>('type');
   const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
+  const [editingComponentContext, setEditingComponentContext] = useState<{
+    tabsComponentId?: string;
+    tabId?: string;
+  } | null>(null);
   const [newTabName, setNewTabName] = useState('');
   const [newCardFieldForm, setNewCardFieldForm] = useState({ label: '', type: 'text' as 'text' | 'textarea' | 'image' });
   const [newTagOption, setNewTagOption] = useState({ label: '', color: '#64748b' });
@@ -713,6 +905,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         // 从作品的 metadata 字段加载模板配置
         const workData = await worksApi.getWork(Number(workId));
         const templateConfig = workData.metadata?.template_config;
+        const componentData = workData.metadata?.component_data || {};
+        const charactersFromMetadata = workData.metadata?.characters || []; // 向后兼容
         
         if (templateConfig && 
             templateConfig.templateId && 
@@ -729,15 +923,25 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           // 如果不是预设模板，尝试从数据库模板列表中找到（需要等待 userTemplates 加载）
           if (!baseTemplate && templateConfig.templateId.startsWith('db-')) {
             // 延迟加载，等待 userTemplates 加载完成
+            const dataToMerge = { ...componentData }; // 保存到局部变量
+            // 向后兼容：如果有 characters 字段，也添加到 component_data（使用 dataKey 'characters'）
+            if (charactersFromMetadata.length > 0 && !dataToMerge['characters']) {
+              dataToMerge['characters'] = charactersFromMetadata;
+            }
             setTimeout(() => {
               const dbTemplateId = parseInt(templateConfig.templateId.replace('db-', ''));
               const dbTemplate = userTemplates.find(t => t.id === dbTemplateId);
               if (dbTemplate) {
+                let modules = templateConfig.modules;
+                // 将组件数据写入模板格式
+                if (Object.keys(dataToMerge).length > 0) {
+                  modules = writeComponentDataToTemplate(modules, dataToMerge);
+                }
                 setTemplate({
                   id: `db-${dbTemplate.id}`,
                   name: dbTemplate.name,
                   description: dbTemplate.description || '',
-                  modules: templateConfig.modules
+                  modules: modules
                 });
               }
             }, 500);
@@ -750,15 +954,136 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             baseTemplate = presetTemplates[0];
           }
           
+          // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
+          const dataToWrite = { ...componentData };
+          if (charactersFromMetadata.length > 0 && !dataToWrite['characters']) {
+            dataToWrite['characters'] = charactersFromMetadata;
+          }
+          
+          // 将简化格式的组件数据写入模板格式
+          let modules = templateConfig.modules;
+          
+          // 如果从数据库加载的模板缺少 dataKey 和 dataDependencies，从预设模板中补充
+          const mergePresetTemplateConfig = (dbModules: ModuleConfig[], presetModules: ModuleConfig[]): ModuleConfig[] => {
+            return dbModules.map(dbModule => {
+              const presetModule = presetModules.find(pm => pm.id === dbModule.id);
+              if (!presetModule) return dbModule;
+              
+              const mergeComponents = (dbComps: ComponentConfig[], presetComps: ComponentConfig[]): ComponentConfig[] => {
+                return dbComps.map(dbComp => {
+                  const presetComp = presetComps.find(pc => pc.id === dbComp.id);
+                  if (!presetComp) {
+                    // 如果是 tabs，递归处理子组件
+                    if (dbComp.type === 'tabs' && dbComp.config?.tabs) {
+                      const presetTabsComp = presetComps.find(pc => pc.id === dbComp.id && pc.type === 'tabs');
+                      if (presetTabsComp && presetTabsComp.config && presetTabsComp.config.tabs) {
+                        const mergedTabs = dbComp.config.tabs.map((dbTab: any) => {
+                          const presetTab = presetTabsComp.config!.tabs!.find((pt: any) => pt.id === dbTab.id);
+                          if (presetTab && presetTab.components) {
+                            return {
+                              ...dbTab,
+                              components: mergeComponents(dbTab.components || [], presetTab.components)
+                            };
+                          }
+                          return dbTab;
+                        });
+                        return {
+                          ...dbComp,
+                          config: { ...dbComp.config, tabs: mergedTabs }
+                        };
+                      }
+                    }
+                    return dbComp;
+                  }
+                  
+                  // 合并配置：保留数据库中的 value，但补充缺失的 dataKey 和 dataDependencies
+                  return {
+                    ...dbComp,
+                    dataKey: dbComp.dataKey || presetComp.dataKey,
+                    dataDependencies: dbComp.dataDependencies || presetComp.dataDependencies,
+                    // 如果是 tabs，递归处理子组件
+                    ...(dbComp.type === 'tabs' && dbComp.config?.tabs && presetComp.config && presetComp.config.tabs ? {
+                      config: {
+                        ...dbComp.config,
+                        tabs: dbComp.config.tabs.map((dbTab: any) => {
+                          const presetTab = presetComp.config!.tabs!.find((pt: any) => pt.id === dbTab.id);
+                          if (presetTab && presetTab.components) {
+                            return {
+                              ...dbTab,
+                              components: mergeComponents(dbTab.components || [], presetTab.components)
+                            };
+                          }
+                          return dbTab;
+                        })
+                      }
+                    } : {})
+                  };
+                });
+              };
+              
+              return {
+                ...dbModule,
+                components: mergeComponents(dbModule.components, presetModule.components)
+              };
+            });
+          };
+          
+          // 如果是从数据库模板加载，尝试从预设模板补充缺失的配置
+          if (templateConfig.templateId && templateConfig.templateId.startsWith('db-')) {
+            // 对于数据库模板，暂时不补充（因为数据库模板应该已经有完整的配置）
+            // 如果数据库模板缺少配置，需要重新运行初始化脚本
+          } else {
+            // 如果是预设模板，直接使用预设模板补充
+            const presetTemplate = presetTemplates.find(t => t.id === templateConfig.templateId);
+            if (presetTemplate) {
+              modules = mergePresetTemplateConfig(modules, presetTemplate.modules);
+              console.log('✅ 从预设模板补充了缺失的 dataKey 和 dataDependencies');
+            }
+          }
+          
+          // 验证加载的模块配置中是否包含 dataKey 和 dataDependencies
+          const validateLoadedModules = (components: ComponentConfig[], path: string = ''): void => {
+            for (const comp of components) {
+              const currentPath = path ? `${path} > ${comp.label || comp.id}` : comp.label || comp.id;
+              if (comp.dataKey) {
+                console.log(`✅ 加载 - 组件 "${currentPath}": dataKey="${comp.dataKey}", dataDependencies=${JSON.stringify(comp.dataDependencies || [])}`);
+              }
+              // 递归检查 tabs 中的组件
+              if (comp.type === 'tabs' && comp.config?.tabs) {
+                for (const tab of comp.config.tabs) {
+                  if (tab.components) {
+                    validateLoadedModules(tab.components, `${currentPath} > ${tab.label || tab.id}`);
+                  }
+                }
+              }
+            }
+          };
+          
+          console.log('🔍 验证从数据库加载的模板配置中的 dataKey 和 dataDependencies:');
+          for (const module of modules) {
+            validateLoadedModules(module.components, module.name);
+          }
+          
+          if (Object.keys(dataToWrite).length > 0) {
+            modules = writeComponentDataToTemplate(modules, dataToWrite);
+            console.log('✅ 从 metadata 将', Object.keys(dataToWrite).length, '个组件的数据写入模板格式');
+            
+            // 再次验证写入后的模块配置
+            console.log('🔍 验证写入数据后的模板配置中的 dataKey 和 dataDependencies:');
+            for (const module of modules) {
+              validateLoadedModules(module.components, module.name);
+            }
+          }
+          
           setTemplate({
             ...baseTemplate,
-            modules: templateConfig.modules
+            modules: modules
           });
           
           // 同时更新本地缓存（使用模板ID作为key的一部分）
           saveToCache({
             templateId: templateConfig.templateId,
-            modules: templateConfig.modules,
+            modules: modules,
             lastModified: Date.now()
           }, workId, templateConfig.templateId);
         } else {
@@ -801,7 +1126,210 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     loadTemplate();
   }, [workId]);
 
-  // 从模板中提取角色信息
+  // 从模板格式中提取所有组件数据（简化格式，按 dataKey 组织）
+  const extractComponentDataFromTemplate = useCallback((modules: ModuleConfig[]): { [dataKey: string]: any } => {
+    const componentData: { [dataKey: string]: any } = {};
+    
+    // 递归提取组件数据
+    const extractFromComponents = (components: ComponentConfig[]) => {
+      for (const comp of components) {
+        // 如果组件有 dataKey，使用 dataKey 作为存储键
+        // 注意：即使 value 是空数组或空对象，也应该保存 dataKey（因为 dataKey 是组件配置的一部分）
+        if (comp.dataKey) {
+          // 根据组件类型提取数据
+          if (comp.type === 'character-card' && Array.isArray(comp.value)) {
+            componentData[comp.dataKey] = comp.value;
+          } else if (comp.type === 'relation-graph' && typeof comp.value === 'object') {
+            // 关系图组件：只保存关系，角色来自角色列表（不保存）
+            const relationValue = comp.value as { characters?: any[]; relations?: any[] } || {};
+            
+            // 确保保存的数据格式正确：只保存 relations，characters 始终为空
+            componentData[comp.dataKey] = {
+              characters: [], // 角色来自依赖的角色列表，不保存
+              relations: Array.isArray(relationValue.relations) ? relationValue.relations : []  // 只保存关系
+            };
+            
+            console.log(`💾 提取关系图谱数据 "${comp.dataKey}": 0 个角色（来自角色列表）, ${componentData[comp.dataKey].relations.length} 个关系`);
+          } else if (comp.type === 'timeline') {
+            // 时间线组件：如果是新格式（包含 events），只提取 events；否则提取整个 value
+            if (comp.value && typeof comp.value === 'object' && 'events' in comp.value) {
+              componentData[comp.dataKey] = comp.value.events;
+            } else if (Array.isArray(comp.value)) {
+              componentData[comp.dataKey] = comp.value;
+            } else {
+              // 即使 value 为空，也保存 dataKey（值为空数组）
+              componentData[comp.dataKey] = [];
+            }
+          } else {
+            // 其他类型：即使 value 为空，也保存 dataKey
+            if (comp.value !== undefined && comp.value !== null && comp.value !== '') {
+              componentData[comp.dataKey] = comp.value;
+            } else {
+              // 根据组件类型设置默认值
+              if (comp.type === 'multiselect' || comp.type === 'list' || comp.type === 'keyvalue' || comp.type === 'table' || comp.type === 'card-list') {
+                componentData[comp.dataKey] = [];
+              } else if (comp.type === 'text' || comp.type === 'textarea') {
+                componentData[comp.dataKey] = '';
+              } else {
+                componentData[comp.dataKey] = comp.value; // 保存原始值（可能是 null 或 undefined）
+              }
+            }
+          }
+        }
+        
+        // 递归处理 tabs 中的组件
+        if (comp.type === 'tabs' && comp.config?.tabs) {
+          for (const tab of comp.config.tabs) {
+            if (tab.components) {
+              extractFromComponents(tab.components);
+            }
+          }
+        }
+      }
+    };
+    
+    // 遍历所有模块
+    for (const module of modules) {
+      extractFromComponents(module.components);
+    }
+    
+    return componentData;
+  }, []);
+
+  // 将简化格式的组件数据写入模板格式（按 dataKey 匹配，并注入依赖数据）
+  const writeComponentDataToTemplate = useCallback((modules: ModuleConfig[], componentData: { [dataKey: string]: any }): ModuleConfig[] => {
+    if (!componentData || Object.keys(componentData).length === 0) return modules;
+    
+    // 递归写入组件数据
+    const writeToComponents = (components: ComponentConfig[]): ComponentConfig[] => {
+      return components.map(comp => {
+        if (comp.type === 'tabs' && comp.config?.tabs) {
+          return {
+            ...comp,  // 保留所有属性，包括 dataKey 和 dataDependencies（虽然 tabs 组件通常不需要）
+            config: {
+              ...comp.config,
+              tabs: comp.config.tabs.map(tab => {
+                if (tab.components) {
+                  return {
+                    ...tab,
+                    components: writeToComponents(tab.components)
+                  };
+                }
+                return tab;
+              })
+            }
+          };
+        } else if (comp.dataKey) {
+          // 如果组件有 dataKey，从 componentData 中获取数据
+          // 重要：必须保留 comp 的所有属性，包括 dataKey 和 dataDependencies
+          let value = comp.value;
+          
+          if (componentData[comp.dataKey] !== undefined) {
+            // 根据组件类型合并数据
+            if (comp.type === 'character-card' && Array.isArray(componentData[comp.dataKey])) {
+              // 角色卡片：合并数组
+              const existing = comp.value && Array.isArray(comp.value) ? comp.value : [];
+              const newData = componentData[comp.dataKey];
+              const charMap: { [key: string]: any } = {};
+              
+              existing.forEach((char: any) => {
+                const key = char.name || char.id;
+                if (key) charMap[key] = char;
+              });
+              
+              newData.forEach((char: any) => {
+                const key = char.name || char.id;
+                if (key) {
+                  if (charMap[key]) {
+                    charMap[key] = { ...charMap[key], ...char };
+                  } else {
+                    charMap[key] = char;
+                  }
+                }
+              });
+              
+              value = Object.values(charMap);
+            } else if (comp.type === 'relation-graph' && typeof componentData[comp.dataKey] === 'object') {
+              // 关系图：合并对象，确保正确处理 characters 和 relations 两个字段
+              const existing = comp.value && typeof comp.value === 'object' ? comp.value : { characters: [], relations: [] };
+              const newData = componentData[comp.dataKey];
+              
+              // 确保 newData 是对象格式，并且包含 characters 和 relations 两个字段
+              if (newData && typeof newData === 'object') {
+                // 优先使用 newData 中的数据（即使为空数组也要使用，因为可能是用户清空了数据）
+                const restoredValue = {
+                  characters: Array.isArray(newData.characters) ? newData.characters : (Array.isArray(existing.characters) ? existing.characters : []),
+                  relations: Array.isArray(newData.relations) ? newData.relations : (Array.isArray(existing.relations) ? existing.relations : [])
+                };
+                
+                console.log(`📥 恢复关系图谱数据 "${comp.dataKey}": ${restoredValue.characters.length} 个角色, ${restoredValue.relations.length} 个关系`);
+                value = restoredValue;
+              } else {
+                // 如果 newData 格式不正确，使用现有数据
+                console.log(`⚠️ 关系图谱数据格式不正确 "${comp.dataKey}", 使用现有数据`);
+                value = {
+                  characters: Array.isArray(existing.characters) ? existing.characters : [],
+                  relations: Array.isArray(existing.relations) ? existing.relations : []
+                };
+              }
+            } else {
+              // 其他类型：直接使用新数据
+              value = componentData[comp.dataKey];
+            }
+          }
+          
+          // 注入依赖数据（如果组件有 dataDependencies）
+          if (comp.dataDependencies && comp.dataDependencies.length > 0) {
+            const dependencies: { [key: string]: any } = {};
+            comp.dataDependencies.forEach(depKey => {
+              if (componentData[depKey] !== undefined) {
+                dependencies[depKey] = componentData[depKey];
+              }
+            });
+            
+            // 将依赖数据注入到组件的 value 中（根据组件类型决定注入方式）
+            if (comp.type === 'timeline' && Array.isArray(value)) {
+              // 时间线组件：将依赖的角色数据作为元数据注入，供组件使用
+              // 注意：这里不修改 value 数组本身，而是将依赖数据存储在组件的 _dependencies 属性中
+              // 但为了保持数据结构的一致性，我们将依赖数据存储在 value 的顶层
+              value = {
+                events: value,
+                _dependencies: dependencies // 将依赖数据作为元数据注入
+              };
+            } else if (comp.type === 'relation-graph' && typeof value === 'object') {
+              // 关系图组件：只保存关系，角色来自角色列表（不保存）
+              // 确保 value 是对象格式，包含 characters 和 relations
+              const currentValue = value && typeof value === 'object' ? value : { characters: [], relations: [] };
+              
+              value = {
+                characters: [], // 角色来自依赖的角色列表，不保存
+                relations: Array.isArray(currentValue.relations) ? currentValue.relations : []  // 只保存关系
+              };
+              
+              console.log(`💾 写入关系图谱数据到模板 "${comp.dataKey}": 0 个角色（来自角色列表）, ${value.relations.length} 个关系`);
+              // 注意：角色数据会在渲染时（renderComponent）从依赖的角色列表中动态获取
+            }
+          }
+          
+          // 重要：使用展开运算符保留所有原始属性（包括 dataKey 和 dataDependencies），只更新 value
+          return { 
+            ...comp,  // 保留所有原始属性：id, type, label, config, dataKey, dataDependencies, generatePrompt, validatePrompt 等
+            value     // 只更新 value
+          };
+        }
+        // 对于没有 dataKey 的组件，直接返回（保留所有属性）
+        return comp;
+      });
+    };
+    
+    // 遍历所有模块并写入数据
+    return modules.map(module => ({
+      ...module,
+      components: writeToComponents(module.components)
+    }));
+  }, []);
+
+  // 从模板中提取角色信息（用于保存到 characters 字段）
   const extractCharactersFromTemplate = useCallback((template: TemplateConfig): any[] => {
     const characters: any[] = [];
     
@@ -843,36 +1371,121 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     return findCharacterCards(characterModule.components);
   }, []);
 
-  // 保存作品信息到 metadata（包括模板配置和角色信息）
+  // 保存作品信息到 metadata（包括模板配置和所有组件数据）
   const saveWorkInfoToMetadata = useCallback(async (template: TemplateConfig) => {
     if (!workId) {
       return;
     }
 
     try {
-      // 提取角色信息
-      console.log('🔍 开始提取角色信息，template 结构:', {
-        id: template.id,
-        modulesCount: template.modules?.length,
-        characterModule: template.modules?.find(m => m.id === 'characters')
-      });
+      // 先从数据库获取当前的组件数据（可能包含从AI分析提取的数据）
+      let existingComponentData: { [componentId: string]: any } = {};
+      let charactersFromMetadata: any[] = []; // 保留用于向后兼容
+      try {
+        const workData = await worksApi.getWork(Number(workId));
+        existingComponentData = workData.metadata?.component_data || {};
+        charactersFromMetadata = workData.metadata?.characters || [];
+        console.log('📥 从数据库获取到组件数据:', Object.keys(existingComponentData).length, '个组件');
+      } catch (error) {
+        console.warn('获取当前组件数据失败，继续使用模板中的数据:', error);
+      }
       
-      const characters = extractCharactersFromTemplate(template);
-      console.log('🔍 提取到的角色信息:', characters, '数量:', characters.length);
+      // 从模板格式中提取所有组件数据（简化格式）
+      const componentDataFromTemplate = extractComponentDataFromTemplate(template.modules);
+      console.log('📥 从模板中提取到组件数据:', Object.keys(componentDataFromTemplate).length, '个组件');
       
-      // 构建要更新的 metadata（只包含要更新的字段，后端会合并）
-      const metadataUpdate: any = {
-        // 保存模板配置
-        template_config: {
-          templateId: template.id,
-          modules: template.modules,
-          lastModified: Date.now()
+      // 合并组件数据：模板中的数据优先（最新），metadata 中的数据作为补充（用于向后兼容）
+      const mergedComponentData: { [componentId: string]: any } = { ...componentDataFromTemplate };
+      
+      // 用 metadata 中的组件数据补充（只添加模板中没有的组件数据）
+      for (const [componentId, data] of Object.entries(existingComponentData)) {
+        if (!mergedComponentData[componentId]) {
+          // 如果模板中没有这个组件的数据，使用 metadata 中的数据
+          mergedComponentData[componentId] = data;
+        } else {
+          // 如果模板中已有数据，优先使用模板中的数据（因为这是最新的）
+          // 但对于关系图，需要确保 relations 数组被正确保留
+          if (typeof mergedComponentData[componentId] === 'object' && typeof data === 'object') {
+            // 对于关系图，确保 relations 数组被正确保留（使用模板中的数据）
+            if (Array.isArray(mergedComponentData[componentId].relations)) {
+              console.log(`✅ 使用模板中的关系图谱数据 "${componentId}": ${mergedComponentData[componentId].relations.length} 个关系`);
+              // 模板中的数据已经是最新的，不需要合并
+            }
+          }
+        }
+      }
+      
+      // 向后兼容：如果有 characters 字段，也合并到对应的组件中（使用 dataKey 'characters'）
+      if (charactersFromMetadata.length > 0) {
+        const charactersDataKey = 'characters'; // 使用 dataKey
+        if (mergedComponentData[charactersDataKey]) {
+          // 合并角色数据
+          const existingChars = Array.isArray(mergedComponentData[charactersDataKey]) ? mergedComponentData[charactersDataKey] : [];
+          const charMap: { [key: string]: any } = {};
+          existingChars.forEach((char: any) => {
+            const key = char.name || char.id;
+            if (key) charMap[key] = char;
+          });
+          charactersFromMetadata.forEach(char => {
+            const key = char.name || char.id;
+            if (key) {
+              if (charMap[key]) {
+                charMap[key] = { ...charMap[key], ...char };
+              } else {
+                charMap[key] = char;
+              }
+            }
+          });
+          mergedComponentData[charactersDataKey] = Object.values(charMap);
+        } else {
+          mergedComponentData[charactersDataKey] = charactersFromMetadata;
+        }
+      }
+      
+      console.log('✅ 合并后共有', Object.keys(mergedComponentData).length, '个组件的数据');
+      
+      // 将合并后的组件数据写回模板格式
+      const modulesWithData = writeComponentDataToTemplate(template.modules, mergedComponentData);
+      
+      // 验证 dataKey 和 dataDependencies 是否被保留
+      const validateComponentConfig = (components: ComponentConfig[]): void => {
+        for (const comp of components) {
+          if (comp.type === 'tabs' && comp.config?.tabs) {
+            for (const tab of comp.config.tabs) {
+              if (tab.components) {
+                validateComponentConfig(tab.components);
+              }
+            }
+          } else {
+            // 检查有 dataKey 的组件是否保留了 dataKey 和 dataDependencies
+            if (comp.dataKey) {
+              console.log(`✅ 组件 "${comp.label}" (${comp.id}): dataKey="${comp.dataKey}", dataDependencies=${JSON.stringify(comp.dataDependencies || [])}`);
+            }
+          }
         }
       };
-
-      // 只有当有角色时才更新 characters 字段
-      if (characters.length > 0) {
-        metadataUpdate.characters = characters.map((char: any) => ({
+      
+      // 验证所有模块的组件配置
+      console.log('🔍 验证保存的模板配置中的 dataKey 和 dataDependencies:');
+      for (const module of modulesWithData) {
+        validateComponentConfig(module.components);
+      }
+      
+      // 从合并后的数据中提取角色数据（用于向后兼容 characters 字段）
+      const characters = mergedComponentData['characters'] || [];
+      
+      // 构建要更新的 metadata
+      const metadataUpdate: any = {
+        // 保存模板配置（包含所有组件数据，包括 dataKey 和 dataDependencies）
+        template_config: {
+          templateId: template.id,
+          modules: modulesWithData,
+          lastModified: Date.now()
+        },
+        // 保存简化格式的组件数据（按组件ID组织）
+        component_data: mergedComponentData,
+        // 向后兼容：同时保存角色数据到 characters 字段
+        characters: characters.map((char: any) => ({
           name: char.name || '',
           display_name: char.display_name || char.name || '',
           description: char.description || '',
@@ -881,23 +1494,20 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           personality: char.personality || {},
           appearance: char.appearance || {},
           background: char.background || {},
-          ...char // 包含所有其他字段
-        }));
-        console.log('✅ 准备保存角色信息:', JSON.stringify(metadataUpdate.characters, null, 2));
-      } else {
-        console.log('⚠️ 未找到角色信息，跳过更新 characters 字段');
-      }
+          ...char
+        }))
+      };
 
       // 直接保存到数据库（PUT 请求会返回更新后的作品信息，后端会合并 metadata）
       await worksApi.updateWork(Number(workId), {
         metadata: metadataUpdate
       });
 
-      console.log('✅ 作品信息已保存到 metadata 字段');
+      console.log('✅ 作品信息已保存：模板格式保存在 template_config.modules，组件数据保存在 component_data');
     } catch (error) {
       console.error('❌ 保存作品信息到 metadata 失败:', error);
     }
-  }, [workId, extractCharactersFromTemplate]);
+  }, [workId, extractComponentDataFromTemplate, writeComponentDataToTemplate]);
 
   // 自动保存到数据库和缓存（防抖，基于 workId）
   useEffect(() => {
@@ -952,16 +1562,23 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
 
   // 更新组件值
   const updateComponentValue = (moduleId: string, componentId: string, value: any, parentTabId?: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      modules: prev.modules.map(m => {
-        if (m.id !== moduleId) return m;
-        return {
-          ...m,
-          components: updateComponentInList(m.components, componentId, value, parentTabId)
-        };
-      })
-    }));
+    setTemplate(prev => {
+      const updated = {
+        ...prev,
+        modules: prev.modules.map(m => {
+          if (m.id !== moduleId) return m;
+          return {
+            ...m,
+            components: updateComponentInList(m.components, componentId, value, parentTabId)
+          };
+        })
+      };
+      // 如果是关系图谱组件，添加调试信息
+      if (value && typeof value === 'object' && Array.isArray(value.relations)) {
+        console.log(`✅ updateComponentValue: 更新关系图谱组件 ${componentId}，${value.relations.length} 个关系`, value);
+      }
+      return updated;
+    });
   };
 
   const updateComponentInList = (components: ComponentConfig[], targetId: string, value: any, parentTabId?: string): ComponentConfig[] => {
@@ -1079,6 +1696,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         // 从作品的 metadata 字段加载模板配置
         const workData = await worksApi.getWork(Number(workId));
         const templateConfig = workData.metadata?.template_config;
+        const componentData = workData.metadata?.component_data || {};
+        const charactersFromMetadata = workData.metadata?.characters || []; // 向后兼容
         
         if (templateConfig && 
             templateConfig.templateId === newTemplate.id &&
@@ -1086,8 +1705,21 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             Array.isArray(templateConfig.modules) &&
             templateConfig.modules.length > 0) {
           // 如果作品 metadata 中有该模板的保存内容，使用保存的内容
+          let modules = templateConfig.modules;
           
-          newTemplate.modules = templateConfig.modules;
+          // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
+          const dataToWrite = { ...componentData };
+          if (charactersFromMetadata.length > 0 && !dataToWrite['characters']) {
+            dataToWrite['characters'] = charactersFromMetadata;
+          }
+          
+          // 将简化格式的组件数据写入模板格式
+          if (Object.keys(dataToWrite).length > 0) {
+            modules = writeComponentDataToTemplate(modules, dataToWrite);
+            console.log('✅ 从 metadata 将', Object.keys(dataToWrite).length, '个组件的数据写入模板格式');
+          }
+          
+          newTemplate.modules = modules;
         }
       } catch (error) {
         console.error('加载保存的模板内容失败:', error);
@@ -1220,6 +1852,28 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     }
 
     try {
+      // 验证模板配置中是否包含 dataKey 和 dataDependencies
+      const validateTemplateConfig = (components: ComponentConfig[]): void => {
+        for (const comp of components) {
+          if (comp.type === 'tabs' && comp.config?.tabs) {
+            for (const tab of comp.config.tabs) {
+              if (tab.components) {
+                validateTemplateConfig(tab.components);
+              }
+            }
+          } else {
+            if (comp.dataKey) {
+              console.log(`✅ 创建模板 - 组件 "${comp.label}" (${comp.id}): dataKey="${comp.dataKey}", dataDependencies=${JSON.stringify(comp.dataDependencies || [])}`);
+            }
+          }
+        }
+      };
+      
+      console.log('🔍 验证创建模板时的 dataKey 和 dataDependencies:');
+      for (const module of template.modules) {
+        validateTemplateConfig(module.components);
+      }
+      
       const templateData = {
         name: createTemplateForm.name,
         description: createTemplateForm.description || undefined,
@@ -1228,13 +1882,15 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         is_public: createTemplateForm.is_public,
         template_config: {
           templateId: `custom-${Date.now()}`,
-          modules: template.modules
+          modules: template.modules  // 这里应该包含完整的组件配置，包括 dataKey 和 dataDependencies
         },
         settings: {},
         tags: []
       };
 
+      console.log('📤 发送创建模板请求，template_config.modules 包含', template.modules.length, '个模块');
       const createdTemplate = await templatesApi.createTemplate(templateData);
+      console.log('✅ 模板创建成功，ID:', createdTemplate.id);
       
       // 更新当前模板的 ID
       const newTemplate = {
@@ -1345,6 +2001,9 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       config: finalConfig,
       generatePrompt: newComponentForm.generatePrompt.trim() || undefined,
       validatePrompt: newComponentForm.validatePrompt.trim() || undefined,
+      // tabs 组件不需要 dataKey 和 dataDependencies
+      dataKey: newComponentForm.type === 'tabs' ? undefined : (newComponentForm.dataKey.trim() || undefined),
+      dataDependencies: newComponentForm.type === 'tabs' ? undefined : (newComponentForm.dataDependencies.length > 0 ? newComponentForm.dataDependencies : undefined),
       value: getDefaultValue(newComponentForm.type),
     };
     
@@ -1398,8 +2057,9 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     setShowAddComponent(false);
     setAddComponentStep('type');
     setEditingComponentId(null);
+    setEditingComponentContext(null);
     setAddingToTab(null);
-    setNewComponentForm({ type: 'text', label: '', config: {}, generatePrompt: '', validatePrompt: '', tabsConfig: [], cardFields: [] });
+    setNewComponentForm({ type: 'text', label: '', config: {}, generatePrompt: '', validatePrompt: '', tabsConfig: [], cardFields: [], dataKey: '', dataDependencies: [] });
     setNewTabName('');
     setNewCardFieldForm({ label: '', type: 'text' });
     setNewTagOption({ label: '', color: '#64748b' });
@@ -1423,8 +2083,9 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   };
 
   // 开始编辑组件
-  const startEditComponent = (comp: ComponentConfig) => {
+  const startEditComponent = (comp: ComponentConfig, tabsComponentId?: string, tabId?: string) => {
     setEditingComponentId(comp.id);
+    setEditingComponentContext(tabsComponentId && tabId ? { tabsComponentId, tabId } : null);
     
     // 如果是 tabs 类型，提取 tabsConfig
     const tabsConfig = comp.type === 'tabs' && comp.config.tabs
@@ -1444,6 +2105,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       validatePrompt: comp.validatePrompt || '',
       tabsConfig,
       cardFields,
+      dataKey: comp.dataKey || '',
+      dataDependencies: comp.dataDependencies || [],
     });
     setAddComponentStep('config');
     setShowAddComponent(true);
@@ -1463,51 +2126,105 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       return;
     }
     
-    setTemplate(prev => ({
-      ...prev,
-      modules: prev.modules.map((m, i) => 
-        i === activeModuleIndex 
-          ? { 
-              ...m, 
-              components: m.components.map(c => {
-                if (c.id !== editingComponentId) return c;
-                
-                let newConfig = { ...newComponentForm.config };
-                
-                // 如果是 tabs 类型，更新 tabs 配置（保留已有的 components）
-                if (newComponentForm.type === 'tabs') {
-                  const existingTabs = c.config.tabs || [];
-                  newConfig.tabs = newComponentForm.tabsConfig.map(t => {
-                    const existingTab = existingTabs.find((et: any) => et.id === t.id);
+    // 如果是在 tabs 中的组件
+    if (editingComponentContext?.tabsComponentId && editingComponentContext?.tabId) {
+      setTemplate(prev => ({
+        ...prev,
+        modules: prev.modules.map((m, i) => 
+          i === activeModuleIndex 
+            ? { 
+                ...m, 
+                components: m.components.map(c => {
+                  // 找到 tabs 组件
+                  if (c.id === editingComponentContext.tabsComponentId && c.type === 'tabs') {
+                    const updatedTabs = (c.config.tabs || []).map((tab: any) => {
+                      if (tab.id === editingComponentContext.tabId) {
+                        // 更新该 tab 中的组件
+                        return {
+                          ...tab,
+                          components: tab.components.map((subComp: ComponentConfig) => {
+                            if (subComp.id === editingComponentId) {
+                              return {
+                                ...subComp,
+                                label: newComponentForm.label.trim(),
+                                config: { ...newComponentForm.config },
+                                generatePrompt: newComponentForm.generatePrompt.trim() || undefined,
+                                validatePrompt: newComponentForm.validatePrompt.trim() || undefined,
+                                // tabs 组件不需要 dataKey 和 dataDependencies
+                                dataKey: newComponentForm.type === 'tabs' ? undefined : (newComponentForm.dataKey.trim() || undefined),
+                                dataDependencies: newComponentForm.type === 'tabs' ? undefined : (newComponentForm.dataDependencies.length > 0 ? newComponentForm.dataDependencies : undefined),
+                              };
+                            }
+                            return subComp;
+                          })
+                        };
+                      }
+                      return tab;
+                    });
                     return {
-                      id: t.id,
-                      label: t.label,
-                      components: existingTab?.components || []
+                      ...c,
+                      config: {
+                        ...c.config,
+                        tabs: updatedTabs
+                      }
                     };
-                  });
-                }
-                
-                // 如果是 card-list 类型，更新 cardFields 配置
-                if (newComponentForm.type === 'card-list') {
-                  newConfig.cardFields = newComponentForm.cardFields.map(f => ({
-                    key: f.label.toLowerCase().replace(/\s+/g, '_'),
-                    label: f.label,
-                    type: f.type
-                  }));
-                }
-                
-                return {
-                  ...c,
-                  label: newComponentForm.label.trim(),
-                  config: newConfig,
-                  generatePrompt: newComponentForm.generatePrompt.trim() || undefined,
-                  validatePrompt: newComponentForm.validatePrompt.trim() || undefined,
-                };
-              })
-            }
-          : m
-      )
-    }));
+                  }
+                  return c;
+                })
+              }
+            : m
+        )
+      }));
+    } else {
+      // 普通组件
+      setTemplate(prev => ({
+        ...prev,
+        modules: prev.modules.map((m, i) => 
+          i === activeModuleIndex 
+            ? { 
+                ...m, 
+                components: m.components.map(c => {
+                  if (c.id !== editingComponentId) return c;
+                  
+                  let newConfig = { ...newComponentForm.config };
+                  
+                  // 如果是 tabs 类型，更新 tabs 配置（保留已有的 components）
+                  if (newComponentForm.type === 'tabs') {
+                    const existingTabs = c.config.tabs || [];
+                    newConfig.tabs = newComponentForm.tabsConfig.map(t => {
+                      const existingTab = existingTabs.find((et: any) => et.id === t.id);
+                      return {
+                        id: t.id,
+                        label: t.label,
+                        components: existingTab?.components || []
+                      };
+                    });
+                  }
+                  
+                  // 如果是 card-list 类型，更新 cardFields 配置
+                  if (newComponentForm.type === 'card-list') {
+                    newConfig.cardFields = newComponentForm.cardFields.map(f => ({
+                      key: f.label.toLowerCase().replace(/\s+/g, '_'),
+                      label: f.label,
+                      type: f.type
+                    }));
+                  }
+                  
+                  return {
+                    ...c,
+                    label: newComponentForm.label.trim(),
+                    config: newConfig,
+                    generatePrompt: newComponentForm.generatePrompt.trim() || undefined,
+                    validatePrompt: newComponentForm.validatePrompt.trim() || undefined,
+                    dataKey: newComponentForm.dataKey.trim() || undefined,
+                    dataDependencies: newComponentForm.dataDependencies.length > 0 ? newComponentForm.dataDependencies : undefined,
+                  };
+                })
+              }
+            : m
+        )
+      }));
+    }
     closeAddComponentModal();
   };
 
@@ -1803,6 +2520,10 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           setShowAddComponent(true);
           setAddComponentStep('type');
         };
+        const handleEditComponentInTab = (subComp: ComponentConfig, tabId: string) => {
+          // 编辑 tabs 中的组件
+          startEditComponent(subComp, comp.id, tabId);
+        };
         return (
           <TabsComponent 
             tabs={tabs} 
@@ -1811,78 +2532,476 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             renderComponent={renderComponent}
             onUpdateTabs={handleUpdateTabs}
             onAddComponentToTab={handleAddComponentToTab}
+            onEditComponentInTab={handleEditComponentInTab}
             isEditMode={isEditMode}
           />
         );
 
       case 'relation-graph':
         // 转换数据格式
-        const relationData = comp.value as { characters?: any[]; relations?: any[] } || {};
+        // 确保 comp.value 是对象格式，包含 characters 和 relations 两个字段
+        let relationData: { characters?: any[]; relations?: any[] } = {};
+        if (comp.value && typeof comp.value === 'object') {
+          relationData = {
+            characters: Array.isArray(comp.value.characters) ? comp.value.characters : [],
+            relations: Array.isArray(comp.value.relations) ? comp.value.relations : []
+          };
+        } else {
+          // 如果 comp.value 不存在或格式不正确，初始化为空对象
+          relationData = { characters: [], relations: [] };
+        }
+        
+        // 如果组件有依赖，尝试从依赖中获取角色数据
+        if (comp.dataDependencies && comp.dataDependencies.length > 0) {
+          // 重要：如果关系图谱组件有依赖，角色数据应该完全来自依赖，而不是 comp.value.characters
+          // 因为 comp.value.characters 在保存时被设置为空数组（避免数据翻倍）
+          // 所以这里应该忽略 comp.value.characters，只从依赖中获取角色数据
+          
+          // 从模板中查找依赖的组件数据
+          const findDependencyData = (depKey: string): any[] => {
+            for (const module of template.modules) {
+              const findInComponents = (components: ComponentConfig[], path: string = ''): any[] | null => {
+                for (const compItem of components) {
+                  // 检查当前组件是否匹配
+                  if (compItem.dataKey === depKey) {
+                    // 即使 value 是空数组，也应该返回（这样关系图谱至少能显示，只是没有角色）
+                    if (compItem.value !== undefined && compItem.value !== null) {
+                      if (Array.isArray(compItem.value)) {
+                        return compItem.value; // 即使为空数组也返回
+                      } else if (typeof compItem.value === 'object' && compItem.value !== null) {
+                        // 如果是对象，尝试提取数组字段
+                        const obj = compItem.value as any;
+                        if (Array.isArray(obj.characters)) {
+                          return obj.characters;
+                        }
+                      }
+                    } else {
+                      return []; // 返回空数组而不是 null
+                    }
+                  }
+                  
+                  // 递归查找 tabs 中的组件
+                  if (compItem.type === 'tabs' && compItem.config?.tabs) {
+                    for (const tab of compItem.config.tabs) {
+                      if (tab.components) {
+                        const found = findInComponents(tab.components, `${path} > ${tab.label || tab.id}`);
+                        if (found) return found;
+                      }
+                    }
+                  }
+                }
+                return null;
+              };
+              const found = findInComponents(module.components, module.name);
+              if (found) {
+                return found;
+              }
+            }
+            return [];
+          };
+          
+          // 重要：如果关系图谱组件有依赖，角色数据应该完全来自依赖
+          // 初始值应该为空数组，而不是 relationData.characters（因为保存时被设置为空）
+          let mergedCharacters: any[] = [];
+          
+          // 收集所有依赖的角色数据并去重
+          const allDependencyCharacters: any[] = [];
+          for (const depKey of comp.dataDependencies) {
+            const depData = findDependencyData(depKey);
+            if (depData && Array.isArray(depData) && depData.length > 0) {
+              // 转换角色数据格式
+              // 注意：保持角色ID稳定，如果角色没有ID，使用 name 作为稳定的标识
+              const convertedCharacters = depData.map((char: any, index: number) => {
+                if (char.id && char.name && (char.gender === '男' || char.gender === '女')) {
+                  return {
+                    id: char.id,
+                    name: char.name,
+                    gender: char.gender
+                  };
+                }
+                // 如果没有ID，使用 name 作为ID（更稳定，不包含时间戳）
+                const stableId = char.id || char.name || `char-${index}`;
+                return {
+                  id: stableId,
+                  name: char.name || char.display_name || '',
+                  gender: (char.gender === '男' || char.gender === '女') ? char.gender : '男'
+                };
+              });
+              
+              allDependencyCharacters.push(...convertedCharacters);
+            }
+          }
+          
+          // 去重：使用 id 或 name 作为唯一标识
+          const charMap: { [key: string]: any } = {};
+          allDependencyCharacters.forEach((char: any) => {
+            const key = char.id || char.name;
+            if (key && !charMap[key]) {
+              charMap[key] = char;
+            }
+          });
+          mergedCharacters = Object.values(charMap);
+          
+          relationData = {
+            ...relationData,
+            characters: mergedCharacters,  // 角色数据完全来自依赖的角色列表
+            relations: relationData.relations || []  // 关系数据来自 comp.value
+          };
+        } else {
+          // 如果没有依赖配置，仍然只使用关系数据，角色为空（因为角色应该来自角色列表）
+          // 注意：关系图谱应该总是配置了依赖，如果没有配置，角色列表将为空
+          relationData = {
+            characters: [], // 即使没有依赖配置，也不使用 comp.value.characters（因为角色应该来自角色列表）
+            relations: Array.isArray(relationData.relations) ? relationData.relations : []
+          };
+        }
+        
         const graphData: CharacterRelationsData = {
           characters: relationData.characters || [],
           relations: relationData.relations || []
         };
+        
+        // 调试信息：检查关系数据
+        if (graphData.relations.length > 0) {
+          console.log(`🔗 关系图谱渲染: ${graphData.characters.length} 个角色, ${graphData.relations.length} 个关系`, graphData.relations);
+        }
+        
         return (
-          <div className="comp-relation-graph">
+          <div className="comp-relation-graph" style={{ width: '100%', height: '600px', minHeight: '600px' }}>
             <CharacterRelations 
+              key={`relation-graph-${comp.id}`}
               data={graphData}
-              onChange={(newData) => updateValue({ 
-                characters: newData.characters, 
-                relations: newData.relations 
-              })}
+              onChange={(newData) => {
+                // 关系图谱只保存关系，角色始终从角色列表中获取（不保存）
+                const valueToSave = {
+                  characters: [], // 角色来自依赖的角色列表，不保存
+                  relations: newData.relations || [] // 只保存关系
+                };
+                console.log(`💾 关系图谱 onChange 触发: 保存 ${valueToSave.relations.length} 个关系`, valueToSave.relations);
+                updateValue(valueToSave);
+              }}
             />
           </div>
         );
 
       case 'timeline':
-        const timelineData = (comp.value as { time: string; event: string; description: string }[]) || [];
+        // 支持两种格式：数组格式（旧格式）和对象格式（新格式，包含依赖数据）
+        let timelineData: any[] = [];
+        let dependencies: { [key: string]: any } = {};
+        
+        if (Array.isArray(comp.value)) {
+          // 旧格式：直接是数组
+          timelineData = comp.value;
+        } else if (comp.value && typeof comp.value === 'object' && 'events' in comp.value) {
+          // 新格式：包含 events 和 _dependencies
+          timelineData = comp.value.events || [];
+          dependencies = comp.value._dependencies || {};
+        } else {
+          timelineData = [];
+        }
+        
+        // 从依赖中获取角色列表
+        let availableCharacters: any[] = [];
+        if (comp.dataDependencies && comp.dataDependencies.length > 0) {
+          const findDependencyData = (depKey: string): any[] => {
+            for (const module of template.modules) {
+              const findInComponents = (components: ComponentConfig[]): any[] | null => {
+                for (const compItem of components) {
+                  if (compItem.dataKey === depKey) {
+                    if (compItem.value !== undefined && compItem.value !== null) {
+                      if (Array.isArray(compItem.value)) {
+                        return compItem.value;
+                      } else if (typeof compItem.value === 'object' && compItem.value !== null) {
+                        const obj = compItem.value as any;
+                        if (Array.isArray(obj.characters)) {
+                          return obj.characters;
+                        }
+                      }
+                    }
+                    return [];
+                  }
+                  if (compItem.type === 'tabs' && compItem.config?.tabs) {
+                    for (const tab of compItem.config.tabs) {
+                      if (tab.components) {
+                        const found = findInComponents(tab.components);
+                        if (found) return found;
+                      }
+                    }
+                  }
+                }
+                return null;
+              };
+              const found = findInComponents(module.components);
+              if (found) return found;
+            }
+            return [];
+          };
+          
+          // 收集所有依赖的角色数据并去重
+          const allDependencyCharacters: any[] = [];
+          for (const depKey of comp.dataDependencies) {
+            const depData = findDependencyData(depKey);
+            if (depData && Array.isArray(depData) && depData.length > 0) {
+              allDependencyCharacters.push(...depData);
+            }
+          }
+          
+          // 去重
+          const charMap: { [key: string]: any } = {};
+          allDependencyCharacters.forEach((char: any) => {
+            const key = char.id || char.name;
+            if (key && !charMap[key]) {
+              charMap[key] = {
+                id: char.id || key,
+                name: char.name || char.display_name || '',
+                gender: char.gender || '男'
+              };
+            }
+          });
+          availableCharacters = Object.values(charMap);
+        }
+        
+        // 确保时间线数据格式正确
+        const ensureEventFormat = (item: any) => {
+          return {
+            id: item.id || `event-${Date.now()}-${Math.random()}`,
+            characterId: item.characterId || '',
+            character: item.character || '',
+            time: item.time || '',
+            event: item.event || '',
+            description: item.description || '',
+            location: item.location || ''
+          };
+        };
+        
+        const normalizedTimelineData = timelineData.map(ensureEventFormat);
+        
         return (
           <div className="comp-timeline">
-            {timelineData.map((item, i) => (
-              <div key={i} className="timeline-item">
-                <div className="timeline-dot" />
-                <div className="timeline-content">
-                  <input
-                    type="text"
-                    className="timeline-time"
-                    value={item.time}
-                    onChange={(e) => {
-                      const newData = [...timelineData];
-                      newData[i] = { ...item, time: e.target.value };
-                      updateValue(newData);
-                    }}
-                    placeholder="时间点"
-                  />
-                  <input
-                    type="text"
-                    className="timeline-event"
-                    value={item.event}
-                    onChange={(e) => {
-                      const newData = [...timelineData];
-                      newData[i] = { ...item, event: e.target.value };
-                      updateValue(newData);
-                    }}
-                    placeholder="事件标题"
-                  />
-                  <textarea
-                    className="timeline-desc"
-                    value={item.description}
-                    onChange={(e) => {
-                      const newData = [...timelineData];
-                      newData[i] = { ...item, description: e.target.value };
-                      updateValue(newData);
-                    }}
-                    placeholder="事件描述..."
-                    rows={2}
-                  />
-                  <button className="timeline-del" onClick={() => updateValue(timelineData.filter((_, idx) => idx !== i))}>
-                    <X size={14} />
-                  </button>
+            <div className="timeline-header-section">
+              <h4 className="timeline-title">{comp.label || '时间线'}</h4>
+              {availableCharacters.length > 0 && (
+                <div className="timeline-filter">
+                  <label>可用角色：</label>
+                  <span className="character-count">{availableCharacters.length} 个角色</span>
                 </div>
-              </div>
-            ))}
-            <button className="list-add" onClick={() => updateValue([...timelineData, { time: '', event: '', description: '' }])}>
-              <Plus size={14} /> 添加事件
+              )}
+            </div>
+            
+            <div className="timeline-events-list">
+              {normalizedTimelineData.map((item, i) => {
+                const isEditing = editingTimelineEvents[comp.id] === item.id;
+                const editFormKey = `${comp.id}-${item.id}`;
+                const editForm = timelineEditForms[editFormKey] || {
+                  characterId: item.characterId || '',
+                  character: item.character || '',
+                  time: item.time || '',
+                  event: item.event || '',
+                  description: item.description || '',
+                  location: item.location || ''
+                };
+
+                return (
+                  <div key={item.id || i} className="timeline-event-item">
+                    <div className="timeline-marker" />
+                    <div className="timeline-event-content">
+                      {isEditing ? (
+                        // 编辑模式
+                        <>
+                          <div className="timeline-event-header">
+                            <div className="timeline-event-meta">
+                              {availableCharacters.length > 0 && (
+                                <select
+                                  className="timeline-character-select"
+                                  value={editForm.characterId}
+                                  onChange={(e) => {
+                                    const selectedChar = availableCharacters.find(c => c.id === e.target.value);
+                                    setTimelineEditForms(prev => ({
+                                      ...prev,
+                                      [editFormKey]: {
+                                        ...editForm,
+                                        characterId: e.target.value,
+                                        character: selectedChar?.name || ''
+                                      }
+                                    }));
+                                  }}
+                                >
+                                  <option value="">选择角色</option>
+                                  {availableCharacters.map(char => (
+                                    <option key={char.id} value={char.id}>{char.name}</option>
+                                  ))}
+                                </select>
+                              )}
+                              <input
+                                type="text"
+                                className="timeline-time-input"
+                                value={editForm.time}
+                                onChange={(e) => setTimelineEditForms(prev => ({
+                                  ...prev,
+                                  [editFormKey]: { ...editForm, time: e.target.value }
+                                }))}
+                                placeholder="时间/章节（如：第一卷 第1章 或 2024年1月）"
+                              />
+                            </div>
+                            <div className="timeline-event-actions">
+                              <button
+                                className="timeline-save-btn"
+                                onClick={() => {
+                                  const newData = [...normalizedTimelineData];
+                                  newData[i] = {
+                                    ...item,
+                                    ...editForm
+                                  };
+                                  if (comp.value && typeof comp.value === 'object' && '_dependencies' in comp.value) {
+                                    updateValue({ events: newData, _dependencies: dependencies });
+                                  } else {
+                                    updateValue(newData);
+                                  }
+                                  setEditingTimelineEvents(prev => ({ ...prev, [comp.id]: null }));
+                                  // 清除编辑表单数据
+                                  setTimelineEditForms(prev => {
+                                    const newForms = { ...prev };
+                                    delete newForms[editFormKey];
+                                    return newForms;
+                                  });
+                                }}
+                              >
+                                保存
+                              </button>
+                              <button
+                                className="timeline-cancel-btn"
+                                onClick={() => {
+                                  setEditingTimelineEvents(prev => ({ ...prev, [comp.id]: null }));
+                                  // 清除编辑表单数据
+                                  setTimelineEditForms(prev => {
+                                    const newForms = { ...prev };
+                                    delete newForms[editFormKey];
+                                    return newForms;
+                                  });
+                                }}
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                          <input
+                            type="text"
+                            className="timeline-event-title"
+                            value={editForm.event}
+                            onChange={(e) => setTimelineEditForms(prev => ({
+                              ...prev,
+                              [editFormKey]: { ...editForm, event: e.target.value }
+                            }))}
+                            placeholder="事件标题"
+                          />
+                          <textarea
+                            className="timeline-event-description"
+                            value={editForm.description}
+                            onChange={(e) => setTimelineEditForms(prev => ({
+                              ...prev,
+                              [editFormKey]: { ...editForm, description: e.target.value }
+                            }))}
+                            placeholder="事件描述..."
+                            rows={2}
+                          />
+                          <input
+                            type="text"
+                            className="timeline-location-input"
+                            value={editForm.location}
+                            onChange={(e) => setTimelineEditForms(prev => ({
+                              ...prev,
+                              [editFormKey]: { ...editForm, location: e.target.value }
+                            }))}
+                            placeholder="地点（可选）"
+                          />
+                        </>
+                      ) : (
+                        // 只读模式
+                        <>
+                          <div className="timeline-event-header">
+                            <div className="timeline-event-meta">
+                              {item.character && (
+                                <span className="timeline-character-name">{item.character}</span>
+                              )}
+                              {item.time && (
+                                <span className="timeline-time">{item.time}</span>
+                              )}
+                            </div>
+                            <div className="timeline-event-actions">
+                              <button
+                                className="timeline-edit-btn"
+                                onClick={() => {
+                                  // 初始化编辑表单数据
+                                  setTimelineEditForms(prev => ({
+                                    ...prev,
+                                    [editFormKey]: {
+                                      characterId: item.characterId || '',
+                                      character: item.character || '',
+                                      time: item.time || '',
+                                      event: item.event || '',
+                                      description: item.description || '',
+                                      location: item.location || ''
+                                    }
+                                  }));
+                                  setEditingTimelineEvents(prev => ({ ...prev, [comp.id]: item.id }));
+                                }}
+                              >
+                                编辑
+                              </button>
+                              <button
+                                className="timeline-delete-btn"
+                                onClick={() => {
+                                  const newData = normalizedTimelineData.filter((_, idx) => idx !== i);
+                                  if (comp.value && typeof comp.value === 'object' && '_dependencies' in comp.value) {
+                                    updateValue({ events: newData, _dependencies: dependencies });
+                                  } else {
+                                    updateValue(newData);
+                                  }
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {item.event && (
+                            <div className="timeline-event-title-readonly">{item.event}</div>
+                          )}
+                          {item.description && (
+                            <div className="timeline-event-description-readonly">{item.description}</div>
+                          )}
+                          {item.location && (
+                            <div className="timeline-location-readonly">📍 {item.location}</div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <button 
+              className="timeline-add-btn"
+              onClick={() => {
+                const newEvent = {
+                  id: `event-${Date.now()}-${Math.random()}`,
+                  characterId: '',
+                  character: '',
+                  time: '',
+                  event: '',
+                  description: '',
+                  location: ''
+                };
+                const newData = [...normalizedTimelineData, newEvent];
+                if (comp.value && typeof comp.value === 'object' && '_dependencies' in comp.value) {
+                  updateValue({ events: newData, _dependencies: dependencies });
+                } else {
+                  updateValue(newData);
+                }
+              }}
+            >
+              <Plus size={16} />
+              <span>添加时间线事件</span>
             </button>
           </div>
         );
@@ -3158,6 +4277,43 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                       </div>
                     )}
                   </div>
+
+                  {/* tabs 组件不需要数据绑定配置 */}
+                  {newComponentForm.type !== 'tabs' && (
+                    <div className="form-section">
+                      <div className="section-title">
+                        数据绑定配置
+                        <span className="section-hint">配置组件数据的存储键和依赖关系</span>
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>
+                          数据存储键 (dataKey)
+                          <span className="label-hint">用于在 component_data 中存储和读取数据，建议使用小写字母和下划线，如：characters、character_timeline</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newComponentForm.dataKey}
+                          onChange={(e) => setNewComponentForm({ ...newComponentForm, dataKey: e.target.value })}
+                          placeholder="例如：characters、character_timeline、world_locations"
+                          style={{ fontFamily: 'monospace' }}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>
+                          数据依赖 (dataDependencies)
+                          <span className="label-hint">选择此组件需要依赖的其他组件数据键，例如时间线组件可以依赖角色列表的数据</span>
+                        </label>
+                        <DataDependenciesSelector
+                          value={newComponentForm.dataDependencies}
+                          onChange={(deps) => setNewComponentForm({ ...newComponentForm, dataDependencies: deps })}
+                          template={template}
+                          currentComponentId={editingComponentId || undefined}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="form-section">
                     <div className="section-title">
