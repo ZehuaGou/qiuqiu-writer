@@ -232,24 +232,25 @@ const documentCache = {
     });
 
     try {
-      // 先保存到本地缓存（使用编辑器内容）
+      // 先保存到本地缓存（使用编辑器内容），确保即使同步失败也有本地备份
       const cached = await localCacheManager.get<ShareDBDocument>(documentId);
       if (cached) {
         cached.content = contentToSave; // 使用编辑器内容
+        // 临时更新版本号（如果同步成功，会用服务器返回的版本号覆盖）
         cached.version = (cached.version || 0) + 1;
         await localCacheManager.set(documentId, cached, cached.version);
         documentCache.currentVersion.set(documentId, cached.version);
-        documentCache.currentContent.set(documentId, contentToSave); // 更新缓存为编辑器内容
+        documentCache.currentContent.set(documentId, contentToSave); // 更新内存缓存为编辑器内容
       } else {
         // 如果缓存不存在，创建新的
         const newDoc: ShareDBDocument = {
           document_id: documentId,
           content: contentToSave, // 使用编辑器内容
-          version: 1,
+          version: localVersion || 1, // 使用当前版本号或默认值
         };
-        await localCacheManager.set(documentId, newDoc, 1);
-        documentCache.currentVersion.set(documentId, 1);
-        documentCache.currentContent.set(documentId, contentToSave); // 更新缓存为编辑器内容
+        await localCacheManager.set(documentId, newDoc, newDoc.version);
+        documentCache.currentVersion.set(documentId, newDoc.version);
+        documentCache.currentContent.set(documentId, contentToSave); // 更新内存缓存为编辑器内容
       }
 
       // 关键修复：调用后端 ShareDB 同步接口（使用编辑器内容）
@@ -318,13 +319,27 @@ const documentCache = {
             documentCache.lastSyncedContent.set(documentId, previousContent);
           }
           
-          // 更新缓存
+          // 更新缓存（保留原有的 metadata，确保章节信息不丢失）
+          // 关键修复：在同步成功后，重新读取本地缓存以确保获取最新的 metadata
+          const existingDoc = await localCacheManager.get<ShareDBDocument>(documentId);
           const updatedDoc: ShareDBDocument = {
             document_id: documentId,
-            content: result.content,
-            version: result.version,
+            content: result.content, // 使用服务器返回的合并后内容
+            version: result.version, // 使用服务器返回的版本号
+            // 关键修复：优先使用 existingDoc 的 metadata（因为 updateDocument 可能已经更新了它）
+            // 如果 existingDoc 不存在，使用 cached 的 metadata
+            metadata: existingDoc?.metadata || cached?.metadata || undefined,
           };
           await localCacheManager.set(documentId, updatedDoc, result.version);
+          
+          // 关键修复：确保 metadata 被正确保存，并记录日志
+          console.log('✅ [DocumentCache] 已更新本地缓存:', {
+            documentId,
+            version: result.version,
+            contentLength: result.content.length,
+            hasMetadata: !!updatedDoc.metadata,
+            metadataKeys: updatedDoc.metadata ? Object.keys(updatedDoc.metadata) : [],
+          });
           
           console.log('✅ [DocumentCache] 已同步到服务器:', {
             documentId,
@@ -346,6 +361,20 @@ const documentCache = {
         }
       } catch (syncError) {
         console.warn('⚠️ [DocumentCache] 同步到服务器失败，但已保存到本地缓存:', syncError);
+        // 关键修复：即使服务器同步失败，也要确保本地缓存已更新
+        // 重新读取本地缓存，确保内容已保存
+        const savedDoc = await localCacheManager.get<ShareDBDocument>(documentId);
+        if (savedDoc) {
+          // 确保本地缓存中的内容是最新的编辑器内容
+          if (savedDoc.content !== contentToSave) {
+            savedDoc.content = contentToSave;
+            await localCacheManager.set(documentId, savedDoc, savedDoc.version || localVersion);
+            console.log('✅ [DocumentCache] 已更新本地缓存（同步失败后的修复）:', {
+              documentId,
+              contentLength: contentToSave.length,
+            });
+          }
+        }
         // 即使服务器同步失败，也返回成功（因为已保存到本地）
         return {
           success: true,
