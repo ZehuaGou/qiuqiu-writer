@@ -148,11 +148,21 @@ class QdrantVecDB(BaseVecDB):
 
         if self.collection_exists(self.config.collection_name):
             collection_info = self.client.get_collection(self.config.collection_name)
-            logger.warning(
-                f"Collection '{self.config.collection_name}' (vector dimension: {collection_info.config.params.vectors.size}) already exists. Skipping creation."
-            )
-
-            return
+            existing_dimension = collection_info.config.params.vectors.size
+            expected_dimension = self.config.vector_dimension
+            
+            # Check if dimension matches
+            if existing_dimension != expected_dimension:
+                logger.warning(
+                    f"Collection '{self.config.collection_name}' exists with dimension {existing_dimension}, "
+                    f"but expected {expected_dimension}. Deleting and recreating..."
+                )
+                self.delete_collection(self.config.collection_name)
+            else:
+                logger.info(
+                    f"Collection '{self.config.collection_name}' (vector dimension: {existing_dimension}) already exists. Skipping creation."
+                )
+                return
 
         # Map string distance metric to Qdrant Distance enum
         distance_map = {
@@ -234,6 +244,28 @@ class QdrantVecDB(BaseVecDB):
             List of search results with distance scores and payloads.
         """
         self._lazy_ensure_connection()
+        # Ensure collection exists and has correct dimension before searching
+        if not self.collection_exists(self.config.collection_name):
+            logger.warning(
+                f"Collection '{self.config.collection_name}' does not exist. Creating it now..."
+            )
+            self.create_collection()
+        else:
+            # Check if dimension matches
+            try:
+                collection_info = self.client.get_collection(self.config.collection_name)
+                existing_dimension = collection_info.config.params.vectors.size
+                expected_dimension = self.config.vector_dimension
+                if existing_dimension != expected_dimension:
+                    logger.warning(
+                        f"Collection '{self.config.collection_name}' has dimension {existing_dimension}, "
+                        f"but expected {expected_dimension}. Recreating collection..."
+                    )
+                    self.delete_collection(self.config.collection_name)
+                    self.create_collection()
+            except Exception as e:
+                logger.warning(f"Failed to check collection dimension: {e}. Attempting to create collection...")
+                self.create_collection()
         qdrant_filter = self._dict_to_filter(filter) if filter else None
         response = self.client.search(
             collection_name=self.config.collection_name,
@@ -387,6 +419,12 @@ class QdrantVecDB(BaseVecDB):
                 - 'payload': additional fields for filtering/retrieval
         """
         self._lazy_ensure_connection()
+        # Ensure collection exists before adding
+        if not self.collection_exists(self.config.collection_name):
+            logger.warning(
+                f"Collection '{self.config.collection_name}' does not exist. Creating it now..."
+            )
+            self.create_collection()
         points = []
         for item in data:
             if isinstance(item, dict):
@@ -425,6 +463,13 @@ class QdrantVecDB(BaseVecDB):
         Args:
             fields (list[str]): List of field names to index (as keyword).
         """
+        self._lazy_ensure_connection()
+        # Ensure collection exists before creating indexes
+        if not self.collection_exists(self.config.collection_name):
+            logger.warning(
+                f"Collection '{self.config.collection_name}' does not exist. Creating it now..."
+            )
+            self.create_collection()
         for field in fields:
             try:
                 self.client.create_payload_index(

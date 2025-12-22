@@ -262,6 +262,17 @@ class APIConfig:
     @staticmethod
     def get_openai_config() -> dict[str, Any]:
         """Get OpenAI configuration."""
+        # OpenAI 客户端会自动添加 /v1 路径，所以 base_url 不应该包含 /v1
+        api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
+        # 如果环境变量中已经包含了 /v1，则移除它
+        if api_base.endswith("/v1"):
+            api_base = api_base[:-3]
+        # 移除末尾的斜杠（如果有）
+        api_base = api_base.rstrip("/")
+        # 如果没有协议前缀，默认使用 https://
+        if not api_base.startswith(("http://", "https://")):
+            api_base = f"https://{api_base}"
+        
         return {
             "model_name_or_path": os.getenv("MOS_CHAT_MODEL", "gpt-4o-mini"),
             "temperature": float(os.getenv("MOS_CHAT_TEMPERATURE", "0.8")),
@@ -270,7 +281,7 @@ class APIConfig:
             "top_k": int(os.getenv("MOS_TOP_K", "50")),
             "remove_think_prefix": True,
             "api_key": os.getenv("OPENAI_API_KEY", "your-api-key-here"),
-            "api_base": os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"),
+            "api_base": api_base,
         }
 
     @staticmethod
@@ -433,9 +444,24 @@ class APIConfig:
         if embedder_backend == "universal_api":
             # Use OpenAI API for embeddings (reuse chat API credentials)
             api_key = os.getenv("MOS_EMBEDDER_API_KEY") or os.getenv("OPENAI_API_KEY")
-            api_base = os.getenv("MOS_EMBEDDER_API_BASE") or os.getenv("OPENAI_API_BASE")
+            api_base_raw = os.getenv("MOS_EMBEDDER_API_BASE") or os.getenv("OPENAI_API_BASE")
             
-            logger.info(f"🔧 Embedder API key: {'SET' if api_key else 'NOT SET'}, API base: {api_base}")
+            logger.info(f"🔧 Embedder API key: {'SET' if api_key else 'NOT SET'}, API base: {api_base_raw}")
+            
+            # 检查是否是 DeepSeek API（DeepSeek 不支持 embeddings）
+            if api_base_raw and ("deepseek" in api_base_raw.lower()):
+                logger.warning(
+                    "检测到 DeepSeek API，但 DeepSeek 不支持 embeddings API。"
+                    "自动回退到 sentence_transformer embedder（本地模型）。"
+                )
+                return {
+                    "backend": "sentence_transformer",
+                    "config": {
+                        "model_name_or_path": os.getenv(
+                            "MOS_EMBEDDER_MODEL", "nomic-ai/nomic-embed-text-v1.5"
+                        ),
+                    },
+                }
             
             if not api_key:
                 logger.warning(
@@ -451,16 +477,27 @@ class APIConfig:
                     },
                 }
             
+            # OpenAI 客户端会自动添加 /v1 路径，所以 base_url 不应该包含 /v1
+            api_base = api_base_raw or "https://api.openai.com/v1"
+            # 如果环境变量中已经包含了 /v1，则移除它
+            if api_base.endswith("/v1"):
+                api_base = api_base[:-3]
+            # 移除末尾的斜杠（如果有）
+            api_base = api_base.rstrip("/")
+            # 如果没有协议前缀，默认使用 https://
+            if not api_base.startswith(("http://", "https://")):
+                api_base = f"https://{api_base}"
+            
             config = {
                 "backend": "universal_api",
                 "config": {
                     "provider": os.getenv("MOS_EMBEDDER_PROVIDER", "openai"),
                     "api_key": api_key,
                     "model_name_or_path": os.getenv("MOS_EMBEDDER_MODEL", "text-embedding-3-large"),
-                    "base_url": api_base or "https://api.openai.com/v1",
+                    "base_url": api_base,
                 },
             }
-            logger.info(f"✅ Using universal_api embedder with provider: {config['config']['provider']}, model: {config['config']['model_name_or_path']}")
+            logger.info(f"✅ Using universal_api embedder with provider: {config['config']['provider']}, model: {config['config']['model_name_or_path']}, base_url: {api_base}")
             return config
         elif embedder_backend == "sentence_transformer":
             return {
@@ -501,13 +538,23 @@ class APIConfig:
         }
 
     @staticmethod
-    def get_internet_config() -> dict[str, Any]:
-        """Get embedder configuration."""
+    def get_internet_config() -> dict[str, Any] | None:
+        """Get internet retriever configuration."""
+        # 检查是否启用了 internet retriever
+        if os.getenv("ENABLE_INTERNET", "false").lower() != "true":
+            return None
+        
+        # 获取 API key
+        api_key = os.getenv("BOCHA_API_KEY")
+        if not api_key:
+            logger.warning("BOCHA_API_KEY not set, internet retriever will not be enabled")
+            return None
+        
         reader_config = APIConfig.get_reader_config()
         return {
             "backend": "bocha",
             "config": {
-                "api_key": os.getenv("BOCHA_API_KEY"),
+                "api_key": api_key,
                 "max_results": 15,
                 "num_per_request": 10,
                 "reader": {
@@ -546,6 +593,34 @@ class APIConfig:
     @staticmethod
     def get_neo4j_community_config(user_id: str | None = None) -> dict[str, Any]:
         """Get Neo4j community configuration."""
+        # Determine embedding dimension based on embedder configuration
+        embedder_config = APIConfig.get_embedder_config()
+        embedder_model = embedder_config.get("config", {}).get("model_name_or_path", "")
+        
+        # Default dimension
+        default_dimension = 1024
+        
+        # If using sentence_transformer with nomic-embed-text-v1.5, use 768
+        if embedder_config.get("backend") == "sentence_transformer":
+            if "nomic-embed-text-v1.5" in embedder_model:
+                default_dimension = 768
+                logger.info(f"🔧 Using embedding dimension 768 for nomic-embed-text-v1.5")
+            else:
+                # For other sentence_transformer models, try to get dimension from env or use default
+                default_dimension = int(os.getenv("EMBEDDING_DIMENSION", 768))
+        elif embedder_config.get("backend") == "universal_api":
+            # For universal_api, check model name
+            if "text-embedding-3-large" in embedder_model:
+                default_dimension = 3072
+            elif "text-embedding-3-small" in embedder_model:
+                default_dimension = 1536
+            else:
+                default_dimension = int(os.getenv("EMBEDDING_DIMENSION", 1024))
+        else:
+            default_dimension = int(os.getenv("EMBEDDING_DIMENSION", 1024))
+        
+        embedding_dimension = int(os.getenv("EMBEDDING_DIMENSION", default_dimension))
+        
         return {
             "uri": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
             "user": os.getenv("NEO4J_USER", "neo4j"),
@@ -554,14 +629,14 @@ class APIConfig:
             "user_name": f"memos{user_id.replace('-', '')}",
             "auto_create": False,
             "use_multi_db": False,
-            "embedding_dimension": int(os.getenv("EMBEDDING_DIMENSION", 1024)),
+            "embedding_dimension": embedding_dimension,
             "vec_config": {
                 # Pass nested config to initialize external vector DB
                 # If you use qdrant, please use Server instead of local mode.
                 "backend": "qdrant",
                 "config": {
                     "collection_name": "neo4j_vec_db",
-                    "vector_dimension": int(os.getenv("EMBEDDING_DIMENSION", 1024)),
+                    "vector_dimension": embedding_dimension,
                     "distance_metric": "cosine",
                     "host": os.getenv("QDRANT_HOST", "localhost"),
                     "port": int(os.getenv("QDRANT_PORT", "6333")),
@@ -922,13 +997,18 @@ class APIConfig:
             )
             
             # 验证 embedder 配置
-            if embedder_backend != "universal_api":
-                logger.error(
-                    f"❌ ERROR: get_embedder_config() returned backend '{embedder_backend}' "
-                    f"instead of 'universal_api'! This will cause issues."
+            # 注意：当检测到 DeepSeek API 时，会自动回退到 sentence_transformer，这是正常行为
+            if embedder_backend == "sentence_transformer":
+                logger.info(
+                    f"✅ Embedder config: using sentence_transformer (likely due to DeepSeek API detection or missing API key)"
                 )
-            else:
+            elif embedder_backend == "universal_api":
                 logger.info(f"✅ Embedder config is correct: universal_api")
+            else:
+                logger.warning(
+                    f"⚠️ WARNING: Unexpected embedder backend '{embedder_backend}'. "
+                    f"Expected 'universal_api' or 'sentence_transformer'."
+                )
 
             default_cube_config = GeneralMemCubeConfig.model_validate(
                 {

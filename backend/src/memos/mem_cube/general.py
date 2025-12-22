@@ -202,6 +202,117 @@ class GeneralMemCube(BaseMemCube):
             logger.warning(
                 f"⚠️ init_from_dir: No default_config provided, using existing config for cube {config.cube_id}"
             )
+            
+            # 即使没有 default_config，也尝试修复配置中的问题
+            config_dict = config.model_dump()
+            config_modified = False
+            
+            if config.text_mem.backend != "uninitialized":
+                text_mem_config = config_dict.get("text_mem", {}).get("config", {})
+                
+                # 修复 LLM 配置中的 api_base
+                for llm_key in ["extractor_llm", "dispatcher_llm"]:
+                    if llm_key in text_mem_config:
+                        llm_config = text_mem_config[llm_key].get("config", {})
+                        if "api_base" in llm_config:
+                            api_base = llm_config["api_base"]
+                            if api_base and api_base.endswith("/v1"):
+                                logger.warning(
+                                    f"🔧 Fixing {llm_key} api_base: removing /v1 suffix from {api_base}"
+                                )
+                                llm_config["api_base"] = api_base[:-3].rstrip("/")
+                                config_modified = True
+                
+                # 修复 embedder 配置
+                embedder_backend = None
+                embedder_model = None
+                if "embedder" in text_mem_config:
+                    embedder_dict = text_mem_config["embedder"]
+                    embedder_backend = embedder_dict.get("backend")
+                    if "config" in embedder_dict:
+                        embedder_config = embedder_dict["config"]
+                        embedder_model = embedder_config.get("model_name_or_path", "")
+                        # 检查并修复 embedder 配置
+                        if "base_url" in embedder_config:
+                            base_url = embedder_config["base_url"]
+                            # 先检查是否是 DeepSeek（应该使用 sentence_transformer）
+                            # 需要检查原始 base_url（可能包含 /v1）和修复后的 base_url
+                            base_url_to_check = base_url
+                            if base_url and base_url.endswith("/v1"):
+                                base_url_to_check = base_url[:-3].rstrip("/")
+                            
+                            if base_url_to_check and "deepseek" in base_url_to_check.lower() and embedder_dict.get("backend") == "universal_api":
+                                logger.warning(
+                                    f"🔧 Detected DeepSeek API in embedder config ({base_url}), but DeepSeek doesn't support embeddings. "
+                                    f"Force replacing with sentence_transformer."
+                                )
+                                # 强制替换为 sentence_transformer
+                                embedder_dict["backend"] = "sentence_transformer"
+                                embedder_dict["config"] = {
+                                    "model_name_or_path": os.getenv(
+                                        "MOS_EMBEDDER_MODEL", "nomic-ai/nomic-embed-text-v1.5"
+                                    ),
+                                }
+                                embedder_backend = "sentence_transformer"
+                                embedder_model = embedder_dict["config"]["model_name_or_path"]
+                                config_modified = True
+                            # 如果不是 DeepSeek，修复 base_url 中的 /v1 后缀
+                            elif base_url and base_url.endswith("/v1"):
+                                logger.warning(
+                                    f"🔧 Fixing embedder base_url: removing /v1 suffix from {base_url}"
+                                )
+                                embedder_config["base_url"] = base_url[:-3].rstrip("/")
+                                config_modified = True
+                
+                # 修复向量维度配置（根据 embedder 模型）
+                if embedder_backend == "sentence_transformer" and embedder_model and "nomic-embed-text-v1.5" in embedder_model:
+                    # 检查 text_mem.config.graph_db 配置中的 vec_config
+                    if "graph_db" in text_mem_config:
+                        graph_db_config = text_mem_config["graph_db"].get("config", {})
+                        if "vec_config" in graph_db_config:
+                            vec_config = graph_db_config["vec_config"].get("config", {})
+                            if "vector_dimension" in vec_config and vec_config["vector_dimension"] != 768:
+                                logger.warning(
+                                    f"🔧 Fixing vector_dimension: changing from {vec_config['vector_dimension']} to 768 for nomic-embed-text-v1.5"
+                                )
+                                vec_config["vector_dimension"] = 768
+                                graph_db_config["embedding_dimension"] = 768
+                                config_modified = True
+                        # 也修复 embedding_dimension（如果没有 vec_config）
+                        elif "embedding_dimension" in graph_db_config and graph_db_config["embedding_dimension"] != 768:
+                            logger.warning(
+                                f"🔧 Fixing embedding_dimension: changing from {graph_db_config['embedding_dimension']} to 768 for nomic-embed-text-v1.5"
+                            )
+                            graph_db_config["embedding_dimension"] = 768
+                            # 如果有 vec_config，也修复它
+                            if "vec_config" in graph_db_config:
+                                vec_config = graph_db_config["vec_config"].get("config", {})
+                                if "vector_dimension" in vec_config:
+                                    vec_config["vector_dimension"] = 768
+                            config_modified = True
+            
+            # 如果配置被修改，重新验证并保存
+            if config_modified:
+                config = GeneralMemCubeConfig.model_validate(config_dict)
+                logger.info(f"✅ Fixed configuration issues in cube {config.cube_id}")
+                # 保存修复后的配置回文件，避免下次加载时再次修复
+                try:
+                    config.to_json_file(config_path)
+                    logger.info(f"✅ Saved fixed configuration to {config_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to save fixed configuration: {e}")
+                # 清除 embedder 和 LLM 缓存，确保使用新的配置
+                try:
+                    from memos.embedders.factory import EmbedderFactory
+                    from memos.llms.factory import LLMFactory
+                    from memos.llms.openai import OpenAILLM, AzureLLM
+                    _factory_singleton.clear_cache(EmbedderFactory)
+                    _factory_singleton.clear_cache(LLMFactory)
+                    OpenAILLM.clear_cache()
+                    AzureLLM.clear_cache()
+                    logger.info("✅ Cleared embedder and LLM factory cache after fixing config")
+                except Exception as e:
+                    logger.warning(f"Failed to clear cache: {e}")
         
         mem_cube = GeneralMemCube(config)
         mem_cube.load(dir, memory_types)

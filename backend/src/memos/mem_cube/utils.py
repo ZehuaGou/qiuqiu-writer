@@ -184,28 +184,81 @@ def merge_config_with_default(
     # Create new config from merged dictionary
     merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
     
-    # 强制检查：如果 embedder backend 是 ollama，强制替换为 universal_api
+    # 修复 LLM 配置中的 api_base（移除 /v1 后缀）
     if merged_config.text_mem.backend != "uninitialized":
+        text_mem_config = merged_dict.get("text_mem", {}).get("config", {})
+        for llm_key in ["extractor_llm", "dispatcher_llm"]:
+            if llm_key in text_mem_config:
+                llm_config = text_mem_config[llm_key].get("config", {})
+                if "api_base" in llm_config:
+                    api_base = llm_config["api_base"]
+                    if api_base and api_base.endswith("/v1"):
+                        logger.warning(
+                            f"🔧 Fixing {llm_key} api_base in merged config: removing /v1 suffix from {api_base}"
+                        )
+                        llm_config["api_base"] = api_base[:-3].rstrip("/")
+                        # 重新验证配置
+                        merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
+    
+    # 强制使用 default_config 中的 embedder 配置，确保使用最新的配置（包括 DeepSeek 检测和 /v1 修复）
+    if merged_config.text_mem.backend != "uninitialized" and default_config.text_mem.backend != "uninitialized":
         merged_embedder = merged_config.text_mem.config.embedder
+        default_embedder = default_config.text_mem.config.embedder
+        
+        # 检查是否需要强制替换 embedder 配置
+        need_replace = False
+        replace_reason = ""
+        
+        # 1. 如果 backend 是 ollama，强制替换
         if merged_embedder.backend == "ollama":
+            need_replace = True
+            replace_reason = "ollama backend detected"
+        # 2. 如果是 universal_api，检查 base_url 是否包含 /v1 或 DeepSeek
+        elif merged_embedder.backend == "universal_api":
+            base_url = getattr(merged_embedder, "base_url", None)
+            if base_url:
+                # 检查是否包含 /v1（应该被移除）
+                if base_url.endswith("/v1"):
+                    need_replace = True
+                    replace_reason = "base_url contains /v1 suffix"
+                # 检查是否是 DeepSeek（应该使用 sentence_transformer）
+                elif "deepseek" in base_url.lower():
+                    need_replace = True
+                    replace_reason = "DeepSeek API detected (should use sentence_transformer)"
+        
+        if need_replace:
             logger.warning(
-                f"⚠️ WARNING: Merged config still has 'ollama' embedder backend! "
-                f"Force replacing with 'universal_api' from default config."
+                f"⚠️ WARNING: Merged embedder config issue detected: {replace_reason}. "
+                f"Force replacing with embedder from default config: {default_embedder.backend}"
             )
-            # 强制使用 default_config 中的 embedder
-            if default_config.text_mem.backend != "uninitialized":
-                default_embedder = default_config.text_mem.config.embedder
+            # 直接修改 merged_dict 中的 embedder 配置
+            if "text_mem" in merged_dict and "config" in merged_dict["text_mem"]:
+                merged_dict["text_mem"]["config"]["embedder"] = default_embedder.model_dump()
+                # 重新验证配置
+                merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
                 logger.info(
-                    f"🔄 Force replacing embedder: ollama -> {default_embedder.backend}"
+                    f"✅ Successfully force-replaced embedder to {merged_config.text_mem.config.embedder.backend}"
                 )
-                # 直接修改 merged_dict 中的 embedder 配置
-                if "text_mem" in merged_dict and "config" in merged_dict["text_mem"]:
-                    merged_dict["text_mem"]["config"]["embedder"] = default_embedder.model_dump()
-                    # 重新验证配置
-                    merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
-                    logger.info(
-                        f"✅ Successfully force-replaced embedder to {merged_config.text_mem.config.embedder.backend}"
-                    )
+                # 清除 embedder 缓存，确保使用新的配置
+                try:
+                    from memos.embedders.factory import EmbedderFactory
+                    from memos.memos_tools.singleton import _factory_singleton
+                    _factory_singleton.clear_cache(EmbedderFactory)
+                    logger.info("✅ Cleared embedder factory cache after replacing embedder config")
+                except Exception as e:
+                    logger.warning(f"Failed to clear embedder cache: {e}")
+        elif merged_embedder.backend != default_embedder.backend:
+            # 即使没有检测到问题，如果 backend 不同，也使用 default 的配置
+            logger.info(
+                f"🔄 Embedder backend mismatch: merged={merged_embedder.backend}, default={default_embedder.backend}. "
+                f"Using default embedder config."
+            )
+            if "text_mem" in merged_dict and "config" in merged_dict["text_mem"]:
+                merged_dict["text_mem"]["config"]["embedder"] = default_embedder.model_dump()
+                merged_config = GeneralMemCubeConfig.model_validate(merged_dict)
+                logger.info(
+                    f"✅ Successfully replaced embedder to {merged_config.text_mem.config.embedder.backend}"
+                )
 
     logger.info(
         f"Successfully merged cube config for user {merged_config.user_id}, cube {merged_config.cube_id}, "

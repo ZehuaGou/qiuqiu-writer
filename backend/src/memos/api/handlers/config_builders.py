@@ -42,7 +42,7 @@ def build_graph_db_config(user_id: str = "default") -> dict[str, Any]:
         "polardb": APIConfig.get_polardb_config(user_id=user_id),
     }
 
-    graph_db_backend = os.getenv("NEO4J_BACKEND", "nebular").lower()
+    graph_db_backend = os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
     return GraphDBConfigFactory.model_validate(
         {
             "backend": graph_db_backend,
@@ -113,14 +113,17 @@ def build_reranker_config() -> dict[str, Any]:
     return RerankerConfigFactory.model_validate(APIConfig.get_reranker_config())
 
 
-def build_internet_retriever_config() -> dict[str, Any]:
+def build_internet_retriever_config() -> dict[str, Any] | None:
     """
     Build internet retriever configuration.
 
     Returns:
-        Validated internet retriever configuration dictionary
+        Validated internet retriever configuration dictionary, or None if not configured
     """
-    return InternetRetrieverConfigFactory.model_validate(APIConfig.get_internet_config())
+    internet_config = APIConfig.get_internet_config()
+    if internet_config is None:
+        return None
+    return InternetRetrieverConfigFactory.model_validate(internet_config)
 
 
 def build_pref_extractor_config() -> dict[str, Any]:

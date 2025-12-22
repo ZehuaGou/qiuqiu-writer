@@ -126,8 +126,10 @@ def init_server() -> dict[str, Any]:
     embedder = EmbedderFactory.from_config(embedder_config)
     mem_reader = MemReaderFactory.from_config(mem_reader_config)
     reranker = RerankerFactory.from_config(reranker_config)
-    internet_retriever = InternetRetrieverFactory.from_config(
-        internet_retriever_config, embedder=embedder
+    internet_retriever = (
+        InternetRetrieverFactory.from_config(internet_retriever_config, embedder=embedder)
+        if internet_retriever_config is not None
+        else None
     )
 
     logger.debug("Core components instantiated")
