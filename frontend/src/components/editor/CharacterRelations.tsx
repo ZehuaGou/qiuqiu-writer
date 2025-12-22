@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { Plus, ArrowRight, User, Trash2 } from 'lucide-react';
+import { Plus, ArrowRight, User, Trash2, Maximize2, X } from 'lucide-react';
 import { ExtensionCategory, Graph, register } from '@antv/g6';
 import { ReactNode } from '@antv/g6-extension-react';
 import type { GraphData } from '@antv/g6';
@@ -107,6 +107,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
   const isExternalUpdateRef = useRef(false);
   const [editingRelation, setEditingRelation] = useState<string | null>(null);
   const [addingRelation, setAddingRelation] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [editForm, setEditForm] = useState<{
     relationType?: string;
     relationDescription?: string;
@@ -114,7 +115,9 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
     relationTo?: string;
   }>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
+  const fullscreenGraphRef = useRef<Graph | null>(null);
 
   // 使用 useMemo 来稳定数据引用，避免不必要的重新渲染
   const graphData = useMemo(() => {
@@ -465,8 +468,122 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
         }
         graphRef.current = null;
       }
+      if (fullscreenGraphRef.current) {
+        try {
+          fullscreenGraphRef.current.destroy();
+        } catch (e) {
+          // 忽略清理错误
+        }
+        fullscreenGraphRef.current = null;
+      }
     };
   }, []); // 只在组件卸载时执行
+
+  // 全屏模式初始化图
+  useEffect(() => {
+    if (!isFullscreen || !fullscreenContainerRef.current || characters.length === 0) {
+      // 如果关闭全屏，清理全屏图实例
+      if (!isFullscreen && fullscreenGraphRef.current) {
+        try {
+          fullscreenGraphRef.current.destroy();
+        } catch (e) {
+          // 忽略清理错误
+        }
+        fullscreenGraphRef.current = null;
+      }
+      return;
+    }
+
+    // 延迟一下确保容器已渲染
+    const timer = setTimeout(() => {
+      if (!fullscreenContainerRef.current) return;
+
+      const container = fullscreenContainerRef.current;
+      const width = container.offsetWidth || window.innerWidth - 100;
+      const height = container.offsetHeight || window.innerHeight - 150;
+
+      // 如果全屏图已存在，先销毁
+      if (fullscreenGraphRef.current) {
+        try {
+          fullscreenGraphRef.current.destroy();
+        } catch (e) {
+          // 忽略清理错误
+        }
+      }
+
+      try {
+        // 创建全屏图实例
+        const fullscreenGraph = new Graph({
+          container: container,
+          width,
+          height,
+          data: graphData,
+          node: {
+            type: 'react',
+            style: {
+              size: [80, 80] as [number, number],
+              component: (data: any) => <CharacterNode data={data} />,
+            },
+          } as any,
+          edge: {
+            style: {
+              stroke: '#10b981',
+              lineWidth: 2,
+              endArrow: {
+                type: 'vee',
+                size: 8,
+                fill: '#10b981',
+              },
+            },
+            labelText: (d: any) => d.data?.label || '',
+            labelFill: '#10b981',
+            labelFontSize: 12,
+            labelFontWeight: 500,
+            labelBackground: true,
+            labelBackgroundFill: 'white',
+            labelBackgroundOpacity: 0.8,
+            labelPlacement: 'center',
+          } as any,
+          behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
+        });
+
+        const renderResult = fullscreenGraph.render();
+        
+        if (renderResult && typeof renderResult.then === 'function') {
+          renderResult.then(() => {
+            fullscreenGraphRef.current = fullscreenGraph;
+          }).catch((error) => {
+            console.error('全屏图渲染失败:', error);
+          });
+        } else {
+          fullscreenGraphRef.current = fullscreenGraph;
+        }
+
+        // 窗口大小改变时调整全屏图大小
+        const handleResize = () => {
+          if (fullscreenGraphRef.current && fullscreenContainerRef.current) {
+            const newWidth = fullscreenContainerRef.current.offsetWidth || window.innerWidth - 100;
+            const newHeight = fullscreenContainerRef.current.offsetHeight || window.innerHeight - 150;
+            if (newWidth > 0 && newHeight > 0) {
+              fullscreenGraphRef.current.resize(newWidth, newHeight);
+            }
+          }
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+          window.removeEventListener('resize', handleResize);
+        };
+      } catch (error) {
+        console.error('创建全屏图失败:', error);
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isFullscreen, graphData, characters.length]);
 
   // 数据更新已经在第一个 useEffect 中处理，这里不需要单独的更新逻辑
 
@@ -563,6 +680,16 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       <div className="relations-header">
         <h3>人物关系网</h3>
         <div className="header-actions">
+          {characters.length > 0 && (
+            <button 
+              className="action-btn" 
+              onClick={() => setIsFullscreen(true)}
+              title="放大查看"
+            >
+              <Maximize2 size={16} />
+              <span>放大</span>
+            </button>
+          )}
           <button className="action-btn" onClick={handleAddRelation}>
             <Plus size={16} />
             <span>添加关系</span>
@@ -792,6 +919,25 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
           </div>
         ) : null;
       })()}
+
+      {/* 全屏放大模态框 */}
+      {isFullscreen && (
+        <div className="fullscreen-modal-overlay" onClick={() => setIsFullscreen(false)}>
+          <div className="fullscreen-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="fullscreen-header">
+              <h3>人物关系网 - 全屏查看</h3>
+              <button 
+                className="close-fullscreen-btn" 
+                onClick={() => setIsFullscreen(false)}
+                title="关闭"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="fullscreen-canvas" ref={fullscreenContainerRef}></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

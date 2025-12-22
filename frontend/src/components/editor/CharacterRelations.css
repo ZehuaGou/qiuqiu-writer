@@ -56,7 +56,7 @@
 .relations-canvas {
   flex: 1;
   position: relative;
-  background: #f9fafb;
+  background: white;
   min-height: 500px;
   width: 100%;
   height: 100%;
@@ -71,7 +71,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: #f9fafb;
+  background: white;
   color: #9ca3af;
 }
 
@@ -558,4 +558,76 @@
   font-size: 14px;
   color: #1f2937;
   line-height: 1.6;
+}
+
+/* 全屏模态框 */
+.fullscreen-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.fullscreen-modal {
+  width: 100%;
+  height: 100%;
+  max-width: 95vw;
+  max-height: 95vh;
+  background: white;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.fullscreen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.fullscreen-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.close-fullscreen-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-fullscreen-btn:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.fullscreen-canvas {
+  flex: 1;
+  position: relative;
+  background: white;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  min-height: 0;
 }
