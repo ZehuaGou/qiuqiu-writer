@@ -35,7 +35,21 @@ class AIService:
     def __init__(self):
         """初始化AI服务"""
         self.api_key = os.getenv("OPENAI_API_KEY",)
-        self.base_url = os.getenv("OPENAI_API_BASE", "https://api.deepseek.com/v1")
+        # OpenAI 客户端会自动添加 /v1 路径，所以 base_url 不应该包含 /v1
+        base_url_env = os.getenv("OPENAI_API_BASE", "https://api.deepseek.com")
+        # 如果环境变量中已经包含了 /v1，则移除它
+        if base_url_env.endswith("/v1"):
+            base_url_env = base_url_env[:-3]
+        # 移除末尾的斜杠（如果有）
+        base_url_env = base_url_env.rstrip("/")
+        # 确保使用 HTTPS 协议（如果配置了 http://，自动转换为 https://）
+        if base_url_env.startswith("http://") and "localhost" not in base_url_env and "127.0.0.1" not in base_url_env:
+            logger.warning(f"检测到 base_url 使用 HTTP 协议，自动转换为 HTTPS: {base_url_env}")
+            base_url_env = base_url_env.replace("http://", "https://", 1)
+        # 如果没有协议前缀，默认使用 https://
+        if not base_url_env.startswith(("http://", "https://")):
+            base_url_env = f"https://{base_url_env}"
+        self.base_url = base_url_env
         self.default_model = os.getenv("DEFAULT_AI_MODEL", "deepseek-chat")
 
         if not self.api_key:
@@ -120,7 +134,8 @@ class AIService:
 
             logger.info(
                 f"Starting chapter analysis with model: {model_name}, "
-                f"temperature: {temperature}, max_tokens: {max_tokens}"
+                f"temperature: {temperature}, max_tokens: {max_tokens}, "
+                f"base_url: {self.base_url}, use_json_format: {use_json_format}"
             )
             logger.debug(f"System prompt length: {len(system_content)}, User prompt length: {len(user_content)}")
 
@@ -178,8 +193,19 @@ class AIService:
             return full_text
 
         except OpenAIError as e:
-            logger.error(f"OpenAI API error during chapter analysis: {str(e)}")
-            raise ValueError(f"AI服务调用失败: {str(e)}")
+            error_msg = str(e)
+            logger.error(
+                f"OpenAI API error during chapter analysis: {error_msg}, "
+                f"base_url: {self.base_url}, model: {model_name}"
+            )
+            # 如果是 405 错误，提供更详细的诊断信息
+            if "405" in error_msg:
+                logger.error(
+                    f"405 错误诊断: base_url={self.base_url}, "
+                    f"实际请求URL应该是: {self.base_url}/v1/chat/completions, "
+                    f"请检查 base_url 配置是否正确（不应该包含 /v1）"
+                )
+            raise ValueError(f"AI服务调用失败: {error_msg}")
 
         except Exception as e:
             logger.error(f"Unexpected error during chapter analysis: {str(e)}")

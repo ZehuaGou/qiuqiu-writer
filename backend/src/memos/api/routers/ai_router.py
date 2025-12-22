@@ -7,7 +7,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -187,6 +187,39 @@ async def analyze_chapter(
                     })
                     yield f"data: {character_start_msg}\n\n"
                     
+                    # 获取现有的 work 数据（如果提供了 work_id）
+                    existing_data_context = ""
+                    if request.work_id:
+                        try:
+                            from memos.api.services.work_service import WorkService
+                            work_service = WorkService(db)
+                            work = await work_service.get_work_by_id(request.work_id)
+                            if work:
+                                work_metadata = work.work_metadata or {}
+                                component_data = work_metadata.get("component_data", {})
+                                existing_characters = component_data.get("characters", [])
+                                
+                                if existing_characters:
+                                    import json
+                                    # 只展示前3个角色作为示例，避免 prompt 过长
+                                    example_characters = existing_characters[:3]
+                                    existing_data_context = f"""
+# 现有作品数据结构参考
+以下是该作品已有的角色数据结构示例（请参考此结构生成新角色数据）：
+
+```json
+{json.dumps(example_characters, ensure_ascii=False, indent=2)}
+```
+
+**重要提示：**
+1. 新提取的角色数据应该与上述数据结构保持一致
+2. 如果提取到已存在的角色（通过 name 字段匹配），请保持该角色的现有字段结构，只更新或补充新信息
+3. 新角色的数据结构应该包含以下字段：name, display_name, type, gender, appearance, background, description, personality, display_name
+4. 如果章节中出现了新角色，请按照上述数据结构格式生成完整的角色信息
+"""
+                        except Exception as e:
+                            logger.warning(f"获取现有作品数据失败: {e}")
+                    
                     # 获取角色状态提取的提示词模板
                     character_status_template = await book_analysis_service.get_default_prompt_template("character_status_extraction")
                     
@@ -202,6 +235,10 @@ async def analyze_chapter(
                         else:
                             # 如果 user_prompt 中有 {content} 变量，需要替换
                             character_user_prompt = character_user_prompt.replace("{content}", request.content)
+                        
+                        # 在 user_prompt 中添加现有数据结构上下文
+                        if existing_data_context:
+                            character_user_prompt = existing_data_context + "\n\n" + character_user_prompt
                     else:
                         # 使用默认的角色状态提取提示词
                         character_system_prompt = """# 角色
@@ -223,18 +260,12 @@ async def analyze_chapter(
     {
       "name": "角色名称",
       "display_name": "显示名称",
+      "type": "主要角色",
+      "gender": "男/女",
       "description": "角色描述",
-      "status": {
-        "emotion": "情绪状态",
-        "physical": "身体状况",
-        "mental": "心理状态",
-        "location": "所在位置",
-        "relationships": "与其他角色的关系状态"
-      },
-      "actions": ["角色在本章中的主要行为"],
-      "dialogue": ["角色的重要对话或内心独白"],
-      "appearance": "角色在本章中的外貌描述",
-      "personality_traits": ["性格特征"]
+      "appearance": {},
+      "background": {},
+      "personality": {}
     }
   ]
 }
@@ -243,8 +274,9 @@ async def analyze_chapter(
 # 重要提示
 1. **必须输出有效的JSON格式**，不要添加任何Markdown代码块标记外的文字
 2. 只提取本章中实际出现的角色
-3. 状态信息要具体、准确，反映角色在本章中的实际情况
-4. 如果某个角色在本章中没有出现，不要包含在结果中
+3. 如果提供了现有角色数据结构参考，请按照该结构生成数据
+4. 新角色的数据结构应该包含：name, display_name, type, gender, appearance, background, description, personality
+5. 如果某个角色在本章中没有出现，不要包含在结果中
 
 # 章节内容
 {content}
@@ -252,6 +284,10 @@ async def analyze_chapter(
 # 开始分析
 请严格按照上述JSON格式输出角色信息和状态："""
                         character_user_prompt = character_system_prompt.replace("{content}", request.content)
+                        
+                        # 在 user_prompt 中添加现有数据结构上下文
+                        if existing_data_context:
+                            character_user_prompt = existing_data_context + "\n\n" + character_user_prompt
                     
                     logger.info("开始提取角色信息和状态...")
                     
@@ -330,7 +366,7 @@ async def analyze_chapter(
                         characters_count = result.get("characters_processed", 0)
                         characters_saved = characters_count > 0
                         if characters_saved:
-                            logger.info(f"✅ 成功保存 {characters_count} 个角色信息到作品 {request.work_id} 的 metainfo 中")
+                            logger.info(f"✅ 成功保存 {characters_count} 个角色信息到作品 {request.work_id} 的 component_data 中")
                             save_success_msg = json.dumps({
                                 "type": "save_complete",
                                 "message": f"已保存 {characters_count} 个角色信息到作品",
@@ -1172,7 +1208,7 @@ async def generate_chapter_outlines(
     work_id: int = Query(..., description="作品ID"),
     chapter_ids: Optional[str] = Query(None, description="指定要处理的章节ID列表（逗号分隔），如果不提供则处理所有章节"),
     prompt: Optional[str] = Query(None, description="自定义prompt（可选）"),
-    settings: Optional[AnalysisSettings] = None,
+    settings: Optional[AnalysisSettings] = Body(None, embed=True, description="AI分析设置（可选）"),
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id),
 ):
@@ -1278,6 +1314,32 @@ async def generate_chapter_outlines(
                         if chapter_content:
                             logger.info(f"开始为章节 {chapter_id} 提取角色信息...")
                             
+                            # 获取现有的 work 数据，特别是 component_data 结构
+                            work_metadata = work.work_metadata or {}
+                            component_data = work_metadata.get("component_data", {})
+                            existing_characters = component_data.get("characters", [])
+                            
+                            # 构建现有数据的描述，用于指导模型生成合适的数据结构
+                            existing_data_context = ""
+                            if existing_characters:
+                                import json
+                                # 只展示前3个角色作为示例，避免 prompt 过长
+                                example_characters = existing_characters[:3]
+                                existing_data_context = f"""
+# 现有作品数据结构参考
+以下是该作品已有的角色数据结构示例（请参考此结构生成新角色数据）：
+
+```json
+{json.dumps(example_characters, ensure_ascii=False, indent=2)}
+```
+
+**重要提示：**
+1. 新提取的角色数据应该与上述数据结构保持一致
+2. 如果提取到已存在的角色（通过 name 字段匹配），请保持该角色的现有字段结构，只更新或补充新信息
+3. 新角色的数据结构应该包含以下字段：name, display_name, type, gender, appearance, background, description, personality, display_name
+4. 如果章节中出现了新角色，请按照上述数据结构格式生成完整的角色信息
+"""
+                            
                             # 获取角色状态提取的提示词模板
                             character_status_template = await book_analysis_service.get_default_prompt_template("character_status_extraction")
                             
@@ -1293,6 +1355,10 @@ async def generate_chapter_outlines(
                                 else:
                                     # 如果 user_prompt 中有 {content} 变量，需要替换
                                     character_user_prompt = character_user_prompt.replace("{content}", chapter_content)
+                                
+                                # 在 user_prompt 中添加现有数据结构上下文
+                                if existing_data_context:
+                                    character_user_prompt = existing_data_context + "\n\n" + character_user_prompt
                             else:
                                 # 使用默认的角色状态提取提示词
                                 character_system_prompt = """# 角色
@@ -1314,18 +1380,12 @@ async def generate_chapter_outlines(
                                         {
                                         "name": "角色名称",
                                         "display_name": "显示名称",
+                                        "type": "主要角色",
+                                        "gender": "男/女",
                                         "description": "角色描述",
-                                        "status": {
-                                            "emotion": "情绪状态",
-                                            "physical": "身体状况",
-                                            "mental": "心理状态",
-                                            "location": "所在位置",
-                                            "relationships": "与其他角色的关系状态"
-                                        },
-                                        "actions": ["角色在本章中的主要行为"],
-                                        "dialogue": ["角色的重要对话或内心独白"],
-                                        "appearance": "角色在本章中的外貌描述",
-                                        "personality_traits": ["性格特征"]
+                                        "appearance": {},
+                                        "background": {},
+                                        "personality": {}
                                         }
                                     ]
                                     }
@@ -1334,14 +1394,19 @@ async def generate_chapter_outlines(
                                     # 重要提示
                                     1. **必须输出有效的JSON格式**，不要添加任何Markdown代码块标记外的文字
                                     2. 只提取本章中实际出现的角色
-                                    3. 状态信息要具体、准确，反映角色在本章中的实际情况
-                                    4. 如果某个角色在本章中没有出现，不要包含在结果中
+                                    3. 如果提供了现有角色数据结构参考，请按照该结构生成数据
+                                    4. 新角色的数据结构应该包含：name, display_name, type, gender, appearance, background, description, personality
+                                    5. 如果某个角色在本章中没有出现，不要包含在结果中
 
                                     # 章节内容
                                     {content}
                                     # 开始分析
                                     请严格按照上述JSON格式输出角色信息和状态："""
                                 character_user_prompt = character_system_prompt.replace("{content}", chapter_content)
+                                
+                                # 在 user_prompt 中添加现有数据结构上下文
+                                if existing_data_context:
+                                    character_user_prompt = existing_data_context + "\n\n" + character_user_prompt
                             
                             # 调用AI服务提取角色信息
                             character_status_response = await ai_service.analyze_chapter_stream(
@@ -1354,14 +1419,24 @@ async def generate_chapter_outlines(
                             )
                             
                             # 解析角色状态信息
+                            logger.debug(f"开始解析章节 {chapter_id} 的角色信息，AI响应长度: {len(character_status_response)}")
                             character_status_data = book_analysis_service.parse_single_chapter_response(character_status_response)
                             
-                            if character_status_data and character_status_data.get("characters"):
-                                chapter_characters = character_status_data.get("characters", [])
-                                all_characters.extend(chapter_characters)
-                                logger.info(f"✅ 成功为章节 {chapter_id} 提取 {len(chapter_characters)} 个角色的状态信息")
+                            if character_status_data:
+                                logger.debug(f"解析成功，数据键: {list(character_status_data.keys())}")
+                                if character_status_data.get("characters"):
+                                    chapter_characters = character_status_data.get("characters", [])
+                                    logger.info(f"✅ 成功为章节 {chapter_id} 提取 {len(chapter_characters)} 个角色的状态信息")
+                                    # 记录每个角色的名称
+                                    for char in chapter_characters:
+                                        char_name = char.get("name", "未知") if isinstance(char, dict) else "无效数据"
+                                        logger.debug(f"  - 角色: {char_name}")
+                                    all_characters.extend(chapter_characters)
+                                else:
+                                    logger.warning(f"⚠️ 章节 {chapter_id} 解析成功但未找到 characters 字段，数据键: {list(character_status_data.keys())}")
                             else:
-                                logger.warning(f"⚠️ 章节 {chapter_id} 未提取到角色信息")
+                                logger.warning(f"⚠️ 章节 {chapter_id} 未提取到角色信息，解析返回 None")
+                                logger.debug(f"AI响应内容（前500字符）: {character_status_response[:500]}")
                         else:
                             logger.warning(f"⚠️ 章节 {chapter_id} 内容为空，跳过角色提取")
                     except Exception as e:
@@ -1394,15 +1469,20 @@ async def generate_chapter_outlines(
             if all_characters:
                 try:
                     logger.info(f"开始保存 {len(all_characters)} 个角色信息到作品 {work_id}...")
+                    logger.debug(f"所有提取的角色列表: {[char.get('name', '未知') if isinstance(char, dict) else '无效' for char in all_characters]}")
                     
                     # 合并角色信息（去重）
                     character_map = {}
+                    skipped_count = 0
                     for char_data in all_characters:
                         if not isinstance(char_data, dict):
+                            logger.warning(f"跳过无效的角色数据（不是字典）: {type(char_data)}")
+                            skipped_count += 1
                             continue
                         char_name = char_data.get("name", "")
                         if char_name:
                             if char_name in character_map:
+                                logger.debug(f"合并已存在的角色: {char_name}")
                                 # 合并现有角色
                                 existing_char = character_map[char_name]
                                 # 深度合并
@@ -1412,10 +1492,18 @@ async def generate_chapter_outlines(
                                     else:
                                         existing_char[key] = value
                             else:
+                                logger.debug(f"添加新角色: {char_name}")
                                 # 添加新角色
                                 character_map[char_name] = char_data
+                        else:
+                            logger.warning(f"跳过没有 name 字段的角色数据: {char_data}")
+                            skipped_count += 1
+                    
+                    if skipped_count > 0:
+                        logger.warning(f"跳过了 {skipped_count} 个无效的角色数据")
                     
                     characters_count = len(character_map)
+                    logger.info(f"合并后共有 {characters_count} 个唯一角色（跳过 {skipped_count} 个无效数据）")
                     
                     if characters_count > 0:
                         # 保存角色信息到作品的 metainfo 中
@@ -1425,10 +1513,23 @@ async def generate_chapter_outlines(
                             analysis_data={"characters": list(character_map.values())},
                             user_id=current_user_id,
                         )
-                        characters_count = save_result.get("characters_processed", characters_count)
-                        characters_saved = characters_count > 0
+                        # characters_processed 现在包含新增和更新的角色总数
+                        processed_count = save_result.get("characters_processed", 0)
+                        # 如果 processed_count 为 0，但 character_map 不为空，说明所有角色都已存在且没有更新
+                        # 这种情况下，我们仍然认为保存成功（因为角色数据已经在数据库中）
+                        if processed_count > 0:
+                            characters_count = processed_count
+                            characters_saved = True
+                        elif len(character_map) > 0:
+                            # 所有角色都已存在，虽然没有新处理，但数据已保存
+                            characters_count = len(character_map)
+                            characters_saved = True
+                            logger.info(f"所有 {characters_count} 个角色都已存在于数据库中，无需新增或更新")
+                        else:
+                            characters_count = 0
+                            characters_saved = False
                         
-                        # 验证角色信息是否已保存到 work.work_metadata 中
+                        # 验证角色信息是否已保存到 work.work_metadata.component_data 中
                         if characters_saved:
                             # 重新查询 work 对象以获取最新数据（因为 incremental_insert_to_work 已经提交并刷新了）
                             from memos.api.services.work_service import WorkService
@@ -1436,10 +1537,11 @@ async def generate_chapter_outlines(
                             updated_work = await work_service.get_work_by_id(work_id)
                             if updated_work:
                                 work_metadata = updated_work.work_metadata or {}
-                                saved_characters = work_metadata.get("characters", [])
+                                component_data = work_metadata.get("component_data", {})
+                                saved_characters = component_data.get("characters", [])
                                 logger.info(
-                                    f"✅ 成功保存 {characters_count} 个角色信息到作品 {work_id} 的 metainfo 中，"
-                                    f"当前 work_metadata 中共有 {len(saved_characters)} 个角色"
+                                    f"✅ 成功保存 {characters_count} 个角色信息到作品 {work_id} 的 component_data 中，"
+                                    f"当前 component_data 中共有 {len(saved_characters)} 个角色"
                                 )
                                 # 更新 work 对象引用
                                 work = updated_work

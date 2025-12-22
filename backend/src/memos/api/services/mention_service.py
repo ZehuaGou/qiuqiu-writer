@@ -216,8 +216,9 @@ class MentionService:
         async def replace_match(match):
             character_name = match.group(1).strip()
             try:
-                # 从作品metadata中查找角色
-                characters = work_metadata.get("characters", [])
+                # 从作品metadata的component_data中查找角色
+                component_data = work_metadata.get("component_data", {})
+                characters = component_data.get("characters", [])
                 character = None
                 
                 # 尝试匹配角色名称

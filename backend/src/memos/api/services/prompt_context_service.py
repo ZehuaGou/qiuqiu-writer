@@ -278,10 +278,11 @@ class PromptContextService:
                 context.current_chapter_outline = metadata.get("outline", {})
                 context.current_chapter_detailed_outline = metadata.get("detailed_outline", {})
         
-        # 3. 获取所有角色（如果需要）- 从 work_metadata 中读取
+        # 3. 获取所有角色（如果需要）- 从 work_metadata.component_data 中读取
         if need_characters:
             work_metadata = context.work.work_metadata or {}
-            characters_data = work_metadata.get("characters", [])
+            component_data = work_metadata.get("component_data", {})
+            characters_data = component_data.get("characters", [])
             # 通用排序：尝试按可能的优先级字段和标识字段排序
             def get_sort_key(x):
                 # 尝试找到优先级字段（is_main, priority, order 等）
@@ -922,9 +923,12 @@ class PromptContextService:
             if not work:
                 raise ValueError(f"作品不存在: {work_id}")
             
-            # 更新 work_metadata 中的角色信息
+            # 更新 work_metadata.component_data 中的角色信息
             work_metadata = work.work_metadata or {}
-            existing_characters = work_metadata.get("characters", [])
+            if "component_data" not in work_metadata:
+                work_metadata["component_data"] = {}
+            component_data = work_metadata["component_data"]
+            existing_characters = component_data.get("characters", [])
             
             # 创建角色标识符到角色的映射，用于去重和更新（通用处理）
             character_map = {}
@@ -971,8 +975,9 @@ class PromptContextService:
                     # 添加新角色：完全保留用户提供的数据结构
                     character_map[char_id] = char_data.copy()
             
-            # 更新 work_metadata
-            work_metadata["characters"] = list(character_map.values())
+            # 更新 work_metadata.component_data
+            component_data["characters"] = list(character_map.values())
+            work_metadata["component_data"] = component_data
             work.work_metadata = work_metadata
             
             await self.db.commit()

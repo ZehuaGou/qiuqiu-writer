@@ -296,12 +296,15 @@ class BookAnalysisService:
     def parse_single_chapter_response(self, ai_response: str) -> Optional[Dict[str, Any]]:
         """
         解析单个章节的AI响应，提取JSON数据
+        支持两种格式：
+        1. 章节数据：{ "chapter_number": ..., "title": ..., "outline": ..., "detailed_outline": ... }
+        2. 角色数据：{ "characters": [...] }
         
         Args:
             ai_response: AI返回的响应文本
         
         Returns:
-            解析后的章节数据字典，如果解析失败返回None
+            解析后的数据字典，如果解析失败返回None
         """
         try:
             # 尝试提取JSON代码块
@@ -320,7 +323,12 @@ class BookAnalysisService:
             # 解析JSON
             data = json.loads(json_str)
 
-            # 兼容两种结构：
+            # 如果包含 characters 字段，说明是角色数据，直接返回
+            if "characters" in data:
+                logger.debug("检测到角色数据格式，返回包含 characters 的数据")
+                return data
+
+            # 兼容两种章节结构：
             # 1）单章节对象：{ "chapter_number": ..., "title": ..., "outline": ..., "detailed_outline": ... }
             # 2）包装对象：{ "chapters": [ { ...单章节对象... } ] }
             if "chapters" in data and isinstance(data["chapters"], list) and data["chapters"]:
@@ -339,10 +347,10 @@ class BookAnalysisService:
             return chapter_data
             
         except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败: {e}")
+            logger.error(f"JSON解析失败: {e}, 响应内容: {ai_response[:500]}")
             return None
         except Exception as e:
-            logger.error(f"解析AI响应失败: {e}")
+            logger.error(f"解析AI响应失败: {e}, 响应内容: {ai_response[:500]}")
             return None
     
     async def get_work_characters_and_locations(self, work_id: int) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -365,7 +373,8 @@ class BookAnalysisService:
                 return [], []
             
             work_metadata = work.work_metadata or {}
-            characters = work_metadata.get("characters", [])
+            component_data = work_metadata.get("component_data", {})
+            characters = component_data.get("characters", [])
             locations = work_metadata.get("locations", [])
             
             # 确保返回的是列表
@@ -700,10 +709,16 @@ class BookAnalysisService:
             
             work_metadata = work.work_metadata or {}
             
-            # 处理角色（合并到work_metadata）
+            # 确保 component_data 存在
+            if "component_data" not in work_metadata:
+                work_metadata["component_data"] = {}
+            component_data = work_metadata["component_data"]
+            
+            # 处理角色（合并到 component_data.characters）
             characters_processed = 0
+            characters_updated = 0
             if analysis_data.get("characters"):
-                existing_characters = work_metadata.get("characters", [])
+                existing_characters = component_data.get("characters", [])
                 character_map = {char.get("name", ""): char for char in existing_characters}
                 
                 for char_data in analysis_data["characters"]:
@@ -715,18 +730,29 @@ class BookAnalysisService:
                         if char_name in character_map:
                             # 合并现有角色
                             existing_char = character_map[char_name]
-                            # 深度合并
+                            # 检查是否有实际更新（深度合并）
+                            has_update = False
                             for key, value in char_data.items():
                                 if key in existing_char and isinstance(existing_char[key], dict) and isinstance(value, dict):
+                                    # 深度合并字典
                                     existing_char[key].update(value)
-                                else:
+                                    has_update = True
+                                elif key not in existing_char or existing_char[key] != value:
+                                    # 字段不存在或值不同，需要更新
                                     existing_char[key] = value
+                                    has_update = True
+                            if has_update:
+                                characters_updated += 1
                         else:
                             # 添加新角色
                             character_map[char_name] = char_data
                             characters_processed += 1
                 
-                work_metadata["characters"] = list(character_map.values())
+                component_data["characters"] = list(character_map.values())
+                work_metadata["component_data"] = component_data
+                
+                # 返回处理的角色总数（新增 + 更新）
+                characters_processed = characters_processed + characters_updated
             
             # 处理地点（合并到work_metadata）
             locations_processed = 0

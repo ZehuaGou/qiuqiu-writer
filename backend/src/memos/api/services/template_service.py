@@ -351,8 +351,12 @@ class TemplateService:
         if not template:
             return False
 
-        # 只有模板创建者可以编辑用户模板，系统模板不能编辑
-        return template.creator_id == user_id and not template.is_system
+        # 所有模板都可以编辑（包括系统模板）
+        # 如果是用户模板，只有创建者可以编辑；如果是系统模板，所有用户都可以编辑
+        if template.is_system:
+            return True  # 系统模板所有用户都可以编辑
+        else:
+            return template.creator_id == user_id  # 用户模板只有创建者可以编辑
 
     async def can_access_work(self, user_id: int, work_id: int) -> bool:
         """检查用户是否可以访问作品"""

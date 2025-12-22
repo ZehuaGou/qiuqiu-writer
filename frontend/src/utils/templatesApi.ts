@@ -48,6 +48,24 @@ class TemplatesApiClient extends BaseApiClient {
   }
 
   /**
+   * 更新模板
+   */
+  async updateTemplate(
+    templateId: number,
+    templateData: {
+      name?: string;
+      description?: string;
+      template_config?: TemplateConfig;
+      settings?: Record<string, any>;
+      category?: string;
+      is_public?: boolean;
+      tags?: string[];
+    }
+  ): Promise<any> {
+    return this.put<any>(`/api/v1/templates/${templateId}`, templateData);
+  }
+
+  /**
    * 获取模板列表
    */
   async listTemplates(params?: {

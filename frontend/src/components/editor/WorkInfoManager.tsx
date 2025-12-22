@@ -318,191 +318,60 @@ const componentRegistry: ComponentDefinition[] = [
 ];
 
 // ============ 预设模板 ============
+// 注意：默认模板现在从数据库加载，不再在代码中定义
+// 如果需要回退模板，可以从数据库加载系统模板（is_system=true）
 
-const presetTemplates: TemplateConfig[] = [
-  {
-    id: 'novel-standard',
-    name: '小说标准模板',
-    description: '通用小说创作模板',
-    modules: [
-      {
-        id: 'basic-info',
-        name: '基本信息',
-        icon: 'FileText',
-        color: '#3b82f6',
-        components: [
-          { id: 'genre', type: 'multiselect', label: '题材类型', config: { 
-            options: [
-              { label: '言情', value: 'romance', color: '#ec4899' },
-              { label: '悬疑', value: 'mystery', color: '#8b5cf6' },
-              { label: '科幻', value: 'scifi', color: '#06b6d4' },
-              { label: '玄幻', value: 'fantasy', color: '#f59e0b' },
-              { label: '都市', value: 'urban', color: '#10b981' },
-            ],
-            maxCount: 3
-          }, value: [] },
-          { id: 'summary', type: 'textarea', label: '作品简介', config: { placeholder: '输入作品简介...' }, value: '' },
-          { id: 'cover', type: 'image', label: '封面图', config: {}, value: '' },
-        ]
-      },
-      {
-        id: 'characters',
-        name: '角色设定',
-        icon: 'Users',
-        color: '#8b5cf6',
-        components: [
-          { id: 'char-tabs', type: 'tabs', label: '角色管理', config: {
-            tabs: [
-              { id: 'list', label: '角色列表', components: [
-                { 
-                  id: 'char-cards', 
-                  type: 'character-card', 
-                  label: '角色卡片', 
-                  dataKey: 'characters', // 数据存储键
-                  config: {}, 
-                  value: [] 
-                }
-              ]},
-              { id: 'relations', label: '关系图谱', components: [
-                { 
-                  id: 'char-relations', 
-                  type: 'relation-graph', 
-                  label: '人物关系', 
-                  dataKey: 'character_relations', // 数据存储键
-                  dataDependencies: ['characters'], // 依赖角色列表数据
-                  config: {
-                    nodeTypes: [
-                      { type: 'protagonist', label: '主角', color: '#ef4444' },
-                      { type: 'supporting', label: '配角', color: '#3b82f6' },
-                      { type: 'antagonist', label: '反派', color: '#6b7280' },
-                    ],
-                    relationTypes: [
-                      { type: 'family', label: '亲属', color: '#ec4899' },
-                      { type: 'friend', label: '朋友', color: '#10b981' },
-                      { type: 'enemy', label: '敌对', color: '#ef4444' },
-                      { type: 'lover', label: '恋人', color: '#f472b6' },
-                    ]
-                  }, 
-                  value: { characters: [], relations: [] } 
-                }
-              ]},
-              { id: 'timeline', label: '时间线', components: [
-                { 
-                  id: 'char-timeline', 
-                  type: 'timeline', 
-                  label: '角色时间线', 
-                  dataKey: 'character_timeline', // 数据存储键
-                  dataDependencies: ['characters'], // 依赖角色列表数据
-                  config: {}, 
-                  value: [] 
-                }
-              ]},
-            ]
-          }, value: null },
-        ]
-      },
-      {
-        id: 'world',
-        name: '世界设定',
-        icon: 'Map',
-        color: '#10b981',
-        components: [
-          { id: 'era', type: 'select', label: '时代背景', config: {
-            options: [
-              { label: '古代', value: 'ancient' },
-              { label: '现代', value: 'modern' },
-              { label: '未来', value: 'future' },
-              { label: '架空', value: 'fictional' },
-            ]
-          }, value: '' },
-          { id: 'world-desc', type: 'textarea', label: '世界描述', config: { placeholder: '描述故事发生的世界...' }, value: '' },
-          { id: 'rules', type: 'keyvalue', label: '世界规则', config: {}, value: [] },
-          { id: 'factions', type: 'faction', label: '势力设定', config: {}, value: [], generatePrompt: '根据世界观背景，生成故事中的主要势力、组织或阵营，包含势力名称、简介、内部等级体系' },
-        ]
-      },
-      {
-        id: 'plot',
-        name: '剧情设计',
-        icon: 'Zap',
-        color: '#f59e0b',
-        components: [
-          { id: 'mainline', type: 'textarea', label: '主线剧情', config: { placeholder: '描述主要剧情线...' }, value: '' },
-          { id: 'conflicts', type: 'keyvalue', label: '核心冲突', config: {}, value: [] },
-          { id: 'turning-points', type: 'list', label: '关键转折', config: {}, value: [] },
-        ]
-      },
-    ]
-  },
-  {
-    id: 'novel-romance',
-    name: '言情小说模板',
-    description: '重点突出感情线和人物关系',
-    modules: [
-      {
-        id: 'basic-info',
-        name: '基本信息',
-        icon: 'FileText',
-        color: '#3b82f6',
-        components: [
-          { id: 'subgenre', type: 'multiselect', label: '感情类型', config: { 
-            options: [
-              { label: '甜宠', value: 'sweet', color: '#f472b6' },
-              { label: '虐恋', value: 'angst', color: '#6b7280' },
-              { label: '先婚后爱', value: 'marriage-first', color: '#ec4899' },
-              { label: '破镜重圆', value: 'reunion', color: '#8b5cf6' },
-              { label: '暗恋', value: 'secret-love', color: '#06b6d4' },
-              { label: '双向奔赴', value: 'mutual', color: '#10b981' },
-            ],
-            maxCount: 3
-          }, value: [] },
-          { id: 'summary', type: 'textarea', label: '作品简介', config: {}, value: '' },
-        ]
-      },
-      {
-        id: 'main-cp',
-        name: '主CP设定',
-        icon: 'Heart',
-        color: '#ec4899',
-        components: [
-          { id: 'cp-tabs', type: 'tabs', label: 'CP管理', config: {
-            tabs: [
-              { id: 'profiles', label: '人物档案', components: [
-                { id: 'female-lead', type: 'keyvalue', label: '女主角', config: {}, value: [] },
-                { id: 'male-lead', type: 'keyvalue', label: '男主角', config: {}, value: [] },
-              ]},
-              { id: 'love-line', label: '感情线', components: [
-                { id: 'stages', type: 'timeline', label: '感情发展', config: {}, value: [] },
-              ]},
-              { id: 'relations', label: '关系图', components: [
-                { id: 'cp-relations', type: 'relation-graph', label: 'CP关系', config: {
-                  nodeTypes: [
-                    { type: 'female', label: '女性', color: '#ec4899' },
-                    { type: 'male', label: '男性', color: '#3b82f6' },
-                  ],
-                  relationTypes: [
-                    { type: 'lover', label: '恋人', color: '#ef4444' },
-                    { type: 'rival', label: '情敌', color: '#f59e0b' },
-                    { type: 'friend', label: '闺蜜/兄弟', color: '#10b981' },
-                  ]
-                }, value: { characters: [], relations: [] } }
-              ]},
-            ]
-          }, value: null },
-        ]
-      },
-      {
-        id: 'sweet-points',
-        name: '甜蜜设计',
-        icon: 'Sparkles',
-        color: '#f472b6',
-        components: [
-          { id: 'sweet-moments', type: 'keyvalue', label: '甜蜜高光', config: {}, value: [] },
-          { id: 'conflicts', type: 'keyvalue', label: '感情冲突', config: {}, value: [] },
-        ]
-      },
-    ]
-  },
-];
+// 从数据库加载默认模板的辅助函数
+const loadDefaultTemplate = async (): Promise<TemplateConfig | null> => {
+  try {
+    const templates = await templatesApi.listTemplates({
+      work_type: 'novel',
+      is_system: true, // 加载系统模板
+      include_fields: false
+    });
+    
+    // 查找第一个系统模板作为默认模板
+    const defaultTemplate = templates.find(t => t.is_system) || templates[0];
+    if (defaultTemplate) {
+      console.log('📥 加载默认模板数据:', {
+        id: defaultTemplate.id,
+        name: defaultTemplate.name,
+        has_template_config: !!defaultTemplate.template_config,
+        template_config: defaultTemplate.template_config
+      });
+      
+      // 检查 template_config 的结构
+      let modules: ModuleConfig[] = [];
+      
+      if (defaultTemplate.template_config) {
+        // 如果 template_config 直接是 modules 数组（向后兼容）
+        if (Array.isArray(defaultTemplate.template_config)) {
+          modules = defaultTemplate.template_config as ModuleConfig[];
+        }
+        // 如果 template_config 是对象，包含 modules 字段
+        else if (defaultTemplate.template_config.modules && Array.isArray(defaultTemplate.template_config.modules)) {
+          modules = defaultTemplate.template_config.modules as ModuleConfig[];
+        }
+      }
+      
+      if (modules.length > 0) {
+        return {
+          id: `db-${defaultTemplate.id}`,
+          name: defaultTemplate.name,
+          description: defaultTemplate.description || '',
+          modules: modules
+        };
+      } else {
+        console.warn('⚠️ 默认模板没有 modules，template_config:', defaultTemplate.template_config);
+      }
+    }
+  } catch (error) {
+    console.warn('加载默认模板失败:', error);
+  }
+  return null;
+};
+
+// 不再使用硬编码的模板，所有模板从数据库加载
 
 // ============ 图标映射 ============
 
@@ -785,19 +654,18 @@ interface WorkInfoManagerProps {
 export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   // 初始化时尝试从缓存加载（基于 workId）
   const [template, setTemplate] = useState<TemplateConfig>(() => {
-    const cached = loadFromCache(workId || null);
-    if (cached) {
-      // 找到对应的模板并用缓存数据覆盖
-      const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
-      return {
-        ...baseTemplate,
-        modules: cached.modules
-      };
-    }
-    return JSON.parse(JSON.stringify(presetTemplates[0]));
+    // 初始状态：使用空模板，等待从数据库加载
+    return {
+      id: '',
+      name: '加载中...',
+      description: '',
+      modules: []
+    };
   });
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
   const [isEditMode, setIsEditMode] = useState(false);
+  // 保存进入编辑模式时的原始模板结构快照（用于比较是否有修改）
+  const [originalTemplateSnapshot, setOriginalTemplateSnapshot] = useState<string | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [createTemplateForm, setCreateTemplateForm] = useState({
@@ -838,6 +706,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   const [newCardFieldForm, setNewCardFieldForm] = useState({ label: '', type: 'text' as 'text' | 'textarea' | 'image' });
   const [newTagOption, setNewTagOption] = useState({ label: '', color: '#64748b' });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // 保存原始作品数据快照（用于比较是否有修改）
+  const [originalWorkDataSnapshot, setOriginalWorkDataSnapshot] = useState<string | null>(null);
   
   // 角色编辑弹窗状态
   const [characterModal, setCharacterModal] = useState<{
@@ -887,16 +757,69 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   useEffect(() => {
     const loadTemplate = async () => {
       if (!workId) {
-        // 如果没有 workId，从本地缓存加载
+        // 如果没有 workId，从本地缓存加载，或从数据库加载默认模板
         const cached = loadFromCache(null);
         if (cached) {
-          const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
-          setTemplate({
-            ...baseTemplate,
-            modules: cached.modules
-          });
+          // 尝试从数据库加载对应的模板
+          if (cached.templateId.startsWith('db-')) {
+            try {
+              const dbTemplateId = parseInt(cached.templateId.replace('db-', ''));
+              const templates = await templatesApi.listTemplates({
+                work_type: 'novel',
+                include_fields: false
+              });
+              const dbTemplate = templates.find(t => t.id === dbTemplateId);
+              if (dbTemplate) {
+                console.log('📥 从缓存加载时获取的模板数据:', {
+                  id: dbTemplate.id,
+                  name: dbTemplate.name,
+                  has_template_config: !!dbTemplate.template_config,
+                  template_config: dbTemplate.template_config
+                });
+                
+                // 提取 modules
+                let dbModules: ModuleConfig[] = [];
+                if (dbTemplate.template_config) {
+                  if (Array.isArray(dbTemplate.template_config)) {
+                    dbModules = dbTemplate.template_config as ModuleConfig[];
+                  } else if (dbTemplate.template_config.modules && Array.isArray(dbTemplate.template_config.modules)) {
+                    dbModules = dbTemplate.template_config.modules as ModuleConfig[];
+                  }
+                }
+                
+                if (dbModules.length > 0) {
+                  setTemplate({
+                    id: `db-${dbTemplate.id}`,
+                    name: dbTemplate.name,
+                    description: dbTemplate.description || '',
+                    modules: writeComponentDataToTemplate(
+                      dbModules,
+                      cached.modules ? extractComponentDataFromTemplate(cached.modules) : {}
+                    )
+                  });
+                  return;
+                } else {
+                  console.warn('⚠️ 数据库模板没有 modules，template_config:', dbTemplate.template_config);
+                }
+              }
+            } catch (error) {
+              console.warn('从数据库加载缓存模板失败:', error);
+            }
+          }
+        }
+        
+        // 如果没有缓存或加载失败，从数据库加载默认模板
+        const defaultTemplate = await loadDefaultTemplate();
+        if (defaultTemplate) {
+          setTemplate(defaultTemplate);
         } else {
-          setTemplate(JSON.parse(JSON.stringify(presetTemplates[0])));
+          // 如果数据库也没有，使用空模板
+          setTemplate({
+            id: '',
+            name: '无模板',
+            description: '请从数据库加载模板',
+            modules: []
+          });
         }
         return;
       }
@@ -908,6 +831,19 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         const componentData = workData.metadata?.component_data || {};
         const charactersFromMetadata = workData.metadata?.characters || []; // 向后兼容
         
+        // 初始化原始作品数据快照（用于比较是否有修改）
+        // 注意：这里保存的是从数据库加载的原始数据，用于后续比较
+        const initialDataStr = JSON.stringify({
+          component_data: componentData,
+          characters: charactersFromMetadata
+        });
+        setOriginalWorkDataSnapshot(initialDataStr);
+        console.log('📸 初始化原始数据快照:', {
+          componentDataKeys: Object.keys(componentData),
+          charactersCount: charactersFromMetadata.length,
+          snapshotLength: initialDataStr.length
+        });
+        
         if (templateConfig && 
             templateConfig.templateId && 
             templateConfig.modules &&
@@ -917,41 +853,105 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           
           
           
-          // 尝试找到对应的预设模板或数据库模板
-          let baseTemplate = presetTemplates.find(t => t.id === templateConfig.templateId);
+          // 所有模板都从数据库加载（不再使用预设模板）
+          let baseTemplate: TemplateConfig | null = null;
           
-          // 如果不是预设模板，尝试从数据库模板列表中找到（需要等待 userTemplates 加载）
-          if (!baseTemplate && templateConfig.templateId.startsWith('db-')) {
-            // 延迟加载，等待 userTemplates 加载完成
-            const dataToMerge = { ...componentData }; // 保存到局部变量
-            // 向后兼容：如果有 characters 字段，也添加到 component_data（使用 dataKey 'characters'）
-            if (charactersFromMetadata.length > 0 && !dataToMerge['characters']) {
-              dataToMerge['characters'] = charactersFromMetadata;
-            }
-            setTimeout(() => {
+          // 如果是数据库模板（db-*），从 work_template 表加载（包含完整的 dataKey 配置）
+          if (templateConfig.templateId && templateConfig.templateId.startsWith('db-')) {
+            try {
               const dbTemplateId = parseInt(templateConfig.templateId.replace('db-', ''));
-              const dbTemplate = userTemplates.find(t => t.id === dbTemplateId);
-              if (dbTemplate) {
-                let modules = templateConfig.modules;
-                // 将组件数据写入模板格式
-                if (Object.keys(dataToMerge).length > 0) {
-                  modules = writeComponentDataToTemplate(modules, dataToMerge);
+              // 尝试从 userTemplates 中查找（如果已加载）
+              let dbTemplate = userTemplates.find(t => t.id === dbTemplateId);
+              
+              // 如果 userTemplates 中找不到，直接调用 API 获取
+              if (!dbTemplate) {
+                try {
+                  const templates = await templatesApi.listTemplates({
+                    work_type: 'novel',
+                    include_fields: false
+                  });
+                  dbTemplate = templates.find(t => t.id === dbTemplateId);
+                } catch (error) {
+                  console.warn('从 API 获取模板失败:', error);
                 }
-                setTemplate({
-                  id: `db-${dbTemplate.id}`,
-                  name: dbTemplate.name,
-                  description: dbTemplate.description || '',
-                  modules: modules
-                });
               }
-            }, 500);
-            // 先使用默认模板结构
-            baseTemplate = presetTemplates[0];
+              
+              if (dbTemplate) {
+                console.log('📥 从数据库获取的模板数据:', {
+                  id: dbTemplate.id,
+                  name: dbTemplate.name,
+                  has_template_config: !!dbTemplate.template_config,
+                  template_config_keys: dbTemplate.template_config ? Object.keys(dbTemplate.template_config) : [],
+                  template_config: dbTemplate.template_config
+                });
+                
+                // 检查 template_config 的结构
+                // template_config 可能直接包含 modules，或者是一个对象包含 modules
+                let dbModules: ModuleConfig[] = [];
+                
+                if (dbTemplate.template_config) {
+                  // 如果 template_config 直接是 modules 数组（向后兼容）
+                  if (Array.isArray(dbTemplate.template_config)) {
+                    dbModules = dbTemplate.template_config as ModuleConfig[];
+                  }
+                  // 如果 template_config 是对象，包含 modules 字段
+                  else if (dbTemplate.template_config.modules && Array.isArray(dbTemplate.template_config.modules)) {
+                    dbModules = dbTemplate.template_config.modules as ModuleConfig[];
+                  }
+                  // 如果 template_config 是对象但没有 modules，可能是旧格式
+                  else if (typeof dbTemplate.template_config === 'object') {
+                    console.warn('⚠️ template_config 存在但不是预期的格式:', dbTemplate.template_config);
+                  }
+                }
+                
+                if (dbModules.length > 0) {
+                  // 从 work_template 表加载模板结构（包含 dataKey）
+                  baseTemplate = {
+                    id: `db-${dbTemplate.id}`,
+                    name: dbTemplate.name,
+                    description: dbTemplate.description || '',
+                    modules: dbModules
+                  };
+                  console.log(`✅ 从 work_template 表加载模板结构: ${dbTemplate.name}，包含 ${dbModules.length} 个模块`);
+                  // 使用 work_template 表中的模板结构，而不是 metadata 中的
+                  templateConfig.modules = dbModules;
+                } else {
+                  console.warn('⚠️ work_template 表中没有找到 modules，template_config:', dbTemplate.template_config);
+                }
+              } else {
+                console.warn('⚠️ 未找到数据库模板，templateId:', templateConfig.templateId);
+              }
+            } catch (error) {
+              console.warn('从 work_template 表加载模板失败:', error);
+            }
           }
           
-          // 如果还是找不到，使用默认模板
+          // 如果 templateId 不是 db-* 格式，但 templateConfig.modules 存在，使用它
+          if (!baseTemplate && templateConfig.modules && Array.isArray(templateConfig.modules) && templateConfig.modules.length > 0) {
+            console.log(`📥 使用 templateConfig.modules（templateId: ${templateConfig.templateId}），共 ${templateConfig.modules.length} 个模块`);
+            baseTemplate = {
+              id: templateConfig.templateId,
+              name: '作品模板',
+              description: '',
+              modules: templateConfig.modules
+            };
+          }
+          
+          // 如果还是找不到，从数据库加载默认模板
           if (!baseTemplate) {
-            baseTemplate = presetTemplates[0];
+            const defaultTemplate = await loadDefaultTemplate();
+            if (defaultTemplate) {
+              baseTemplate = defaultTemplate;
+            } else {
+              // 最后的回退：使用空模板（应该不会发生，因为数据库应该有默认模板）
+              console.warn('⚠️ 无法从数据库加载默认模板，使用空模板');
+              baseTemplate = {
+                id: '',
+                name: '无模板',
+                description: '请从数据库加载模板',
+                modules: []
+              };
+            }
           }
           
           // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
@@ -960,86 +960,36 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             dataToWrite['characters'] = charactersFromMetadata;
           }
           
+          console.log('📥 准备写入的组件数据:', {
+            componentDataKeys: Object.keys(componentData),
+            dataToWriteKeys: Object.keys(dataToWrite),
+            charactersCount: charactersFromMetadata.length,
+            componentDataSample: Object.keys(componentData).slice(0, 3).reduce((acc, key) => {
+              acc[key] = Array.isArray(componentData[key]) 
+                ? `数组(${componentData[key].length}项)` 
+                : typeof componentData[key] === 'object' 
+                  ? `对象(${Object.keys(componentData[key] || {}).length}键)` 
+                  : componentData[key];
+              return acc;
+            }, {} as any)
+          });
+          
           // 将简化格式的组件数据写入模板格式
-          let modules = templateConfig.modules;
-          
-          // 如果从数据库加载的模板缺少 dataKey 和 dataDependencies，从预设模板中补充
-          const mergePresetTemplateConfig = (dbModules: ModuleConfig[], presetModules: ModuleConfig[]): ModuleConfig[] => {
-            return dbModules.map(dbModule => {
-              const presetModule = presetModules.find(pm => pm.id === dbModule.id);
-              if (!presetModule) return dbModule;
-              
-              const mergeComponents = (dbComps: ComponentConfig[], presetComps: ComponentConfig[]): ComponentConfig[] => {
-                return dbComps.map(dbComp => {
-                  const presetComp = presetComps.find(pc => pc.id === dbComp.id);
-                  if (!presetComp) {
-                    // 如果是 tabs，递归处理子组件
-                    if (dbComp.type === 'tabs' && dbComp.config?.tabs) {
-                      const presetTabsComp = presetComps.find(pc => pc.id === dbComp.id && pc.type === 'tabs');
-                      if (presetTabsComp && presetTabsComp.config && presetTabsComp.config.tabs) {
-                        const mergedTabs = dbComp.config.tabs.map((dbTab: any) => {
-                          const presetTab = presetTabsComp.config!.tabs!.find((pt: any) => pt.id === dbTab.id);
-                          if (presetTab && presetTab.components) {
-                            return {
-                              ...dbTab,
-                              components: mergeComponents(dbTab.components || [], presetTab.components)
-                            };
-                          }
-                          return dbTab;
-                        });
-                        return {
-                          ...dbComp,
-                          config: { ...dbComp.config, tabs: mergedTabs }
-                        };
-                      }
-                    }
-                    return dbComp;
-                  }
-                  
-                  // 合并配置：保留数据库中的 value，但补充缺失的 dataKey 和 dataDependencies
-                  return {
-                    ...dbComp,
-                    dataKey: dbComp.dataKey || presetComp.dataKey,
-                    dataDependencies: dbComp.dataDependencies || presetComp.dataDependencies,
-                    // 如果是 tabs，递归处理子组件
-                    ...(dbComp.type === 'tabs' && dbComp.config?.tabs && presetComp.config && presetComp.config.tabs ? {
-                      config: {
-                        ...dbComp.config,
-                        tabs: dbComp.config.tabs.map((dbTab: any) => {
-                          const presetTab = presetComp.config!.tabs!.find((pt: any) => pt.id === dbTab.id);
-                          if (presetTab && presetTab.components) {
-                            return {
-                              ...dbTab,
-                              components: mergeComponents(dbTab.components || [], presetTab.components)
-                            };
-                          }
-                          return dbTab;
-                        })
-                      }
-                    } : {})
-                  };
-                });
-              };
-              
-              return {
-                ...dbModule,
-                components: mergeComponents(dbModule.components, presetModule.components)
-              };
-            });
-          };
-          
-          // 如果是从数据库模板加载，尝试从预设模板补充缺失的配置
-          if (templateConfig.templateId && templateConfig.templateId.startsWith('db-')) {
-            // 对于数据库模板，暂时不补充（因为数据库模板应该已经有完整的配置）
-            // 如果数据库模板缺少配置，需要重新运行初始化脚本
+          // 优先使用 baseTemplate（从数据库加载的模板结构），如果没有则使用 templateConfig.modules
+          let modules: ModuleConfig[] = [];
+          if (baseTemplate && baseTemplate.modules) {
+            modules = baseTemplate.modules;
+            console.log(`📥 使用 baseTemplate 的模块结构，共 ${modules.length} 个模块`);
+          } else if (templateConfig.modules && Array.isArray(templateConfig.modules)) {
+            modules = templateConfig.modules;
+            console.log(`📥 使用 templateConfig.modules，共 ${modules.length} 个模块`);
           } else {
-            // 如果是预设模板，直接使用预设模板补充
-            const presetTemplate = presetTemplates.find(t => t.id === templateConfig.templateId);
-            if (presetTemplate) {
-              modules = mergePresetTemplateConfig(modules, presetTemplate.modules);
-              console.log('✅ 从预设模板补充了缺失的 dataKey 和 dataDependencies');
-            }
+            console.warn('⚠️ 没有找到模块结构，baseTemplate:', baseTemplate, 'templateConfig.modules:', templateConfig.modules);
+            modules = [];
           }
+          
+          // 不再使用预设模板补充，所有配置都应该在数据库中
+          // 如果数据库模板缺少配置，需要重新运行初始化脚本或更新数据库
           
           // 验证加载的模块配置中是否包含 dataKey 和 dataDependencies
           const validateLoadedModules = (components: ComponentConfig[], path: string = ''): void => {
@@ -1065,8 +1015,42 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           }
           
           if (Object.keys(dataToWrite).length > 0) {
+            console.log('📤 开始写入组件数据到模板');
+            console.log('   数据键:', Object.keys(dataToWrite));
+            console.log('   模块数量:', modules.length);
+            console.log('   每个模块的组件数量:', modules.map(m => ({ name: m.name, componentCount: m.components.length })));
+            
             modules = writeComponentDataToTemplate(modules, dataToWrite);
             console.log('✅ 从 metadata 将', Object.keys(dataToWrite).length, '个组件的数据写入模板格式');
+            
+            // 验证写入后的数据
+            const verifyDataWritten = (components: ComponentConfig[], path: string = ''): void => {
+              for (const comp of components) {
+                const currentPath = path ? `${path} > ${comp.label || comp.id}` : comp.label || comp.id;
+                const storageKey = comp.dataKey || comp.id;
+                if (dataToWrite[storageKey] !== undefined) {
+                  const hasValue = comp.value !== undefined && comp.value !== null;
+                  const valueType = Array.isArray(comp.value) 
+                    ? `数组(${comp.value.length}项)` 
+                    : typeof comp.value === 'object' 
+                      ? `对象(${Object.keys(comp.value || {}).length}键)` 
+                      : typeof comp.value;
+                  console.log(`✅ 数据已写入 - 组件 "${currentPath}" (dataKey: ${storageKey}): ${hasValue ? valueType : '无值'}`);
+                }
+                // 递归检查 tabs 中的组件
+                if (comp.type === 'tabs' && comp.config?.tabs) {
+                  for (const tab of comp.config.tabs) {
+                    if (tab.components) {
+                      verifyDataWritten(tab.components, `${currentPath} > ${tab.label || tab.id}`);
+                    }
+                  }
+                }
+              }
+            };
+            console.log('🔍 验证写入后的数据:');
+            for (const module of modules) {
+              verifyDataWritten(module.components, module.name);
+            }
             
             // 再次验证写入后的模块配置
             console.log('🔍 验证写入数据后的模板配置中的 dataKey 和 dataDependencies:');
@@ -1088,19 +1072,69 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           }, workId, templateConfig.templateId);
         } else {
           
-          // 数据库中没有，尝试从本地缓存加载（尝试加载最近使用的模板）
-          // 先尝试从通用缓存加载
+          // 数据库中没有，尝试从本地缓存加载，或从数据库加载默认模板
           const cached = loadFromCache(workId);
           if (cached) {
-            const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
-            setTemplate({
-              ...baseTemplate,
-              modules: cached.modules
-            });
-            // 同时保存到模板特定缓存
-            saveToCache(cached, workId, cached.templateId);
+            // 尝试从数据库加载对应的模板
+            if (cached.templateId.startsWith('db-')) {
+              try {
+                const dbTemplateId = parseInt(cached.templateId.replace('db-', ''));
+                const templates = await templatesApi.listTemplates({
+                  work_type: 'novel',
+                  include_fields: false
+                });
+                const dbTemplate = templates.find(t => t.id === dbTemplateId);
+                if (dbTemplate) {
+                  console.log('📥 从缓存加载时获取的模板数据:', {
+                    id: dbTemplate.id,
+                    name: dbTemplate.name,
+                    has_template_config: !!dbTemplate.template_config,
+                    template_config: dbTemplate.template_config
+                  });
+                  
+                  // 提取 modules
+                  let dbModules: ModuleConfig[] = [];
+                  if (dbTemplate.template_config) {
+                    if (Array.isArray(dbTemplate.template_config)) {
+                      dbModules = dbTemplate.template_config as ModuleConfig[];
+                    } else if (dbTemplate.template_config.modules && Array.isArray(dbTemplate.template_config.modules)) {
+                      dbModules = dbTemplate.template_config.modules as ModuleConfig[];
+                    }
+                  }
+                  
+                  if (dbModules.length > 0) {
+                    setTemplate({
+                      id: `db-${dbTemplate.id}`,
+                      name: dbTemplate.name,
+                      description: dbTemplate.description || '',
+                      modules: writeComponentDataToTemplate(
+                        dbModules,
+                        cached.modules ? extractComponentDataFromTemplate(cached.modules) : {}
+                      )
+                    });
+                    saveToCache(cached, workId, cached.templateId);
+                    return;
+                  } else {
+                    console.warn('⚠️ 数据库模板没有 modules，template_config:', dbTemplate.template_config);
+                  }
+                }
+              } catch (error) {
+                console.warn('从数据库加载缓存模板失败:', error);
+              }
+            }
+          }
+          
+          // 如果没有缓存或加载失败，从数据库加载默认模板
+          const defaultTemplate = await loadDefaultTemplate();
+          if (defaultTemplate) {
+            setTemplate(defaultTemplate);
           } else {
-            setTemplate(JSON.parse(JSON.stringify(presetTemplates[0])));
+            setTemplate({
+              id: '',
+              name: '无模板',
+              description: '请从数据库加载模板',
+              modules: []
+            });
           }
         }
       } catch (error) {
@@ -1109,16 +1143,68 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         if (import.meta.env.DEV) {
           console.warn('加载模板配置失败（使用本地缓存）:', error instanceof Error ? error.message : error);
         }
-        // 加载失败，从本地缓存加载
+        // 加载失败，从本地缓存加载，或从数据库加载默认模板
         const cached = loadFromCache(workId);
         if (cached) {
-          const baseTemplate = presetTemplates.find(t => t.id === cached.templateId) || presetTemplates[0];
-          setTemplate({
-            ...baseTemplate,
-            modules: cached.modules
-          });
+          // 尝试从数据库加载对应的模板
+          if (cached.templateId.startsWith('db-')) {
+            try {
+              const dbTemplateId = parseInt(cached.templateId.replace('db-', ''));
+              const templates = await templatesApi.listTemplates({
+                work_type: 'novel',
+                include_fields: false
+              });
+              const dbTemplate = templates.find(t => t.id === dbTemplateId);
+              if (dbTemplate) {
+                console.log('📥 从缓存加载时获取的模板数据:', {
+                  id: dbTemplate.id,
+                  name: dbTemplate.name,
+                  has_template_config: !!dbTemplate.template_config,
+                  template_config: dbTemplate.template_config
+                });
+                
+                // 提取 modules
+                let dbModules: ModuleConfig[] = [];
+                if (dbTemplate.template_config) {
+                  if (Array.isArray(dbTemplate.template_config)) {
+                    dbModules = dbTemplate.template_config as ModuleConfig[];
+                  } else if (dbTemplate.template_config.modules && Array.isArray(dbTemplate.template_config.modules)) {
+                    dbModules = dbTemplate.template_config.modules as ModuleConfig[];
+                  }
+                }
+                
+                if (dbModules.length > 0) {
+                  setTemplate({
+                    id: `db-${dbTemplate.id}`,
+                    name: dbTemplate.name,
+                    description: dbTemplate.description || '',
+                    modules: writeComponentDataToTemplate(
+                      dbModules,
+                      cached.modules ? extractComponentDataFromTemplate(cached.modules) : {}
+                    )
+                  });
+                  return;
+                } else {
+                  console.warn('⚠️ 数据库模板没有 modules，template_config:', dbTemplate.template_config);
+                }
+              }
+            } catch (error) {
+              console.warn('从数据库加载缓存模板失败:', error);
+            }
+          }
+        }
+        
+        // 如果没有缓存或加载失败，从数据库加载默认模板
+        const defaultTemplate = await loadDefaultTemplate();
+        if (defaultTemplate) {
+          setTemplate(defaultTemplate);
         } else {
-          setTemplate(JSON.parse(JSON.stringify(presetTemplates[0])));
+          setTemplate({
+            id: '',
+            name: '无模板',
+            description: '请从数据库加载模板',
+            modules: []
+          });
         }
       }
     };
@@ -1133,45 +1219,52 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     // 递归提取组件数据
     const extractFromComponents = (components: ComponentConfig[]) => {
       for (const comp of components) {
-        // 如果组件有 dataKey，使用 dataKey 作为存储键
-        // 注意：即使 value 是空数组或空对象，也应该保存 dataKey（因为 dataKey 是组件配置的一部分）
-        if (comp.dataKey) {
+        // 确定存储键：优先使用 dataKey，如果没有则使用组件 ID（但会记录警告）
+        const storageKey = comp.dataKey || comp.id;
+        
+        // 如果没有 dataKey，记录警告（但继续保存，使用 ID 作为 key）
+        if (!comp.dataKey && comp.type !== 'tabs') {
+          console.warn(`⚠️ 组件 "${comp.label || comp.id}" (${comp.id}) 没有设置 dataKey，将使用组件 ID 作为存储键。建议为组件添加 dataKey 以确保数据正确保存。`);
+        }
+        
+        // 提取组件数据（有 dataKey 或使用 ID 作为 key）
+        if (comp.dataKey || (comp.type !== 'tabs' && comp.value !== undefined)) {
           // 根据组件类型提取数据
           if (comp.type === 'character-card' && Array.isArray(comp.value)) {
-            componentData[comp.dataKey] = comp.value;
+            componentData[storageKey] = comp.value;
           } else if (comp.type === 'relation-graph' && typeof comp.value === 'object') {
             // 关系图组件：只保存关系，角色来自角色列表（不保存）
             const relationValue = comp.value as { characters?: any[]; relations?: any[] } || {};
             
             // 确保保存的数据格式正确：只保存 relations，characters 始终为空
-            componentData[comp.dataKey] = {
+            componentData[storageKey] = {
               characters: [], // 角色来自依赖的角色列表，不保存
               relations: Array.isArray(relationValue.relations) ? relationValue.relations : []  // 只保存关系
             };
             
-            console.log(`💾 提取关系图谱数据 "${comp.dataKey}": 0 个角色（来自角色列表）, ${componentData[comp.dataKey].relations.length} 个关系`);
+            console.log(`💾 提取关系图谱数据 "${storageKey}": 0 个角色（来自角色列表）, ${componentData[storageKey].relations.length} 个关系`);
           } else if (comp.type === 'timeline') {
             // 时间线组件：如果是新格式（包含 events），只提取 events；否则提取整个 value
             if (comp.value && typeof comp.value === 'object' && 'events' in comp.value) {
-              componentData[comp.dataKey] = comp.value.events;
+              componentData[storageKey] = comp.value.events;
             } else if (Array.isArray(comp.value)) {
-              componentData[comp.dataKey] = comp.value;
+              componentData[storageKey] = comp.value;
             } else {
               // 即使 value 为空，也保存 dataKey（值为空数组）
-              componentData[comp.dataKey] = [];
+              componentData[storageKey] = [];
             }
           } else {
             // 其他类型：即使 value 为空，也保存 dataKey
             if (comp.value !== undefined && comp.value !== null && comp.value !== '') {
-              componentData[comp.dataKey] = comp.value;
+              componentData[storageKey] = comp.value;
             } else {
               // 根据组件类型设置默认值
               if (comp.type === 'multiselect' || comp.type === 'list' || comp.type === 'keyvalue' || comp.type === 'table' || comp.type === 'card-list') {
-                componentData[comp.dataKey] = [];
+                componentData[storageKey] = [];
               } else if (comp.type === 'text' || comp.type === 'textarea') {
-                componentData[comp.dataKey] = '';
+                componentData[storageKey] = '';
               } else {
-                componentData[comp.dataKey] = comp.value; // 保存原始值（可能是 null 或 undefined）
+                componentData[storageKey] = comp.value; // 保存原始值（可能是 null 或 undefined）
               }
             }
           }
@@ -1251,17 +1344,35 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               })
             }
           };
-        } else if (comp.dataKey) {
+        } else {
           // 如果组件有 dataKey，从 componentData 中获取数据
-          // 重要：必须保留 comp 的所有属性，包括 dataKey 和 dataDependencies
+          // 如果没有 dataKey，尝试使用组件 ID 作为 key（向后兼容）
+          const storageKey = comp.dataKey || comp.id;
           let value = comp.value;
           
-          if (componentData[comp.dataKey] !== undefined) {
+          // 调试日志：检查数据匹配
+          if (comp.dataKey) {
+            if (componentData[comp.dataKey] === undefined) {
+              console.warn(`⚠️ 组件 "${comp.label || comp.id}" 的 dataKey "${comp.dataKey}" 在 componentData 中不存在`);
+              console.log(`   可用的 componentData keys:`, Object.keys(componentData));
+            } else {
+              console.log(`✅ 找到数据 - 组件 "${comp.label || comp.id}" (dataKey: ${comp.dataKey})`);
+            }
+          }
+          
+          if (componentData[storageKey] !== undefined) {
+            console.log(`📝 写入数据到组件 "${comp.label || comp.id}" (storageKey: ${storageKey}, type: ${comp.type}):`, 
+              Array.isArray(componentData[storageKey]) 
+                ? `数组(${componentData[storageKey].length}项)` 
+                : typeof componentData[storageKey] === 'object' 
+                  ? `对象(${Object.keys(componentData[storageKey] || {}).length}键)` 
+                  : componentData[storageKey]
+            );
             // 根据组件类型合并数据
-            if (comp.type === 'character-card' && Array.isArray(componentData[comp.dataKey])) {
+            if (comp.type === 'character-card' && Array.isArray(componentData[storageKey])) {
               // 角色卡片：合并数组
               const existing = comp.value && Array.isArray(comp.value) ? comp.value : [];
-              const newData = componentData[comp.dataKey];
+              const newData = componentData[storageKey];
               const charMap: { [key: string]: any } = {};
               
               existing.forEach((char: any) => {
@@ -1281,10 +1392,10 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               });
               
               value = Object.values(charMap);
-            } else if (comp.type === 'relation-graph' && typeof componentData[comp.dataKey] === 'object') {
+            } else if (comp.type === 'relation-graph' && typeof componentData[storageKey] === 'object') {
               // 关系图：合并对象，确保正确处理 characters 和 relations 两个字段
               const existing = comp.value && typeof comp.value === 'object' ? comp.value : { characters: [], relations: [] };
-              const newData = componentData[comp.dataKey];
+              const newData = componentData[storageKey];
               
               // 确保 newData 是对象格式，并且包含 characters 和 relations 两个字段
               if (newData && typeof newData === 'object') {
@@ -1294,11 +1405,11 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                   relations: Array.isArray(newData.relations) ? newData.relations : (Array.isArray(existing.relations) ? existing.relations : [])
                 };
                 
-                console.log(`📥 恢复关系图谱数据 "${comp.dataKey}": ${restoredValue.characters.length} 个角色, ${restoredValue.relations.length} 个关系`);
+                console.log(`📥 恢复关系图谱数据 "${storageKey}": ${restoredValue.characters.length} 个角色, ${restoredValue.relations.length} 个关系`);
                 value = restoredValue;
               } else {
                 // 如果 newData 格式不正确，使用现有数据
-                console.log(`⚠️ 关系图谱数据格式不正确 "${comp.dataKey}", 使用现有数据`);
+                console.log(`⚠️ 关系图谱数据格式不正确 "${storageKey}", 使用现有数据`);
                 value = {
                   characters: Array.isArray(existing.characters) ? existing.characters : [],
                   relations: Array.isArray(existing.relations) ? existing.relations : []
@@ -1306,7 +1417,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               }
             } else {
               // 其他类型：直接使用新数据
-              value = componentData[comp.dataKey];
+              value = componentData[storageKey];
             }
           }
           
@@ -1322,15 +1433,12 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             // 将依赖数据注入到组件的 value 中（根据组件类型决定注入方式）
             if (comp.type === 'timeline' && Array.isArray(value)) {
               // 时间线组件：将依赖的角色数据作为元数据注入，供组件使用
-              // 注意：这里不修改 value 数组本身，而是将依赖数据存储在组件的 _dependencies 属性中
-              // 但为了保持数据结构的一致性，我们将依赖数据存储在 value 的顶层
               value = {
                 events: value,
                 _dependencies: dependencies // 将依赖数据作为元数据注入
               };
             } else if (comp.type === 'relation-graph' && typeof value === 'object') {
               // 关系图组件：只保存关系，角色来自角色列表（不保存）
-              // 确保 value 是对象格式，包含 characters 和 relations
               const currentValue = value && typeof value === 'object' ? value : { characters: [], relations: [] };
               
               value = {
@@ -1338,8 +1446,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                 relations: Array.isArray(currentValue.relations) ? currentValue.relations : []  // 只保存关系
               };
               
-              console.log(`💾 写入关系图谱数据到模板 "${comp.dataKey}": 0 个角色（来自角色列表）, ${value.relations.length} 个关系`);
-              // 注意：角色数据会在渲染时（renderComponent）从依赖的角色列表中动态获取
+              console.log(`💾 写入关系图谱数据到模板 "${storageKey}": 0 个角色（来自角色列表）, ${value.relations.length} 个关系`);
             }
           }
           
@@ -1349,8 +1456,6 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             value     // 只更新 value
           };
         }
-        // 对于没有 dataKey 的组件，直接返回（保留所有属性）
-        return comp;
       });
     };
     
@@ -1404,77 +1509,20 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   }, []);
 
   // 保存作品信息到 metadata（包括模板配置和所有组件数据）
-  const saveWorkInfoToMetadata = useCallback(async (template: TemplateConfig) => {
+  const saveWorkInfoToMetadata = useCallback(async (template: TemplateConfig, originalSnapshot: string | null) => {
     if (!workId) {
-      return;
+      return false;
     }
 
     try {
-      // 先从数据库获取当前的组件数据（可能包含从AI分析提取的数据）
-      let existingComponentData: { [componentId: string]: any } = {};
-      let charactersFromMetadata: any[] = []; // 保留用于向后兼容
-      try {
-        const workData = await worksApi.getWork(Number(workId));
-        existingComponentData = workData.metadata?.component_data || {};
-        charactersFromMetadata = workData.metadata?.characters || [];
-        console.log('📥 从数据库获取到组件数据:', Object.keys(existingComponentData).length, '个组件');
-      } catch (error) {
-        console.warn('获取当前组件数据失败，继续使用模板中的数据:', error);
-      }
-      
-      // 从模板格式中提取所有组件数据（简化格式）
+      // 直接从模板格式中提取所有组件数据（简化格式），不请求数据库
       const componentDataFromTemplate = extractComponentDataFromTemplate(template.modules);
       console.log('📥 从模板中提取到组件数据:', Object.keys(componentDataFromTemplate).length, '个组件');
       
-      // 合并组件数据：模板中的数据优先（最新），metadata 中的数据作为补充（用于向后兼容）
+      // 使用模板中的组件数据（不再合并数据库数据，直接保存当前模板中的数据）
       const mergedComponentData: { [componentId: string]: any } = { ...componentDataFromTemplate };
       
-      // 用 metadata 中的组件数据补充（只添加模板中没有的组件数据）
-      for (const [componentId, data] of Object.entries(existingComponentData)) {
-        if (!mergedComponentData[componentId]) {
-          // 如果模板中没有这个组件的数据，使用 metadata 中的数据
-          mergedComponentData[componentId] = data;
-        } else {
-          // 如果模板中已有数据，优先使用模板中的数据（因为这是最新的）
-          // 但对于关系图，需要确保 relations 数组被正确保留
-          if (typeof mergedComponentData[componentId] === 'object' && typeof data === 'object') {
-            // 对于关系图，确保 relations 数组被正确保留（使用模板中的数据）
-            if (Array.isArray(mergedComponentData[componentId].relations)) {
-              console.log(`✅ 使用模板中的关系图谱数据 "${componentId}": ${mergedComponentData[componentId].relations.length} 个关系`);
-              // 模板中的数据已经是最新的，不需要合并
-            }
-          }
-        }
-      }
-      
-      // 向后兼容：如果有 characters 字段，也合并到对应的组件中（使用 dataKey 'characters'）
-      if (charactersFromMetadata.length > 0) {
-        const charactersDataKey = 'characters'; // 使用 dataKey
-        if (mergedComponentData[charactersDataKey]) {
-          // 合并角色数据
-          const existingChars = Array.isArray(mergedComponentData[charactersDataKey]) ? mergedComponentData[charactersDataKey] : [];
-          const charMap: { [key: string]: any } = {};
-          existingChars.forEach((char: any) => {
-            const key = char.name || char.id;
-            if (key) charMap[key] = char;
-          });
-          charactersFromMetadata.forEach(char => {
-            const key = char.name || char.id;
-            if (key) {
-              if (charMap[key]) {
-                charMap[key] = { ...charMap[key], ...char };
-              } else {
-                charMap[key] = char;
-              }
-            }
-          });
-          mergedComponentData[charactersDataKey] = Object.values(charMap);
-        } else {
-          mergedComponentData[charactersDataKey] = charactersFromMetadata;
-        }
-      }
-      
-      console.log('✅ 合并后共有', Object.keys(mergedComponentData).length, '个组件的数据');
+      console.log('✅ 共有', Object.keys(mergedComponentData).length, '个组件的数据');
       
       // 将合并后的组件数据写回模板格式
       const modulesWithData = writeComponentDataToTemplate(template.modules, mergedComponentData);
@@ -1506,12 +1554,18 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       // 从合并后的数据中提取角色数据（用于向后兼容 characters 字段）
       const characters = mergedComponentData['characters'] || [];
       
+      // 清理模板结构（移除 value 字段，只保留配置信息，包括 dataKey 和 dataDependencies）
+      const cleanedModules = cleanTemplateStructure(template.modules);
+      
+      // 注意：模板结构的更新由 saveTemplateStructure 函数单独处理，这里不再更新
+      // 这样可以避免重复保存模板结构
+      
       // 构建要更新的 metadata
       const metadataUpdate: any = {
-        // 保存模板配置（只保存 templateId，指向 work_template 表）
-        // modules 结构从 work_template 表获取，不在这里保存
+        // 保存模板配置（包括 templateId 和完整的 modules 结构，确保 dataKey 和 dataDependencies 被保存）
         template_config: {
           templateId: template.id, // 指向 work_template 的 ID（如 db-1 表示 work_template 表中 id=1）
+          modules: cleanedModules, // 保存完整的模块结构，包括所有组件的 dataKey 和 dataDependencies
           lastModified: Date.now()
         },
         // 保存简化格式的组件数据（使用 dataKey 作为键）
@@ -1530,16 +1584,124 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         }))
       };
 
+      // 如果有原始快照，比较是否有修改（只比较 component_data，因为 template_config 由 saveTemplateStructure 处理）
+      if (originalSnapshot) {
+        const currentDataStr = JSON.stringify({
+          component_data: mergedComponentData,
+          characters: characters
+        });
+        
+        console.log('🔍 比较数据变化:');
+        console.log('   原始快照长度:', originalSnapshot.length);
+        console.log('   当前数据长度:', currentDataStr.length);
+        console.log('   原始 component_data keys:', JSON.parse(originalSnapshot).component_data ? Object.keys(JSON.parse(originalSnapshot).component_data) : []);
+        console.log('   当前 component_data keys:', Object.keys(mergedComponentData));
+        
+        if (currentDataStr === originalSnapshot) {
+          console.log('ℹ️ 作品数据未修改，跳过保存');
+          return false; // 没有修改，不需要保存
+        } else {
+          console.log('✅ 检测到数据变化，需要保存');
+          // 显示变化的详细信息
+          try {
+            const originalData = JSON.parse(originalSnapshot);
+            const originalKeys = Object.keys(originalData.component_data || {});
+            const currentKeys = Object.keys(mergedComponentData);
+            const addedKeys = currentKeys.filter(k => !originalKeys.includes(k));
+            const removedKeys = originalKeys.filter(k => !currentKeys.includes(k));
+            if (addedKeys.length > 0) console.log('   新增的键:', addedKeys);
+            if (removedKeys.length > 0) console.log('   删除的键:', removedKeys);
+            // 比较每个键的值
+            currentKeys.forEach(key => {
+              if (originalKeys.includes(key)) {
+                const originalValue = JSON.stringify(originalData.component_data[key]);
+                const currentValue = JSON.stringify(mergedComponentData[key]);
+                if (originalValue !== currentValue) {
+                  console.log(`   键 "${key}" 的值已变化`);
+                }
+              }
+            });
+          } catch (e) {
+            console.warn('比较数据时出错:', e);
+          }
+        }
+      }
+
       // 直接保存到数据库（PUT 请求会返回更新后的作品信息，后端会合并 metadata）
       await worksApi.updateWork(Number(workId), {
         metadata: metadataUpdate
       });
 
-      console.log('✅ 作品信息已保存：模板结构（含 dataKey）保存在 template_config.modules，组件数据保存在 component_data');
+      console.log('✅ 作品信息已保存：模板结构（含 dataKey 和 dataDependencies）保存在 template_config.modules，组件数据保存在 component_data');
+      
+      // 验证保存的 dataKey
+      const savedDataKeys: string[] = [];
+      const extractDataKeys = (components: ComponentConfig[]): void => {
+        for (const comp of components) {
+          if (comp.dataKey) {
+            savedDataKeys.push(`${comp.label || comp.id}: ${comp.dataKey}`);
+          }
+          if (comp.type === 'tabs' && comp.config?.tabs) {
+            for (const tab of comp.config.tabs) {
+              if (tab.components) {
+                extractDataKeys(tab.components);
+              }
+            }
+          }
+        }
+      };
+      for (const module of cleanedModules) {
+        extractDataKeys(module.components);
+      }
+      if (savedDataKeys.length > 0) {
+        console.log(`✅ 已保存 ${savedDataKeys.length} 个组件的 dataKey:`, savedDataKeys);
+      } else {
+        console.warn('⚠️ 未找到任何 dataKey，请检查组件配置');
+      }
     } catch (error) {
       console.error('❌ 保存作品信息到 metadata 失败:', error);
     }
   }, [workId, extractComponentDataFromTemplate, writeComponentDataToTemplate, cleanTemplateStructure]);
+
+  // 保存模板结构到数据库（所有数据库模板都可以保存）
+  const saveTemplateStructure = useCallback(async (originalSnapshot: string | null) => {
+    if (!template || !template.id || !template.id.startsWith('db-')) {
+      console.log('ℹ️ 模板 ID 不是数据库模板格式，跳过保存');
+      return false; // 返回 false 表示没有保存
+    }
+
+    try {
+      const dbTemplateId = parseInt(template.id.replace('db-', ''));
+      if (isNaN(dbTemplateId)) {
+        console.warn(`⚠️ 无法解析模板 ID: ${template.id}`);
+        return false;
+      }
+
+      // 清理模板结构（移除 value 字段，只保留配置信息，包括 dataKey 和 dataDependencies）
+      const cleanedModules = cleanTemplateStructure(template.modules);
+      const currentModulesStr = JSON.stringify(cleanedModules);
+      
+      // 如果有原始快照，比较是否有修改
+      if (originalSnapshot && currentModulesStr === originalSnapshot) {
+        console.log('ℹ️ 模板结构未修改，跳过保存');
+        return false; // 没有修改，不需要保存
+      }
+      
+      // 有修改，保存模板结构
+      console.log(`📤 保存模板 ${dbTemplateId} 的结构到数据库`);
+      await templatesApi.updateTemplate(dbTemplateId, {
+        template_config: {
+          templateId: template.id,
+          modules: cleanedModules
+        }
+      });
+      console.log(`✅ 模板 ${dbTemplateId} 的结构已保存到数据库`);
+      return true; // 返回 true 表示已保存
+    } catch (error) {
+      console.error('❌ 保存模板结构失败:', error);
+      throw error;
+    }
+  }, [template, cleanTemplateStructure]);
 
   // 自动保存到数据库和缓存（防抖，基于 workId）
   useEffect(() => {
@@ -1567,8 +1729,18 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       // 如果有 workId，直接保存到作品的 metadata 字段
       if (workId) {
         try {
-          // 使用统一的保存函数
-          await saveWorkInfoToMetadata(template);
+          // 使用统一的保存函数（自动保存时不比较，总是保存）
+          const workSaved = await saveWorkInfoToMetadata(template, null);
+          if (workSaved) {
+            // 更新快照
+            const componentDataFromTemplate = extractComponentDataFromTemplate(template.modules);
+            const characters = componentDataFromTemplate['characters'] || [];
+            const currentDataStr = JSON.stringify({
+              component_data: componentDataFromTemplate,
+              characters: characters
+            });
+            setOriginalWorkDataSnapshot(currentDataStr);
+          }
           setHasUnsavedChanges(false);
         } catch (error) {
           console.error('❌ 保存作品信息到 metadata 失败:', error);
@@ -1609,6 +1781,17 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       if (value && typeof value === 'object' && Array.isArray(value.relations)) {
         console.log(`✅ updateComponentValue: 更新关系图谱组件 ${componentId}，${value.relations.length} 个关系`, value);
       }
+      
+      // 立即保存到数据库（如果有 workId）
+      if (workId) {
+        // 使用 setTimeout 确保状态更新后再保存（自动保存时不比较，总是保存）
+        setTimeout(() => {
+          saveWorkInfoToMetadata(updated, null).catch(error => {
+            console.error('❌ 保存组件数据失败:', error);
+          });
+        }, 0);
+      }
+      
       return updated;
     });
   };
@@ -1704,8 +1887,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     // 如果有 workId，先保存当前编辑的内容
     if (workId && template && template.modules) {
       try {
-        // 直接保存到作品的 metadata 字段
-        await saveWorkInfoToMetadata(template);
+        // 直接保存到作品的 metadata 字段（切换模板前保存，不比较）
+        await saveWorkInfoToMetadata(template, null);
         
       } catch (error) {
         console.error('切换模板前保存失败:', error);
@@ -1728,10 +1911,12 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         // 从作品的 metadata 字段加载模板配置
         const workData = await worksApi.getWork(Number(workId));
         const templateConfig = workData.metadata?.template_config;
-        const componentData = workData.metadata?.component_data || {};
-        const charactersFromMetadata = workData.metadata?.characters || []; // 向后兼容
         
+        // 只有当模板ID匹配时，才加载保存的内容
         if (templateConfig && templateConfig.templateId === newTemplate.id) {
+          const componentData = workData.metadata?.component_data || {};
+          const charactersFromMetadata = workData.metadata?.characters || []; // 向后兼容
+          
           // 从 work_template 获取结构（modules 应该只包含结构，不包含数据）
           // 如果 newTemplate.id 是 db-1 格式，从 work_template 表获取
           let modules = newTemplate.modules; // 从 work_template 获取结构
@@ -1756,6 +1941,9 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           }
           
           newTemplate.modules = modules;
+        } else {
+          // 模板ID不匹配，使用新模板的默认内容
+          console.log('🔄 切换到新模板，使用模板默认内容');
         }
       } catch (error) {
         console.error('加载保存的模板内容失败:', error);
@@ -1775,16 +1963,10 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     try {
       
       
-      // 如果有 workId，先保存当前编辑的内容
+      // 如果有 workId，先保存当前编辑的内容（通过metadata保存）
       if (workId && template && template.modules) {
         try {
-          const currentTemplateData = {
-            templateId: template.id,
-            modules: template.modules,
-            lastModified: Date.now()
-          };
-          await templatesApi.saveWorkTemplateConfig(Number(workId), currentTemplateData);
-          
+          await saveWorkInfoToMetadata(template, null);
         } catch (error) {
           console.error('切换模板前保存失败:', error);
           // 即使保存失败，也继续切换模板
@@ -1821,56 +2003,57 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       // 如果有 workId，尝试从本地缓存加载该模板的保存内容
       if (workId) {
         try {
-          // 优先从本地缓存加载（每个模板独立保存）
-          const cached = loadFromCache(workId, newTemplate.id);
-          if (cached && cached.modules && Array.isArray(cached.modules) && cached.modules.length > 0) {
-            
-            newTemplate.modules = cached.modules;
+          // 先检查当前作品使用的模板ID是否与新模板匹配
+          const workData = await worksApi.getWork(Number(workId));
+          const templateConfig = workData.metadata?.template_config;
+          
+          // 只有当模板ID匹配时，才加载保存的内容
+          if (templateConfig && templateConfig.templateId === newTemplate.id) {
+            // 优先从本地缓存加载（每个模板独立保存）
+            const cached = loadFromCache(workId, newTemplate.id);
+            if (cached && cached.modules && Array.isArray(cached.modules) && cached.modules.length > 0) {
+              
+              newTemplate.modules = cached.modules;
+            } else {
+              // 如果本地缓存没有，从 work 的 metadata 加载数据
+              const componentData = workData.metadata?.component_data || {};
+              const charactersFromMetadata = workData.metadata?.characters || [];
+              
+              // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
+              const dataToWrite = { ...componentData };
+              if (charactersFromMetadata.length > 0 && !dataToWrite['characters']) {
+                dataToWrite['characters'] = charactersFromMetadata;
+              }
+              
+              // 从 work_template 获取结构（modules 应该只包含结构，不包含数据）
+              let modules = newTemplate.modules; // 从模板获取结构
+              
+              // 如果 template_config 中有 modules，使用它（向后兼容）
+              if (templateConfig.modules && 
+                  Array.isArray(templateConfig.modules) &&
+                  templateConfig.modules.length > 0) {
+                // 使用保存的结构（应该不包含数据）
+                modules = templateConfig.modules;
+              }
+              
+              // 从 work 的 component_data 获取数据，然后合并到结构中
+              if (Object.keys(dataToWrite).length > 0) {
+                modules = writeComponentDataToTemplate(modules, dataToWrite);
+                console.log('✅ 从 work 的 component_data 将', Object.keys(dataToWrite).length, '个组件的数据写入模板结构');
+              }
+              
+              newTemplate.modules = modules;
+              
+              // 同时保存到本地缓存
+              saveToCache({
+                templateId: newTemplate.id,
+                modules: modules,
+                lastModified: Date.now()
+              }, workId, newTemplate.id);
+            }
           } else {
-            // 如果本地缓存没有，尝试从数据库加载
-            const response = await templatesApi.getWorkTemplateConfig(Number(workId));
-            
-            
-            
-            
-            // 从 work 的 metadata 加载数据
-            const workData = await worksApi.getWork(Number(workId));
-            const componentData = workData.metadata?.component_data || {};
-            const charactersFromMetadata = workData.metadata?.characters || [];
-            
-            // 合并组件数据：优先使用 component_data，如果没有则使用 characters（向后兼容）
-            const dataToWrite = { ...componentData };
-            if (charactersFromMetadata.length > 0 && !dataToWrite['characters']) {
-              dataToWrite['characters'] = charactersFromMetadata;
-            }
-            
-            // 从 work_template 获取结构（modules 应该只包含结构，不包含数据）
-            let modules = newTemplate.modules; // 从模板获取结构
-            
-            // 如果有保存的 template_config，使用它（但应该只包含结构）
-            if (response.template_config && 
-                response.template_config.templateId === newTemplate.id &&
-                response.template_config.modules &&
-                Array.isArray(response.template_config.modules) &&
-                response.template_config.modules.length > 0) {
-              // 使用保存的结构（应该不包含数据）
-              modules = response.template_config.modules;
-            }
-            
-            // 从 work 的 component_data 获取数据，然后合并到结构中
-            if (Object.keys(dataToWrite).length > 0) {
-              modules = writeComponentDataToTemplate(modules, dataToWrite);
-              console.log('✅ 从 work 的 component_data 将', Object.keys(dataToWrite).length, '个组件的数据写入模板结构');
-            }
-            
-            newTemplate.modules = modules;
-            
-            // 同时保存到本地缓存
-            saveToCache({
-              templateId: newTemplate.id,
-              modules: modules,
-              lastModified: Date.now()
-            }, workId, newTemplate.id);
+            // 模板ID不匹配，使用新模板的默认内容
+            console.log('🔄 切换到新模板，使用模板默认内容');
           }
         } catch (error) {
           console.error('加载保存的模板内容失败:', error);
@@ -3663,12 +3846,22 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               className="save-btn" 
               onClick={async () => {
                 try {
-                  
-                  // 直接保存到作品的 metadata 字段
-                  await saveWorkInfoToMetadata(template);
-                  
-                  setHasUnsavedChanges(false);
-                  alert('保存成功！');
+                  // 保存作品信息（如果有修改）
+                  const workSaved = await saveWorkInfoToMetadata(template, originalWorkDataSnapshot);
+                  if (workSaved) {
+                    // 更新快照为当前数据
+                    const componentDataFromTemplate = extractComponentDataFromTemplate(template.modules);
+                    const characters = componentDataFromTemplate['characters'] || [];
+                    const currentDataStr = JSON.stringify({
+                      component_data: componentDataFromTemplate,
+                      characters: characters
+                    });
+                    setOriginalWorkDataSnapshot(currentDataStr);
+                    setHasUnsavedChanges(false);
+                    alert('保存成功！');
+                  } else {
+                    alert('数据未修改，无需保存');
+                  }
                 } catch (error) {
                   console.error('手动保存失败:', error);
                   alert('保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
@@ -3679,7 +3872,37 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               <Save size={16} />
             </button>
           )}
-          <button className={`edit-btn ${isEditMode ? 'active' : ''}`} onClick={() => setIsEditMode(!isEditMode)}>
+          <button 
+            className={`edit-btn ${isEditMode ? 'active' : ''}`} 
+            onClick={async () => {
+              const wasEditMode = isEditMode;
+              
+              if (!wasEditMode) {
+                // 进入编辑模式：保存原始模板结构快照
+                const cleanedModules = cleanTemplateStructure(template.modules);
+                const snapshot = JSON.stringify(cleanedModules);
+                setOriginalTemplateSnapshot(snapshot);
+                setIsEditMode(true);
+              } else {
+                // 退出编辑模式：保存模板结构（如果有修改）
+                setIsEditMode(false);
+                try {
+                  const templateSaved = await saveTemplateStructure(originalTemplateSnapshot);
+                  if (templateSaved) {
+                    console.log('✅ 模板结构已保存');
+                  } else {
+                    console.log('ℹ️ 模板结构未修改，未保存');
+                  }
+                  // 清除快照
+                  setOriginalTemplateSnapshot(null);
+                } catch (error) {
+                  console.error('保存失败:', error);
+                  alert('保存模板失败: ' + (error instanceof Error ? error.message : '未知错误'));
+                }
+              }
+            }}
+            title={isEditMode ? '完成编辑并保存模板' : '编辑模板结构'}
+          >
             {isEditMode ? <Check size={16} /> : <Settings size={16} />}
           </button>
         </div>
@@ -3693,34 +3916,34 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             <button onClick={() => setShowTemplateSelector(false)}><X size={16} /></button>
           </div>
           <div className="template-grid">
-            {/* 预设模板 */}
-            {presetTemplates.map(t => (
-              <button key={t.id} className={`template-card ${template.id === t.id ? 'active' : ''}`} onClick={() => applyTemplate(t)}>
-                <div className="card-name">{t.name}</div>
-                <div className="card-desc">{t.description}</div>
-              </button>
-            ))}
-            
-            {/* 用户创建的模板 */}
+            {/* 模板列表 */}
             {loadingTemplates ? (
               <div className="template-loading">加载中...</div>
             ) : userTemplates.length > 0 ? (
               userTemplates.map(dbTemplate => {
+                // 将数据库模板转换为 TemplateConfig 格式
+                const templateConfig: TemplateConfig = {
+                  id: `db-${dbTemplate.id}`,
+                  name: dbTemplate.name,
+                  description: dbTemplate.description || '',
+                  modules: (dbTemplate.template_config && dbTemplate.template_config.modules) ? (dbTemplate.template_config.modules as ModuleConfig[]) : []
+                };
                 
                 return (
                   <button 
                     key={`db-${dbTemplate.id}`} 
-                    className={`template-card ${template.id === `db-${dbTemplate.id}` ? 'active' : ''}`} 
+                    className={`template-card ${template.id === templateConfig.id ? 'active' : ''}`} 
                     onClick={() => applyDatabaseTemplate(dbTemplate)}
                   >
                     <div className="card-name">{dbTemplate.name || '未命名模板'}</div>
                     <div className="card-desc">{dbTemplate.description || '用户自定义模板'}</div>
                     {dbTemplate.is_public && <div className="card-badge">公开</div>}
+                    {dbTemplate.is_system && <div className="card-badge system">系统</div>}
                   </button>
                 );
               })
             ) : (
-              <div className="template-empty">暂无用户模板</div>
+              <div className="template-empty">暂无模板</div>
             )}
             
             {/* 创建新模板按钮 */}
@@ -4345,16 +4568,22 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                       
                       <div className="form-group">
                         <label>
-                          数据存储键 (dataKey)
-                          <span className="label-hint">用于在 component_data 中存储和读取数据，建议使用小写字母和下划线，如：characters、character_timeline</span>
+                          数据存储键 (dataKey) <span style={{ color: '#ef4444' }}>*</span>
+                          <span className="label-hint">用于在 component_data 中存储和读取数据，建议使用小写字母和下划线，如：characters、character_timeline。必填项，确保组件数据能够正确保存。</span>
                         </label>
                         <input
                           type="text"
                           value={newComponentForm.dataKey}
-                          onChange={(e) => setNewComponentForm({ ...newComponentForm, dataKey: e.target.value })}
-                          placeholder="例如：characters、character_timeline、world_locations"
-                          style={{ fontFamily: 'monospace' }}
+                          onChange={(e) => setNewComponentForm({ ...newComponentForm, dataKey: e.target.value.trim() })}
+                          placeholder="例如：characters、character_timeline、world_locations（必填）"
+                          style={{ fontFamily: 'monospace', borderColor: !newComponentForm.dataKey ? '#ef4444' : undefined }}
+                          required
                         />
+                        {!newComponentForm.dataKey && (
+                          <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
+                            ⚠️ 请填写 dataKey，否则组件数据无法正确保存
+                          </div>
+                        )}
                       </div>
 
                       <div className="form-group">
@@ -4430,7 +4659,12 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                 <button
                   className="btn-primary"
                   onClick={editingComponentId ? saveEditedComponent : addComponentToModule}
-                  disabled={!newComponentForm.label.trim() || (newComponentForm.type === 'tabs' && newComponentForm.tabsConfig.length === 0) || (newComponentForm.type === 'card-list' && newComponentForm.cardFields.length === 0)}
+                  disabled={
+                    !newComponentForm.label.trim() || 
+                    (newComponentForm.type === 'tabs' && newComponentForm.tabsConfig.length === 0) || 
+                    (newComponentForm.type === 'card-list' && newComponentForm.cardFields.length === 0) ||
+                    (newComponentForm.type !== 'tabs' && !newComponentForm.dataKey?.trim()) // tabs 组件不需要 dataKey，其他组件必填
+                  }
                 >
                   {editingComponentId ? '保存修改' : '添加组件'}
                 </button>
@@ -4665,7 +4899,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                     
                     // 保存作品信息到 metadata
                     if (workId) {
-                      saveWorkInfoToMetadata(updatedTemplate).catch(console.error);
+                      saveWorkInfoToMetadata(updatedTemplate, null).catch(console.error);
                     }
                   } else {
                     // 组件不在分页中，直接更新
@@ -4703,7 +4937,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                     
                     // 保存作品信息到 metadata
                     if (workId) {
-                      saveWorkInfoToMetadata(updatedTemplate).catch(console.error);
+                      saveWorkInfoToMetadata(updatedTemplate, null).catch(console.error);
                     }
                   }
                   

@@ -5,7 +5,7 @@
 
 # OpenAI API配置
 OPENAI_API_KEY=c1d6780e98864594bda92e698f6f9f0c
-OPENAI_API_BASE=http://10.96.20.92/v1
+OPENAI_API_BASE=https://api.deepseek.com/v1
 
 # 默认AI模型设置
 DEFAULT_AI_MODEL=codedrive-chat

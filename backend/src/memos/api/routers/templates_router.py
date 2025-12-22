@@ -57,6 +57,16 @@ class WorkTemplateResponse(BaseModel):
     name: str
     description: Optional[str] = None
     work_type: str
+    is_system: Optional[bool] = False
+    is_public: Optional[bool] = False
+    creator_id: Optional[int] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    template_config: Optional[Dict[str, Any]] = None  # 模板配置，包含 modules（组件配置，包括 dataKey 和 dataDependencies）
+    settings: Optional[Dict[str, Any]] = None
+    usage_count: Optional[int] = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 class TemplateFieldCreate(BaseModel):
     field_name: str
@@ -92,6 +102,7 @@ router = APIRouter(prefix="/api/v1/templates", tags=["作品模板管理"])
 @router.post("/", response_model=WorkTemplateResponse)
 async def create_template(
     template_data: WorkTemplateCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -143,8 +154,8 @@ async def create_template(
         target_type="template",
         target_id=template.id,
         details={"name": template.name, "work_type": template.work_type},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return template.to_dict(include_fields=True)
@@ -272,6 +283,7 @@ async def get_template(
 async def update_template(
     template_id: int,
     template_update: WorkTemplateUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -311,8 +323,8 @@ async def update_template(
         target_type="template",
         target_id=template_id,
         details=template_update.dict(exclude_unset=True),
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return updated_template.to_dict(include_fields=True)
@@ -321,6 +333,7 @@ async def update_template(
 @router.delete("/{template_id}")
 async def delete_template(
     template_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -354,8 +367,8 @@ async def delete_template(
         target_type="template",
         target_id=template_id,
         details={"name": template.name},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return {"message": "模板删除成功"}
@@ -366,6 +379,7 @@ async def delete_template(
 async def add_template_field(
     template_id: int,
     field_data: TemplateFieldCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -401,8 +415,8 @@ async def add_template_field(
             "field_name": field.field_name,
             "field_type": field.field_type
         },
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return field.to_dict()
@@ -413,6 +427,7 @@ async def update_template_field(
     template_id: int,
     field_id: int,
     field_update: TemplateFieldUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -450,8 +465,8 @@ async def update_template_field(
         target_type="template_field",
         target_id=field_id,
         details=field_update.dict(exclude_unset=True),
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return field.to_dict()
@@ -461,6 +476,7 @@ async def update_template_field(
 async def delete_template_field(
     template_id: int,
     field_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -495,8 +511,8 @@ async def delete_template_field(
         target_type="template_field",
         target_id=field_id,
         details={"template_id": template_id},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return {"message": "字段删除成功"}
@@ -507,6 +523,7 @@ async def delete_template_field(
 async def create_work_extended_info(
     work_id: int,
     extended_data: WorkInfoExtendedCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -541,8 +558,8 @@ async def create_work_extended_info(
             "work_id": work_id,
             "template_id": extended_data.template_id
         },
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return extended_info.to_dict(include_template_info=True)
@@ -583,6 +600,7 @@ async def get_work_extended_info(
 async def update_work_extended_info(
     work_id: int,
     extended_update: WorkInfoExtendedUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -620,8 +638,8 @@ async def update_work_extended_info(
         target_type="work_extended_info",
         target_id=extended_info.id,
         details=extended_update.dict(exclude_unset=True),
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return extended_info.to_dict(include_template_info=True)
@@ -631,6 +649,7 @@ async def update_work_extended_info(
 async def apply_template_to_work(
     work_id: int,
     template_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
@@ -662,8 +681,8 @@ async def apply_template_to_work(
         target_type="work",
         target_id=work_id,
         details={"template_id": template_id},
-        ip_address=get_client_ip(Request),
-        user_agent=get_user_agent(Request)
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
     )
 
     return {
@@ -675,7 +694,16 @@ async def apply_template_to_work(
 # 工具函数
 def get_client_ip(request: Request) -> Optional[str]:
     """获取客户端IP地址"""
-    return request.client.host if request.client else None
+    # 优先从 X-Forwarded-For 头获取（如果使用代理）
+    if "x-forwarded-for" in request.headers:
+        return request.headers["x-forwarded-for"].split(",")[0].strip()
+    # 从 X-Real-IP 头获取
+    if "x-real-ip" in request.headers:
+        return request.headers["x-real-ip"]
+    # 最后尝试从 request.client 获取
+    if request.client:
+        return getattr(request.client, "host", None)
+    return None
 
 
 def get_user_agent(request: Request) -> Optional[str]:
