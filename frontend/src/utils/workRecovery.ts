@@ -5,7 +5,9 @@
 
 import { localCacheManager } from './localCacheManager';
 import { worksApi, type Work, type WorkCreate } from './worksApi';
-import { chaptersApi, type Chapter, type ChapterCreate } from './chaptersApi';
+import { chaptersApi, type ChapterCreate } from './chaptersApi';
+import { apiClient } from './api';
+import type { CachedWorkDoc, CachedChapterDoc } from '../types/document';
 
 const STORAGE_PREFIX = 'wawawriter_cache_';
 
@@ -68,7 +70,7 @@ export function extractChapterIdFromKey(key: string): number | null {
  * 获取本地缓存中的作品信息
  */
 export async function getCachedWorkInfo(workId: number): Promise<{
-  work?: any;
+  work?: CachedWorkDoc;
   chapters: Array<{
     chapterId: number;
     chapterNumber: number;
@@ -84,9 +86,9 @@ export async function getCachedWorkInfo(workId: number): Promise<{
     `work_${workId}`,      // 旧格式缓存
   ];
   
-  let workDoc: any = null;
+  let workDoc: CachedWorkDoc | null = null;
   for (const key of possibleKeys) {
-    workDoc = await localCacheManager.get(key);
+    workDoc = await localCacheManager.get<CachedWorkDoc>(key);
     if (workDoc) {
       console.log(`✅ [WorkRecovery] 从缓存键 ${key} 获取作品信息: ${workId}`);
       break;
@@ -102,7 +104,7 @@ export async function getCachedWorkInfo(workId: number): Promise<{
         const cacheKey = key.replace(STORAGE_PREFIX, '');
         const chapterWorkId = extractWorkIdFromKey(cacheKey);
         if (chapterWorkId === workId) {
-          const chapterDoc = await localCacheManager.get(cacheKey);
+          const chapterDoc = await localCacheManager.get<CachedChapterDoc>(cacheKey);
           if (chapterDoc && chapterDoc.metadata) {
             // 从章节的 metadata 中提取作品信息
             workDoc = {
@@ -142,7 +144,7 @@ export async function getCachedWorkInfo(workId: number): Promise<{
       const chapterId = extractChapterIdFromKey(cacheKey);
       
       if (chapterWorkId === workId && chapterId) {
-        const chapterDoc = await localCacheManager.get(cacheKey);
+        const chapterDoc = await localCacheManager.get<CachedChapterDoc>(cacheKey);
         if (chapterDoc && chapterDoc.content) {
           const metadata = chapterDoc.metadata || {};
           chapters.push({
@@ -232,6 +234,8 @@ export async function recoverWorkFromCache(
     if (!hasChapters && !hasWorkInfo) {
       return {
         success: false,
+        workCreated: false,
+        chaptersCreated: 0,
         error: `本地缓存中未找到作品 ${workId} 的信息`,
       };
     }
@@ -316,11 +320,15 @@ export async function recoverWorkFromCache(
       if (error?.status === 400 || error?.message?.includes('已存在')) {
         return {
           success: false,
+          workCreated: false,
+          chaptersCreated: 0,
           error: `作品 ${workId} 已存在于线上，无需恢复`,
         };
       }
       return {
         success: false,
+        workCreated: false,
+        chaptersCreated: 0,
         error: `恢复作品失败: ${error?.message || String(error)}`,
       };
     }
@@ -395,21 +403,11 @@ export async function recoverWorkFromCache(
         const documentId = `work_${createdWork.id}_chapter_${createdChapter.id}`;
         try {
           // 使用 ShareDB 同步接口
-          const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
-          const token = localStorage.getItem('access_token');
-          
-          await fetch(`${API_BASE_URL}/v1/sharedb/documents/sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : '',
-            },
-            body: JSON.stringify({
-              doc_id: documentId,
-              version: 0,
-              content: chapter.content,
-              create_version: true,
-            }),
+          await apiClient.syncShareDBDocument({
+            doc_id: documentId,
+            version: 0,
+            content: chapter.content,
+            create_version: true,
           });
         } catch (syncError) {
           console.warn(`章节 ${chapter.chapterId} 同步到 ShareDB 失败:`, syncError);
@@ -427,6 +425,8 @@ export async function recoverWorkFromCache(
     if (chaptersCreated === 0 && errors.length > 0) {
       return {
         success: false,
+        workCreated: true,
+        chaptersCreated: 0,
         error: `所有章节恢复失败: ${errors.join('; ')}`,
       };
     }
@@ -459,6 +459,8 @@ export async function recoverWorkFromCache(
     
     return {
       success: false,
+      workCreated: false,
+      chaptersCreated: 0,
       error: errorMsg,
     };
   }
@@ -491,18 +493,24 @@ export async function getRecoverableWorks(): Promise<Array<{
     workTitle?: string;
     chapterCount: number;
     existsOnline: boolean;
+    needsRecovery?: boolean;
   }> = [];
   
   for (const workId of workIds) {
     try {
       const cachedData = await getCachedWorkInfo(workId);
-      const existsOnline = await checkWorkExists(workId).catch(() => false);
+      const checkResult = await checkWorkExists(workId).catch(() => ({ exists: false }));
+      const existsOnline = typeof checkResult === 'boolean' ? checkResult : checkResult.exists;
+      const needsRecovery = typeof checkResult === 'object' && 'needsRecovery' in checkResult 
+        ? checkResult.needsRecovery 
+        : undefined;
       
       results.push({
         workId,
         workTitle: cachedData?.work?.title || cachedData?.work?.metadata?.title,
         chapterCount: cachedData?.chapters.length || 0,
         existsOnline,
+        needsRecovery,
       });
     } catch (error) {
       console.warn(`检查作品 ${workId} 失败:`, error);

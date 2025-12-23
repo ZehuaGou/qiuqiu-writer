@@ -139,6 +139,33 @@ class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // ShareDB operations
+  /**
+   * 同步 ShareDB 文档
+   */
+  async syncShareDBDocument(data: {
+    doc_id: string;
+    version?: number;
+    content: string;
+    create_version?: boolean;
+    base_version?: number;
+    base_content?: string;
+    metadata?: Record<string, any>;
+  }): Promise<any> {
+    const response = await this.request<any>('/v1/sharedb/documents/sync', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  }
+
+  /**
+   * 获取 ShareDB 文档
+   */
+  async getShareDBDocument(docId: string): Promise<any> {
+    return this.request<any>(`/v1/sharedb/documents/${docId}`);
+  }
 }
 
 export const apiClient = new ApiClient();

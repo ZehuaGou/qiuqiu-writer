@@ -58,3 +58,37 @@ export interface ChapterFullData {
   detailOutline: string;
 }
 
+// 缓存的作品文档类型
+export interface CachedWorkDoc {
+  id?: number;
+  title?: string;
+  description?: string;
+  work_type?: string;
+  category?: string;
+  genre?: string;
+  is_public?: boolean;
+  metadata?: {
+    title?: string;
+    description?: string;
+    work_type?: string;
+    category?: string;
+    genre?: string;
+    is_public?: boolean;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+// 缓存的章节文档类型
+export interface CachedChapterDoc {
+  content?: string;
+  title?: string;
+  metadata?: {
+    chapter_number?: number;
+    title?: string;
+    volume_number?: number;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
