@@ -4,6 +4,7 @@
  */
 
 import { BaseApiClient } from './baseApiClient';
+import { localCacheManager } from './localCacheManager';
 
 // 前端使用的作品类型（用户友好）
 export type FrontendWorkType = 'long' | 'short' | 'script' | 'video';
@@ -234,18 +235,37 @@ class WorksApiClient extends BaseApiClient {
   async getWork(
     workId: number,
     include_collaborators?: boolean,
-    include_chapters?: boolean
+    include_chapters?: boolean,
+    check_recovery?: boolean
   ): Promise<Work> {
     const response = await this.get<any>(`/api/v1/works/${workId}`, {
       include_collaborators,
       include_chapters,
+      check_recovery,
     });
     
     // 转换作品类型
-    return {
+    const work: Work = {
       ...response,
       work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
     };
+    
+    // 关键修复：缓存作品信息到本地，即使后端返回的是恢复建议（needs_recovery=true）
+    // 这样即使后端数据库中的作品被删除，前端也能从本地缓存恢复
+    if (work && work.id) {
+      const cacheKey = `work_${work.id}_info`;
+      try {
+        await localCacheManager.set(cacheKey, {
+          ...work,
+          cached_at: new Date().toISOString(),
+        }, 1);
+        console.log(`✅ [WorksApi] 已缓存作品信息: ${cacheKey}`);
+      } catch (error) {
+        console.warn(`⚠️ [WorksApi] 缓存作品信息失败: ${error}`);
+      }
+    }
+    
+    return work;
   }
 
   /**
@@ -259,6 +279,29 @@ class WorksApiClient extends BaseApiClient {
     }
     
     const response = await this.put<any>(`/api/v1/works/${workId}`, backendUpdates);
+    
+    // 转换作品类型
+    return {
+      ...response,
+      work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
+    };
+  }
+
+  /**
+   * 恢复作品
+   * 从本地缓存或存储中恢复作品
+   */
+  async recoverWork(workId: number, workData?: WorkCreate): Promise<Work> {
+    // 关键修复：将前端类型转换为后端类型
+    const backendData = workData ? {
+      ...workData,
+      work_type: mapWorkTypeToBackend(workData.work_type),
+    } : {};
+    
+    const response = await this.post<any>(
+      `/api/v1/works/${workId}/recover`,
+      backendData
+    );
     
     // 转换作品类型
     return {

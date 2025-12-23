@@ -21,7 +21,13 @@ class WorkService:
 
     async def create_work(self, **kwargs) -> Work:
         """创建作品"""
+        # 如果指定了 id，使用指定的 id（用于恢复作品时保持原有 ID）
+        work_id = kwargs.pop("id", None)
         work = Work(**kwargs)
+        
+        if work_id is not None:
+            # 设置指定的 ID（需要确保该 ID 不存在）
+            work.id = work_id
 
         self.db.add(work)
         await self.db.commit()

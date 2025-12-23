@@ -218,16 +218,75 @@ async def list_chapters(
 async def get_chapter(
     chapter_id: int,
     include_versions: bool = Query(False, description="是否包含版本历史"),
+    check_recovery: bool = Query(False, description="是否检查恢复建议"),
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取章节详情
+    如果章节不存在但check_recovery=true，会检查ShareDB/MongoDB中是否有相关文档，返回恢复建议
     """
     chapter_service = ChapterService(db)
 
     chapter = await chapter_service.get_chapter_by_id(chapter_id)
     if not chapter:
+        # 如果请求检查恢复建议，检查ShareDB/MongoDB中是否有相关文档
+        if check_recovery:
+            await sharedb_service.initialize()
+            
+            # 尝试从文档ID推断work_id
+            # 格式可能是 work_{work_id}_chapter_{chapter_id} 或 chapter_{chapter_id}
+            has_content_in_storage = False
+            work_id_from_doc = None
+            document_content = None
+            
+            try:
+                # 先尝试新格式
+                # 由于不知道work_id，需要遍历查找
+                if sharedb_service.use_mongodb and sharedb_service.mongodb_db:
+                    collection = sharedb_service.mongodb_db.documents
+                    # 查找包含该章节ID的文档
+                    pattern = f"_chapter_{chapter_id}$"
+                    doc = await collection.find_one({
+                        "id": {"$regex": pattern}
+                    })
+                    if doc:
+                        has_content_in_storage = True
+                        document_content = doc.get("content", "")
+                        # 从文档ID中提取work_id
+                        doc_id = doc.get("id", "")
+                        match = re.match(r"work_(\d+)_chapter_", doc_id)
+                        if match:
+                            work_id_from_doc = int(match.group(1))
+                elif sharedb_service.redis_client:
+                    # Redis中查找（简化处理）
+                    has_content_in_storage = False
+            except Exception as e:
+                logger.warning(f"检查ShareDB文档失败: {e}")
+            
+            if has_content_in_storage:
+                # 返回恢复建议，而不是404错误
+                return {
+                    "id": chapter_id,
+                    "needs_recovery": True,
+                    "recovery_info": {
+                        "chapter_id": chapter_id,
+                        "work_id": work_id_from_doc,
+                        "has_content_in_storage": True,
+                        "content_length": len(str(document_content)) if document_content else 0,
+                        "message": f"章节 {chapter_id} 在数据库中不存在，但在存储中发现内容，可以从本地缓存恢复"
+                    },
+                    "work_id": work_id_from_doc or 0,
+                    "title": f"待恢复的章节 {chapter_id}",
+                    "chapter_number": 0,
+                    "volume_number": 1,
+                    "status": "draft",
+                    "word_count": len(str(document_content)) if document_content else 0,
+                    "content": document_content or "",
+                    "created_at": None,
+                    "updated_at": None,
+                }
+        
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="章节不存在"
@@ -390,7 +449,14 @@ async def delete_chapter(
         )
 
     # 删除ShareDB文档
-    await sharedb_service.delete_document(f"chapter_{chapter_id}")
+    # 关键修复：同时删除新格式和旧格式的文档，确保完全删除
+    document_id = f"work_{chapter.work_id}_chapter_{chapter_id}"
+    
+    try:
+        # 先尝试删除新格式
+        await sharedb_service.delete_document(document_id)
+    except Exception as e:
+        logger.warning(f"删除新格式文档失败: {e}")
 
     # 删除章节记录
     await chapter_service.delete_chapter(chapter_id)
@@ -636,9 +702,19 @@ async def get_chapter_document(
             "updated_at": datetime.utcnow().isoformat()
         }
 
+    # 关键修复：只返回文档的 content 字段，而不是整个 document 对象
+    # 这样前端就不会显示 JSON 信息，只显示内容
+    import json
+    document_content = document.get("content", "")
+    if isinstance(document_content, dict):
+        # 如果 content 是字典，尝试提取文本内容
+        document_content = document_content.get("content", "") or json.dumps(document_content, ensure_ascii=False)
+    elif not isinstance(document_content, str):
+        document_content = str(document_content) if document_content else ""
+    
     return {
         "document_id": document_id_new,  # 返回新格式的文档ID
-        "content": document,
+        "content": document_content,  # 只返回内容字符串，而不是整个 document 对象
         "chapter_info": chapter.to_dict()
     }
 

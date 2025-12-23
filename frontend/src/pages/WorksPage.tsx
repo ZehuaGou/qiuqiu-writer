@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grid, List, Plus, Upload, ChevronDown, Download, Link2, Trash2 } from 'lucide-react';
+import { Grid, List, Plus, Upload, ChevronDown, Download, Link2, Trash2, RefreshCw } from 'lucide-react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { exportAsText, exportAsWord, exportAsPdf } from '../utils/exportUtils';
 import ImportWorkModal from '../components/ImportWorkModal';
+import WorkRecoveryModal from '../components/WorkRecoveryModal';
 import './WorksPage.css';
 
 type WorkType = 'all' | 'short' | 'long' | 'script' | 'video';
@@ -25,6 +26,7 @@ export default function WorksPage() {
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
 
   // 加载作品列表
   useEffect(() => {
@@ -326,6 +328,10 @@ export default function WorksPage() {
             <Upload size={16} />
             <span>导入作品</span>
           </button>
+          <button className="action-btn" onClick={() => setShowRecoveryModal(true)}>
+            <RefreshCw size={16} />
+            <span>恢复作品</span>
+          </button>
           <div className="view-toggle">
             <button
               className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
@@ -592,6 +598,17 @@ export default function WorksPage() {
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onSuccess={handleImportSuccess}
+      />
+
+      <WorkRecoveryModal
+        isOpen={showRecoveryModal}
+        onClose={() => setShowRecoveryModal(false)}
+        onSuccess={(workId) => {
+          // 恢复成功后，重新加载作品列表
+          loadWorks();
+          // 可选：跳转到恢复的作品
+          // navigate(`/novel/editor?workId=${workId}`);
+        }}
       />
     </div>
   );

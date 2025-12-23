@@ -15,6 +15,9 @@ from memos.api.schemas.work import (
     WorkCollaboratorCreate, WorkCollaboratorUpdate, WorkCollaboratorResponse
 )
 from memos.api.models.work import Work, WorkCollaborator
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/works", tags=["作品管理"])
 
@@ -223,16 +226,95 @@ async def get_work(
     work_id: int,
     include_collaborators: bool = Query(False, description="是否包含协作者信息"),
     include_chapters: bool = Query(False, description="是否包含章节信息"),
+    check_recovery: bool = Query(False, description="是否检查恢复建议"),
     db: AsyncSession = Depends(get_db_session),
     current_user_id: int = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取作品详情
+    如果作品不存在但check_recovery=true，会检查ShareDB/MongoDB中是否有相关文档，返回恢复建议
     """
     work_service = WorkService(db)
 
     work = await work_service.get_work_by_id(work_id)
     if not work:
+        # 如果请求检查恢复建议，检查ShareDB/MongoDB中是否有相关文档
+        if check_recovery:
+            from memos.api.services.sharedb_service import ShareDBService
+            sharedb_service = ShareDBService()
+            await sharedb_service.initialize()
+            
+            # 检查是否有该作品的章节文档
+            # 查找格式为 work_{work_id}_chapter_{chapter_id} 的文档
+            has_chapters_in_storage = False
+            chapter_count = 0
+            
+            try:
+                if sharedb_service.use_mongodb and sharedb_service.mongodb_db:
+                    collection = sharedb_service.mongodb_db.documents
+                    # 使用正则表达式查找该作品的所有章节文档
+                    pattern = f"^work_{work_id}_chapter_"
+                    count_result = await collection.count_documents({
+                        "id": {"$regex": pattern}
+                    })
+                    chapter_count = count_result
+                    has_chapters_in_storage = chapter_count > 0
+                elif sharedb_service.redis_client:
+                    # Redis中查找（需要遍历，性能较差，但作为备选方案）
+                    # 这里简化处理，只返回提示信息
+                    has_chapters_in_storage = False
+            except Exception as e:
+                logger.warning(f"检查ShareDB文档失败: {e}")
+            
+            if has_chapters_in_storage:
+                # 尝试从章节文档的metadata中提取作品信息
+                work_info_from_storage = None
+                try:
+                    if sharedb_service.use_mongodb and sharedb_service.mongodb_db:
+                        collection = sharedb_service.mongodb_db.documents
+                        # 获取第一个章节文档，从中提取作品信息
+                        first_chapter_doc = await collection.find_one({
+                            "id": {"$regex": f"^work_{work_id}_chapter_"}
+                        })
+                        if first_chapter_doc:
+                            metadata = first_chapter_doc.get("metadata", {})
+                            # 从metadata中提取作品信息
+                            work_info_from_storage = {
+                                "title": metadata.get("work_title") or f"待恢复的作品 {work_id}",
+                                "description": metadata.get("work_description") or "",
+                                "work_type": metadata.get("work_type") or "novel",
+                                "category": metadata.get("work_category") or "",
+                                "genre": metadata.get("work_genre") or "",
+                                "is_public": metadata.get("work_is_public") or False,
+                            }
+                except Exception as e:
+                    logger.warning(f"从存储中提取作品信息失败: {e}")
+                
+                # 返回恢复建议，而不是404错误
+                recovery_response = {
+                    "id": work_id,
+                    "needs_recovery": True,
+                    "recovery_info": {
+                        "work_id": work_id,
+                        "has_chapters_in_storage": True,
+                        "chapter_count": chapter_count,
+                        "message": f"作品 {work_id} 在数据库中不存在，但在存储中发现 {chapter_count} 个章节文档，可以从本地缓存恢复",
+                        "work_info_from_storage": work_info_from_storage,
+                    },
+                    "title": work_info_from_storage.get("title") if work_info_from_storage else f"待恢复的作品 {work_id}",
+                    "description": work_info_from_storage.get("description") if work_info_from_storage else "该作品需要从本地缓存恢复",
+                    "work_type": work_info_from_storage.get("work_type") if work_info_from_storage else "novel",
+                    "status": "draft",
+                    "word_count": 0,
+                    "chapter_count": chapter_count,
+                    "is_public": work_info_from_storage.get("is_public") if work_info_from_storage else False,
+                    "category": work_info_from_storage.get("category") if work_info_from_storage else "",
+                    "genre": work_info_from_storage.get("genre") if work_info_from_storage else "",
+                    "created_at": None,
+                    "updated_at": None,
+                }
+                return recovery_response
+        
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="作品不存在"
@@ -251,6 +333,124 @@ async def get_work(
     return work.to_dict(
         include_collaborators=include_collaborators
     )
+
+
+@router.post("/{work_id}/recover", response_model=WorkResponse)
+async def recover_work(
+    work_id: int,
+    work_data: Optional[WorkCreate] = None,
+    request: Request = None,
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: int = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    恢复作品
+    如果作品不存在，可以使用此接口从本地缓存或存储中恢复作品
+    可以传递作品信息（work_data），如果不传递，会尝试从存储中提取
+    """
+    work_service = WorkService(db)
+    
+    # 检查作品是否已存在
+    existing_work = await work_service.get_work_by_id(work_id)
+    if existing_work:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"作品 {work_id} 已存在，无需恢复"
+        )
+    
+    # 如果没有传递作品信息，尝试从存储中提取
+    if not work_data:
+        from memos.api.services.sharedb_service import ShareDBService
+        sharedb_service = ShareDBService()
+        await sharedb_service.initialize()
+        
+        work_info_from_storage = None
+        chapter_count = 0
+        
+        try:
+            if sharedb_service.use_mongodb and sharedb_service.mongodb_db:
+                collection = sharedb_service.mongodb_db.documents
+                # 查找该作品的所有章节文档
+                pattern = f"^work_{work_id}_chapter_"
+                chapter_docs = await collection.find({
+                    "id": {"$regex": pattern}
+                }).to_list(length=1)
+                
+                chapter_count = await collection.count_documents({
+                    "id": {"$regex": pattern}
+                })
+                
+                if chapter_docs:
+                    first_chapter_doc = chapter_docs[0]
+                    metadata = first_chapter_doc.get("metadata", {})
+                    # 从metadata中提取作品信息
+                    work_info_from_storage = {
+                        "title": metadata.get("work_title") or f"待恢复的作品 {work_id}",
+                        "description": metadata.get("work_description") or "",
+                        "work_type": metadata.get("work_type") or "novel",
+                        "category": metadata.get("work_category") or "",
+                        "genre": metadata.get("work_genre") or "",
+                        "is_public": metadata.get("work_is_public") or False,
+                    }
+        except Exception as e:
+            logger.warning(f"从存储中提取作品信息失败: {e}")
+        
+        # 如果从存储中提取到了作品信息，使用它
+        if work_info_from_storage:
+            work_data = WorkCreate(
+                title=work_info_from_storage["title"],
+                description=work_info_from_storage["description"],
+                work_type=work_info_from_storage["work_type"],
+                category=work_info_from_storage.get("category"),
+                genre=work_info_from_storage.get("genre"),
+                is_public=work_info_from_storage.get("is_public", False),
+            )
+        else:
+            # 如果无法从存储中提取，使用默认值
+            work_data = WorkCreate(
+                title=f"恢复的作品 {work_id}",
+                description="该作品从本地缓存恢复",
+                work_type="novel",
+            )
+    
+    # 创建作品，保持原有的 work_id（如果可能）
+    # 注意：如果指定的 ID 已存在，数据库会报错，此时需要让数据库自动分配新 ID
+    work_data_dict = work_data.dict()
+    work_data_dict["id"] = work_id  # 尝试使用原有的 work_id
+    
+    try:
+        work = await work_service.create_work(
+            owner_id=current_user_id,
+            **work_data_dict
+        )
+    except Exception as e:
+        # 如果指定的 ID 已存在或不可用，移除 id 让数据库自动分配
+        logger.warning(f"无法使用指定的 work_id={work_id}，将使用自动分配的 ID: {e}")
+        work_data_dict.pop("id", None)
+        work = await work_service.create_work(
+            owner_id=current_user_id,
+            **work_data_dict
+        )
+    
+    # 记录审计日志
+    await work_service.create_audit_log(
+        user_id=current_user_id,
+        action="recover",
+        target_type="work",
+        target_id=work.id,
+        details={
+            "original_work_id": work_id,
+            "title": work.title,
+            "work_type": work.work_type,
+            "recovered_from": "cache_or_storage"
+        },
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
+    )
+    
+    logger.info(f"✅ 作品恢复成功: 原ID={work_id}, 新ID={work.id}, 标题={work.title}")
+    
+    return work.to_dict()
 
 
 @router.put("/{work_id}", response_model=WorkResponse)

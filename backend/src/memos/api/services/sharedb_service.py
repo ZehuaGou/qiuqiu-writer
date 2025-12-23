@@ -191,7 +191,8 @@ class ShareDBService:
             await self.initialize()
 
         # 根据配置选择删除方式
-        if self.use_mongodb and self.mongodb_db:
+        # 关键修复：PyMongo Database 对象不能直接用于布尔判断，需要使用 is not None
+        if self.use_mongodb and self.mongodb_db is not None:
             # 从MongoDB删除
             collection = self.mongodb_db.documents
             await collection.delete_one({"id": document_id})

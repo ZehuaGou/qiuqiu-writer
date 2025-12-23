@@ -176,9 +176,72 @@ const documentCache = {
     
     // 如果服务器获取失败，使用本地缓存
     try {
-      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
+      let cached = await localCacheManager.get<ShareDBDocument>(documentId);
+      
+      // 关键修复：如果新格式缓存不存在，尝试从旧格式迁移
+      if (!cached && documentId.startsWith('work_') && documentId.includes('_chapter_')) {
+        const match = documentId.match(/work_(\d+)_chapter_(\d+)/);
+        if (match) {
+          const [, workId, chapterId] = match;
+          const oldFormatKey = `chapter_${chapterId}`;
+          const oldCached = await localCacheManager.get<ShareDBDocument>(oldFormatKey);
+          
+          if (oldCached) {
+            console.log(`🔄 [DocumentCache] 从旧格式迁移: ${oldFormatKey} -> ${documentId}`);
+            
+            // 确保 content 是字符串
+            let contentStr: string;
+            if (typeof oldCached.content === 'string') {
+              contentStr = oldCached.content;
+            } else if (typeof oldCached.content === 'object' && oldCached.content !== null) {
+              // 如果内容是对象，尝试提取 content 字段
+              if ('content' in oldCached.content && typeof oldCached.content.content === 'string') {
+                contentStr = oldCached.content.content;
+              } else {
+                console.warn('⚠️ [DocumentCache] 旧格式缓存内容是对象但无法提取字符串:', oldCached.content);
+                contentStr = '';
+              }
+            } else {
+              contentStr = String(oldCached.content || '');
+            }
+            
+            // 创建新格式的缓存
+            cached = {
+              document_id: documentId,
+              content: contentStr, // 只保存字符串内容
+              version: oldCached.version || 1,
+              metadata: oldCached.metadata || {},
+            };
+            
+            // 保存到新格式
+            await localCacheManager.set(documentId, cached, cached.version || 1);
+            
+            // 可选：删除旧格式缓存（避免重复）
+            // await localCacheManager.delete(oldFormatKey);
+          }
+        }
+      }
+      
       if (cached) {
-        const contentStr = typeof cached.content === 'string' ? cached.content : JSON.stringify(cached.content);
+        // 关键修复：确保 content 是字符串
+        let contentStr: string;
+        if (typeof cached.content === 'string') {
+          contentStr = cached.content;
+        } else if (typeof cached.content === 'object' && cached.content !== null) {
+          // 如果内容是对象，尝试提取 content 字段
+          if ('content' in cached.content && typeof cached.content.content === 'string') {
+            contentStr = cached.content.content;
+            // 修复缓存：保存正确的字符串内容
+            cached.content = contentStr;
+            await localCacheManager.set(documentId, cached, cached.version || 1);
+          } else {
+            console.warn('⚠️ [DocumentCache] 缓存内容是对象但无法提取字符串:', cached.content);
+            contentStr = '';
+          }
+        } else {
+          contentStr = String(cached.content || '');
+        }
+        
         documentCache.currentVersion.set(documentId, cached.version || 1);
         documentCache.currentContent.set(documentId, contentStr);
         return cached;
@@ -197,23 +260,76 @@ const documentCache = {
     metadata?: ShareDBDocument['metadata']
   ): Promise<void> {
     
-    const existing = await localCacheManager.get<ShareDBDocument>(documentId);
-    const version = existing?.version || 0;
+    // 关键修复：确保只保存字符串内容，而不是整个对象
+    let contentToSave: string;
+    if (typeof content === 'string') {
+      contentToSave = content;
+    } else if (typeof content === 'object' && content !== null) {
+      // 如果内容是对象，尝试提取 content 字段
+      if ('content' in content) {
+        if (typeof content.content === 'string') {
+          contentToSave = content.content;
+        } else if (typeof content.content === 'object' && content.content !== null && 'content' in content.content) {
+          // 嵌套情况：继续提取
+          if (typeof content.content.content === 'string') {
+            contentToSave = content.content.content;
+          } else {
+            console.warn('⚠️ [updateDocument] 无法从嵌套对象中提取字符串内容:', content);
+            contentToSave = '';
+          }
+        } else {
+          console.warn('⚠️ [updateDocument] content 字段不是字符串:', content);
+          contentToSave = '';
+        }
+      } else {
+        console.warn('⚠️ [updateDocument] 内容是对象但没有 content 字段:', content);
+        contentToSave = '';
+      }
+    } else {
+      // 其他类型，转换为字符串
+      contentToSave = String(content || '');
+    }
     
+    const existing = await localCacheManager.get<ShareDBDocument>(documentId);
+    
+    // 关键优化：如果内容没有变化，不更新版本号，只更新 metadata（如果提供了）
+    if (existing && existing.content === contentToSave) {
+      // 检查 metadata 是否有变化
+      if (metadata) {
+        const metadataChanged = JSON.stringify(existing.metadata || {}) !== JSON.stringify(metadata);
+        if (metadataChanged) {
+          existing.metadata = { ...existing.metadata, ...metadata };
+          await localCacheManager.set(documentId, existing, existing.version || 1);
+          console.log('📝 [updateDocument] 内容未变化，只更新 metadata:', {
+            documentId,
+            version: existing.version,
+            metadataKeys: Object.keys(metadata),
+          });
+        }
+      }
+      return; // 内容没有变化，直接返回，避免不必要的更新
+    }
+    
+    // 内容有变化，正常更新
+    const version = existing?.version || 0;
     const updated: ShareDBDocument = {
       document_id: documentId,
-      content,
+      content: contentToSave, // 只保存字符串内容
       version: version + 1,
       metadata: metadata || existing?.metadata,
     };
 
     await localCacheManager.set(documentId, updated, updated.version || 1);
     
-    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
     documentCache.currentVersion.set(documentId, updated.version || 1);
-    documentCache.currentContent.set(documentId, contentStr);
+    documentCache.currentContent.set(documentId, contentToSave);
     
-    
+    console.log('💾 [updateDocument] 内容已更新:', {
+      documentId,
+      oldVersion: version,
+      newVersion: updated.version,
+      contentLength: contentToSave.length,
+    });
   },
   
   // 同步文档状态（保存到本地缓存并同步到服务器）
@@ -232,26 +348,26 @@ const documentCache = {
     });
 
     try {
-      // 先保存到本地缓存（使用编辑器内容），确保即使同步失败也有本地备份
-      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
-      if (cached) {
-        cached.content = contentToSave; // 使用编辑器内容
-        // 临时更新版本号（如果同步成功，会用服务器返回的版本号覆盖）
-        cached.version = (cached.version || 0) + 1;
-        await localCacheManager.set(documentId, cached, cached.version);
-        documentCache.currentVersion.set(documentId, cached.version);
-        documentCache.currentContent.set(documentId, contentToSave); // 更新内存缓存为编辑器内容
+      // 关键修复：确保 contentToSave 是字符串，而不是对象
+      let contentString: string;
+      if (typeof contentToSave === 'string') {
+        contentString = contentToSave;
+      } else if (typeof contentToSave === 'object' && contentToSave !== null) {
+        // 如果内容是对象，尝试提取 content 字段
+        const contentObj = contentToSave as any;
+        if ('content' in contentObj && typeof contentObj.content === 'string') {
+          contentString = contentObj.content;
+        } else {
+          console.warn('⚠️ [syncDocumentState] contentToSave 是对象但无法提取字符串:', contentToSave);
+          contentString = '';
+        }
       } else {
-        // 如果缓存不存在，创建新的
-        const newDoc: ShareDBDocument = {
-          document_id: documentId,
-          content: contentToSave, // 使用编辑器内容
-          version: localVersion || 1, // 使用当前版本号或默认值
-        };
-        await localCacheManager.set(documentId, newDoc, newDoc.version);
-        documentCache.currentVersion.set(documentId, newDoc.version);
-        documentCache.currentContent.set(documentId, contentToSave); // 更新内存缓存为编辑器内容
+        contentString = String(contentToSave || '');
       }
+      
+      // 关键优化：先保存到本地缓存（使用 updateDocument，它会检查内容是否变化）
+      // 这样可以在同步前确保本地有备份，同时避免重复更新
+      await documentCache.updateDocument(documentId, contentString);
 
       // 关键修复：调用后端 ShareDB 同步接口（使用编辑器内容）
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
@@ -305,13 +421,28 @@ const documentCache = {
         const result = await syncResponse.json();
         
         if (result.success) {
+          // 关键修复：确保 result.content 是字符串
+          let resultContent: string;
+          if (typeof result.content === 'string') {
+            resultContent = result.content;
+          } else if (typeof result.content === 'object' && result.content !== null) {
+            if ('content' in result.content && typeof result.content.content === 'string') {
+              resultContent = result.content.content;
+            } else {
+              console.warn('⚠️ [syncDocumentState] result.content 是对象但无法提取字符串:', result.content);
+              resultContent = '';
+            }
+          } else {
+            resultContent = String(result.content || '');
+          }
+          
           // 关键修复：保存上次同步的版本和内容，用于下次同步时的三路合并
           const previousVersion = documentCache.currentVersion.get(documentId) || 0;
           const previousContent = documentCache.currentContent.get(documentId) || '';
           
           // 更新当前版本和内容
           documentCache.currentVersion.set(documentId, result.version);
-          documentCache.currentContent.set(documentId, result.content);
+          documentCache.currentContent.set(documentId, resultContent);
           
           // 保存上次同步的版本和内容（用于三路合并）
           if (previousVersion > 0 && previousContent) {
@@ -319,26 +450,39 @@ const documentCache = {
             documentCache.lastSyncedContent.set(documentId, previousContent);
           }
           
-          // 更新缓存（保留原有的 metadata，确保章节信息不丢失）
-          // 关键修复：在同步成功后，重新读取本地缓存以确保获取最新的 metadata
+          // 关键优化：只更新版本号和内容，不重新保存整个文档（避免重复更新）
+          // 如果缓存存在，只更新版本号和内容；如果不存在，创建新文档
           const existingDoc = await localCacheManager.get<ShareDBDocument>(documentId);
-          const updatedDoc: ShareDBDocument = {
-            document_id: documentId,
-            content: result.content, // 使用服务器返回的合并后内容
-            version: result.version, // 使用服务器返回的版本号
-            // 关键修复：优先使用 existingDoc 的 metadata（因为 updateDocument 可能已经更新了它）
-            // 如果 existingDoc 不存在，使用 cached 的 metadata
-            metadata: existingDoc?.metadata || cached?.metadata || undefined,
-          };
-          await localCacheManager.set(documentId, updatedDoc, result.version);
+          
+          if (existingDoc) {
+            // 关键修复：确保 existingDoc.content 是字符串（如果它是对象，说明缓存已损坏，需要修复）
+            if (typeof existingDoc.content === 'object' && existingDoc.content !== null) {
+              console.warn('⚠️ [syncDocumentState] 检测到 existingDoc.content 是对象，缓存可能已损坏:', existingDoc.content);
+            }
+            
+            // 只更新版本号和内容，保留原有的 metadata
+            existingDoc.version = result.version;
+            existingDoc.content = resultContent; // 使用服务器返回的合并后内容
+            await localCacheManager.set(documentId, existingDoc, result.version);
+          } else {
+            // 如果缓存不存在，创建新文档
+            const newDoc: ShareDBDocument = {
+              document_id: documentId,
+              content: resultContent,
+              version: result.version,
+              metadata: undefined,
+            };
+            await localCacheManager.set(documentId, newDoc, result.version);
+          }
           
           // 关键修复：确保 metadata 被正确保存，并记录日志
+          const finalDoc = existingDoc || await localCacheManager.get<ShareDBDocument>(documentId);
           console.log('✅ [DocumentCache] 已更新本地缓存:', {
             documentId,
             version: result.version,
-            contentLength: result.content.length,
-            hasMetadata: !!updatedDoc.metadata,
-            metadataKeys: updatedDoc.metadata ? Object.keys(updatedDoc.metadata) : [],
+            contentLength: resultContent.length, // 关键修复：使用 resultContent 而不是 result.content
+            hasMetadata: !!finalDoc?.metadata,
+            metadataKeys: finalDoc?.metadata ? Object.keys(finalDoc.metadata) : [],
           });
           
           console.log('✅ [DocumentCache] 已同步到服务器:', {
@@ -351,7 +495,7 @@ const documentCache = {
           return {
             success: true,
             version: result.version,
-            content: result.content,
+            content: resultContent, // 关键修复：返回字符串内容，而不是可能的对象
             operations: result.operations || [],
             work: result.work,  // 传递作品信息（如果存在）
             chapter: result.chapter,  // 传递章节信息（如果存在）
@@ -365,9 +509,26 @@ const documentCache = {
         // 重新读取本地缓存，确保内容已保存
         const savedDoc = await localCacheManager.get<ShareDBDocument>(documentId);
         if (savedDoc) {
+          // 关键修复：确保 savedDoc.content 是字符串（如果它是对象，说明缓存已损坏，需要修复）
+          let savedContentStr: string;
+          if (typeof savedDoc.content === 'string') {
+            savedContentStr = savedDoc.content;
+          } else if (typeof savedDoc.content === 'object' && savedDoc.content !== null) {
+            console.warn('⚠️ [syncDocumentState] 检测到 savedDoc.content 是对象，缓存可能已损坏，正在修复:', savedDoc.content);
+            // 尝试提取 content 字段
+            if ('content' in savedDoc.content && typeof savedDoc.content.content === 'string') {
+              savedContentStr = savedDoc.content.content;
+            } else {
+              // 无法提取，使用传入的字符串内容
+              savedContentStr = contentToSave;
+            }
+          } else {
+            savedContentStr = String(savedDoc.content || '');
+          }
+          
           // 确保本地缓存中的内容是最新的编辑器内容
-          if (savedDoc.content !== contentToSave) {
-            savedDoc.content = contentToSave;
+          if (savedContentStr !== contentToSave) {
+            savedDoc.content = contentToSave; // 使用字符串内容
             await localCacheManager.set(documentId, savedDoc, savedDoc.version || localVersion);
             console.log('✅ [DocumentCache] 已更新本地缓存（同步失败后的修复）:', {
               documentId,
@@ -927,7 +1088,8 @@ export default function NovelEditorPage(){
             sort_order: 'asc',
           });
           
-          const documentIds = response.chapters.map(ch => `chapter_${ch.id}`);
+          // 关键修复：统一使用新格式 work_${workId}_chapter_${chapterId}
+          const documentIds = response.chapters.map(ch => `work_${workId}_chapter_${ch.id}`);
           await syncManager.preloadDocuments(documentIds);
         } catch (err) {
           console.error('预加载章节失败:', err);
@@ -1021,9 +1183,10 @@ export default function NovelEditorPage(){
       });
       setWork(updatedWork);
       setIsEditingTitle(false);
+      console.log('✅ 标题已更新（本地状态）:', titleValue.trim());
     } catch (err) {
-      console.error('保存标题失败:', err);
-      alert(err instanceof Error ? err.message : '保存标题失败');
+      console.error('更新标题失败:', err);
+      alert(err instanceof Error ? err.message : '更新标题失败');
       setTitleValue(work.title);
       setIsEditingTitle(false);
     }
@@ -1386,10 +1549,19 @@ export default function NovelEditorPage(){
           if (currentContent && currentContent.trim() !== '<p></p>' && currentContent.trim() !== '') {
             
             // 立即保存前一个章节的内容，使用同步方式确保保存完成
+            // 关键修复：从 chaptersData 或 allChapters 中获取正确的章节号
+            const previousChapterIdStr = String(previousChapterId);
+            const previousChapterData = chaptersData[previousChapterIdStr];
+            const previousChapter = allChapters.find(c => String(c.id) === previousChapterIdStr);
+            const previousChapterNumber = previousChapterData?.chapter_number 
+              || previousChapter?.chapter_number 
+              || undefined;
+            
             // 先保存到本地缓存
             await documentCache.updateDocument(previousDocumentId, currentContent, {
               work_id: Number(workId),
               chapter_id: previousChapterId,
+              chapter_number: previousChapterNumber, // 关键修复：保存正确的章节号
               updated_at: new Date().toISOString(),
             });
             
@@ -1450,9 +1622,36 @@ export default function NovelEditorPage(){
         try {
           serverDoc = await documentCache.forcePullFromServer(documentId);
           if (serverDoc && serverDoc.content) {
-              let serverContent = typeof serverDoc.content === 'string' 
-                ? serverDoc.content 
-                : JSON.stringify(serverDoc.content);
+              // 关键修复：如果内容是对象，提取 content 字段，而不是序列化整个对象
+              let serverContent: string;
+              if (typeof serverDoc.content === 'string') {
+                serverContent = serverDoc.content;
+              } else if (typeof serverDoc.content === 'object' && serverDoc.content !== null) {
+                // 如果是对象，尝试提取 content 字段
+                if ('content' in serverDoc.content) {
+                  // 如果 content 字段是字符串，直接使用
+                  if (typeof serverDoc.content.content === 'string') {
+                    serverContent = serverDoc.content.content;
+                  } else if (typeof serverDoc.content.content === 'object' && serverDoc.content.content !== null) {
+                    // 如果 content 字段还是对象，继续提取（嵌套情况）
+                    if ('content' in serverDoc.content.content && typeof serverDoc.content.content.content === 'string') {
+                      serverContent = serverDoc.content.content.content;
+                    } else {
+                      // 无法提取，记录警告
+                      console.warn('⚠️ [章节加载] 文档内容是嵌套对象但无法提取字符串内容:', serverDoc.content);
+                      serverContent = '';
+                    }
+                  } else {
+                    serverContent = '';
+                  }
+                } else {
+                  // 如果没有 content 字段，序列化为字符串（不应该发生）
+                  console.warn('⚠️ [章节加载] 文档内容是对象但没有 content 字段:', serverDoc.content);
+                  serverContent = '';
+                }
+              } else {
+                serverContent = '';
+              }
               
               // 将纯文本转换为 HTML 格式（保留换行符）
               const convertTextToHtml = (text: string): string => {
@@ -1480,14 +1679,23 @@ export default function NovelEditorPage(){
               if (serverContent && serverContent.trim().length > 0) {
                 content = serverContent;
               
+                // 关键修复：从 chaptersData 或 allChapters 中获取正确的章节号
+                const chapterIdStr = String(chapterId);
+                const chapterData = chaptersData[chapterIdStr];
+                const chapter = allChapters.find(c => String(c.id) === chapterIdStr);
+                const chapterNumber = chapterData?.chapter_number 
+                  || chapter?.chapter_number 
+                  || serverDoc.metadata?.chapter_number
+                  || undefined;
               
-              // 更新本地缓存
-              await documentCache.updateDocument(documentId, content, {
-                work_id: Number(workId),
-                chapter_id: chapterId,
-                updated_at: new Date().toISOString(),
-              });
-            }
+                // 更新本地缓存
+                await documentCache.updateDocument(documentId, content, {
+                  work_id: Number(workId),
+                  chapter_id: chapterId,
+                  chapter_number: chapterNumber, // 关键修复：保存正确的章节号
+                  updated_at: new Date().toISOString(),
+                });
+              }
           }
         } catch (pullErr) {
           console.warn('⚠️ [切换章节] 从服务器拉取失败，将使用本地缓存:', pullErr);
@@ -1544,15 +1752,28 @@ export default function NovelEditorPage(){
               content = cachedDoc.content;
             }
           } else if (cachedDoc.content && typeof cachedDoc.content === 'object') {
-            // 如果内容是对象，尝试提取 content 字段
+            // 如果内容是对象，尝试提取 content 字段（支持嵌套）
+            let extractedContent: string | null = null;
+            
+            // 尝试提取 content 字段
             if ('content' in cachedDoc.content) {
               const innerContent = cachedDoc.content.content;
-              if (typeof innerContent === 'string' && innerContent.trim().length > 0) {
-                content = innerContent;
+              if (typeof innerContent === 'string') {
+                extractedContent = innerContent;
+              } else if (typeof innerContent === 'object' && innerContent !== null && 'content' in innerContent) {
+                // 嵌套情况：继续提取
+                if (typeof innerContent.content === 'string') {
+                  extractedContent = innerContent.content;
+                }
               }
+            }
+            
+            if (extractedContent && extractedContent.trim().length > 0) {
+              content = extractedContent;
             } else {
-              // 尝试序列化为字符串
-              content = JSON.stringify(cachedDoc.content);
+              // 无法提取有效内容，记录警告但不序列化整个对象
+              console.warn('⚠️ [章节加载] 缓存内容是对象但无法提取有效字符串内容:', cachedDoc.content);
+              content = ''; // 使用空字符串而不是序列化整个对象
             }
           }
           
@@ -2242,9 +2463,18 @@ export default function NovelEditorPage(){
       }
 
       // 1. 保存到本地缓存
+      // 关键修复：从 chaptersData 或 allChapters 中获取正确的章节号
+      const chapterIdStr = String(chapterId);
+      const chapterData = chaptersData[chapterIdStr];
+      const chapter = allChapters.find(c => String(c.id) === chapterIdStr);
+      const chapterNumber = chapterData?.chapter_number 
+        || chapter?.chapter_number 
+        || undefined;
+      
       await documentCache.updateDocument(documentId, editorContent, {
         work_id: Number(workId),
         chapter_id: chapterId,
+        chapter_number: chapterNumber, // 关键修复：保存正确的章节号
         updated_at: new Date().toISOString(),
       });
 
@@ -2500,16 +2730,7 @@ export default function NovelEditorPage(){
           // 使用 workId 和 chapterId 生成唯一的缓存键
           const documentId = `work_${workId}_chapter_${chapterId}`;
           
-          console.log('💾 [自动保存] 开始保存:', {
-            workId,
-            chapterId,
-            documentId,
-            contentLength: editorContent.length,
-            contentPreview: editorContent.substring(0, 100),
-            hasJson: !!editorContentJson,
-            currentChapterIdRef: currentChapterIdRef.current, // 验证章节ID
-            usingEditorContent: true, // 标记使用的是编辑器内容
-          });
+
           
           // 关键修复：验证内容不为空且确实属于当前章节
           // 注意：即使内容为空（用户删除了所有内容），也应该保存，因为这是用户的意图
@@ -2519,21 +2740,22 @@ export default function NovelEditorPage(){
             
           }
           
+          // 关键优化：检查内容是否真的改变了
+          const lastSavedContent = documentCache.currentContent.get(documentId);
+          if (lastSavedContent === editorContent) {
+            // 内容没有变化，不触发保存
+            console.log('⏭️ [自动保存] 内容未变化，跳过保存');
+            return;
+          }
+          
           console.log('💾 [自动保存] 使用编辑器内容:', {
             contentLength: editorContent.length,
             contentPreview: editorContent.substring(0, 100),
             hasJson: !!editorContentJson,
           });
           
-          // 1. 立即保存到本地缓存（用户操作即时响应）
-          await documentCache.updateDocument(documentId, editorContent, {
-            work_id: Number(workId),
-            chapter_id: chapterId,
-            updated_at: new Date().toISOString(),
-          });
-          
-          // 2. 关键修复：立即同步到服务器，确保数据持久化
-          // 使用编辑器中的实际内容，同时提供 JSON 格式用于更精确的合并
+          // 关键优化：只调用 syncDocumentState，它会内部处理缓存更新
+          // 不再单独调用 updateDocument，避免重复更新
           try {
             const syncResult = await documentCache.syncDocumentState(documentId, editorContent, editorContentJson);
             console.log('✅ [自动保存] 已同步到服务器:', {
@@ -2583,11 +2805,20 @@ export default function NovelEditorPage(){
                 expectedChapterId: chapterId,
                 documentId,
               });
+              // 关键修复：从 chaptersData 或 allChapters 中获取正确的章节号
+              const chapterIdStr = String(chapterId);
+              const chapterData = chaptersData[chapterIdStr];
+              const chapter = allChapters.find(c => String(c.id) === chapterIdStr);
+              const chapterNumber = chapterData?.chapter_number 
+                || chapter?.chapter_number 
+                || undefined;
+              
               // 尝试修复：删除错误的缓存，重新保存
               await localCacheManager.delete(documentId);
               await documentCache.updateDocument(documentId, editorContent, {
                 work_id: Number(workId),
                 chapter_id: chapterId,
+                chapter_number: chapterNumber, // 关键修复：保存正确的章节号
                 updated_at: new Date().toISOString(),
               });
               // 重新同步到服务器
