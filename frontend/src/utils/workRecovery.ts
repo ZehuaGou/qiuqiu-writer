@@ -385,7 +385,6 @@ export async function recoverWorkFromCache(
           title: chapter.title,
           chapter_number: chapter.chapterNumber,
           volume_number: chapter.metadata?.volume_number || 1,
-          status: 'draft',
           content: chapter.content,
         };
         

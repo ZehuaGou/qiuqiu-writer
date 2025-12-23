@@ -1,0 +1,60 @@
+/**
+ * 文档相关的类型定义
+ */
+
+// ShareDB 文档类型定义
+export interface ShareDBDocument {
+  document_id: string;
+  content: any;
+  version?: number;
+  document_exists?: boolean; // 关键修复：添加 document_exists 字段，表示文档是否存在于 MongoDB
+  metadata?: {
+    work_id?: number;
+    chapter_id?: number;
+    chapter_number?: number;
+    title?: string; // 关键修复：添加 title 字段
+    created_by?: number;
+    created_at?: string;
+    updated_at?: string;
+    outline?: string;
+    detailed_outline?: string;
+  };
+}
+
+// 同步响应类型定义
+export interface SyncResponse {
+  success: boolean;
+  version: number;
+  content: string;
+  operations: Array<{
+    doc_id: string;
+    version: number;
+    operation: any;
+    user_id: number;
+    timestamp: string;
+  }>;
+  error?: string;
+  work?: {
+    id: number;
+    word_count: number;
+    [key: string]: any;
+  };
+  chapter?: {
+    id: number;
+    word_count: number;
+    [key: string]: any;
+  };
+}
+// 章节完整数据类型
+export interface ChapterFullData {
+  id: string;
+  volumeId: string;
+  volumeTitle: string;
+  title: string;
+  chapter_number?: number;  // 章节号
+  characters: string[];
+  locations: string[];
+  outline: string;
+  detailOutline: string;
+}
+
