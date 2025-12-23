@@ -46,6 +46,7 @@ class DocumentSyncRequest(BaseModel):
     base_content: Optional[str] = None  # 上次同步的内容（HTML 格式，用于计算差异）
     base_content_json: Optional[Dict[str, Any]] = None  # 上次同步的内容（JSON 格式，用于更精确的合并）
     create_version: bool = False  # 是否创建版本快照
+    metadata: Optional[Dict[str, Any]] = None  # 文档的元数据（章节信息等）
 
 
 class DocumentResponse(BaseModel):
@@ -127,7 +128,8 @@ async def sync_document(
             base_content_json=request.base_content_json,  # 传递基础内容（JSON 格式）
             user_id=current_user_id,
             create_version=request.create_version,
-            db_session=db
+            db_session=db,
+            metadata=request.metadata  # 传递 metadata
         )
         
         # 记录同步结果

@@ -689,32 +689,29 @@ async def get_chapter_document(
         if document:
             logger.info(f"使用旧格式文档ID: {document_id_old}")
     
-    if not document:
-        # 如果ShareDB文档不存在，返回空内容而不是404
-        # 这样前端可以正常初始化编辑器
-        # 注意：Chapter 模型没有 content 属性，内容存储在 ShareDB 中
-        logger.warning(f"ShareDB文档不存在（新格式和旧格式都不存在）: {document_id_new} / {document_id_old}，返回空内容")
-        document = {
-            "id": document_id_new,
-            "content": "",  # 返回空内容，让前端可以正常初始化编辑器
-            "version": 1,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
-        }
-
     # 关键修复：只返回文档的 content 字段，而不是整个 document 对象
     # 这样前端就不会显示 JSON 信息，只显示内容
     import json
-    document_content = document.get("content", "")
-    if isinstance(document_content, dict):
-        # 如果 content 是字典，尝试提取文本内容
-        document_content = document_content.get("content", "") or json.dumps(document_content, ensure_ascii=False)
-    elif not isinstance(document_content, str):
-        document_content = str(document_content) if document_content else ""
+    document_content = ""
+    document_exists = False
+    
+    if document:
+        document_exists = True
+        document_content = document.get("content", "")
+        if isinstance(document_content, dict):
+            # 如果 content 是字典，尝试提取文本内容
+            document_content = document_content.get("content", "") or json.dumps(document_content, ensure_ascii=False)
+        elif not isinstance(document_content, str):
+            document_content = str(document_content) if document_content else ""
+    else:
+        # 如果ShareDB文档不存在，返回特殊标记，让前端知道需要使用本地缓存
+        logger.warning(f"ShareDB文档不存在（新格式和旧格式都不存在）: {document_id_new} / {document_id_old}，返回空内容标记")
+        document_content = ""  # 空字符串表示 MongoDB 没有数据
     
     return {
         "document_id": document_id_new,  # 返回新格式的文档ID
         "content": document_content,  # 只返回内容字符串，而不是整个 document 对象
+        "document_exists": document_exists,  # 关键修复：标记文档是否存在于 MongoDB
         "chapter_info": chapter.to_dict()
     }
 

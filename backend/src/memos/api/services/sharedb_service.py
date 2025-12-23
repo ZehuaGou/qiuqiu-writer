@@ -1293,7 +1293,8 @@ class ShareDBService:
         base_content_json: Optional[Dict[str, Any]] = None,  # 上次同步的内容（JSON 格式，用于更精确的合并）
         user_id: Optional[int] = None,
         create_version: bool = False,
-        db_session: Optional[Any] = None
+        db_session: Optional[Any] = None,
+        metadata: Optional[Dict[str, Any]] = None  # 文档的元数据（章节信息等）
     ) -> Dict[str, Any]:
         """
         同步文档到ShareDB，支持多端同步和冲突合并
@@ -1342,6 +1343,10 @@ class ShareDBService:
                             logger.info("已保存 JSON 格式内容到新文档")
                         except Exception as json_err:
                             logger.warning(f"保存 JSON 格式失败: {json_err}")
+                    # 关键修复：如果提供了 metadata，保存到文档中
+                    if metadata:
+                        document["metadata"] = metadata
+                        logger.info(f"已保存 metadata 到新文档: {list(metadata.keys())}")
                     merge_strategy = "create"
                     logger.info(f"📝 [同步] 创建新文档: {document_id}, 版本: {new_version}")
                 else:
@@ -1590,6 +1595,14 @@ class ShareDBService:
                     document["updated_at"] = datetime.utcnow().isoformat()
                     if user_id:
                         document["last_editor_id"] = user_id
+                    # 关键修复：如果提供了 metadata，更新文档的 metadata
+                    if metadata:
+                        # 合并现有的 metadata（如果存在）
+                        if "metadata" in document and document["metadata"]:
+                            document["metadata"] = {**document["metadata"], **metadata}
+                        else:
+                            document["metadata"] = metadata
+                        logger.info(f"已更新文档 metadata: {list(metadata.keys())}")
 
                 # 根据配置选择存储方式
                 if self.use_mongodb and self.mongodb_db is not None:
