@@ -151,9 +151,8 @@ export async function getCachedWorkInfo(workId: number): Promise<{
             chapterId,
             chapterNumber: metadata.chapter_number || 0,
             title: metadata.title || chapterDoc.title || `第${metadata.chapter_number || 0}章`,
-            content: typeof chapterDoc.content === 'string' 
-              ? chapterDoc.content 
-              : JSON.stringify(chapterDoc.content),
+            // 统一格式：content 必须是字符串
+            content: typeof chapterDoc.content === 'string' ? chapterDoc.content : '',
             metadata,
           });
         }

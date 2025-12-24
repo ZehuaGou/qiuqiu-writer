@@ -1,7 +1,7 @@
 import { useEffect, useRef, RefObject } from 'react';
 import { Editor } from '@tiptap/react';
 import { documentCache } from '../utils/documentCache';
-import { localCacheManager } from '../utils/localCacheManager';
+// 关键修复：移除直接使用 localCacheManager，只在 sync/document 请求中进行缓存操作
 import { countCharacters } from '../utils/textUtils';
 import type { Chapter } from '../utils/chaptersApi';
 import type { ChapterFullData } from '../types/document';
@@ -118,6 +118,18 @@ export function useChapterAutoSave({
           // 关键修复：直接使用编辑器中的实际内容，确保保存的是用户当前看到的内容
           // 从编辑器获取最新内容（而不是使用可能过时的变量）
           const editorContent = editor.getHTML();
+          
+          // 关键修复：检查内容是否为空，如果为空且不是用户主动清空（章节切换时会被清空），则跳过保存
+          // 这样可以防止章节切换时，编辑器被清空后触发自动保存，将空内容保存到错误的章节
+          if (!editorContent || editorContent.trim() === '<p></p>' || editorContent.trim() === '') {
+            // 检查是否是章节切换导致的清空（通过检查 currentChapterIdRef 是否匹配）
+            // 如果 currentChapterIdRef 匹配，说明是当前章节，可能是用户主动清空，应该保存
+            // 如果不匹配，说明章节已切换，不应该保存空内容
+            if (currentChapterIdCheck !== chapterId) {
+              console.warn('⚠️ [自动保存] 编辑器内容为空且章节已切换，跳过保存');
+              return;
+            }
+          }
           // 关键修复：同时获取 JSON 格式，用于更精确的段落级合并
           const editorContentJson = editor.getJSON();
           // 使用 workId 和 chapterId 生成唯一的缓存键
@@ -158,19 +170,44 @@ export function useChapterAutoSave({
             return;
           }
           
-          console.log('💾 [自动保存] 使用编辑器内容:', {
+          // 🔍 [调试] 自动保存时的缓存操作
+          console.log('🔍 [自动保存-缓存操作] 开始自动保存并更新缓存:', {
+            documentId,
+            chapterId,
             contentLength: editorContent.length,
             contentPreview: editorContent.substring(0, 100),
             hasJson: !!editorContentJson,
             hasMetadata: !!metadata,
             metadataKeys: Object.keys(metadata),
+            timestamp: new Date().toISOString(),
+            stackTrace: new Error().stack?.split('\n').slice(0, 8).join('\n'),
           });
           
           // 关键优化：只调用 syncDocumentState，它会内部处理缓存更新
           // 不再单独调用 updateDocument，避免重复更新
           // 关键修复：传递 metadata 到 syncDocumentState
+          // 关键修复：添加验证函数，确保只有当前章节才会同步
           try {
-            const syncResult = await documentCache.syncDocumentState(documentId, editorContent, editorContentJson, metadata);
+            const syncResult = await documentCache.syncDocumentState(
+              documentId, 
+              editorContent, 
+              editorContentJson, 
+              metadata,
+              (docId: string) => {
+                // 验证是否是当前章节
+                const currentChapterIdCheck = currentChapterIdRef.current;
+                if (currentChapterIdCheck !== chapterId) {
+                  return false;
+                }
+                // 从 documentId 中提取章节ID
+                const match = docId.match(/work_\d+_chapter_(\d+)/);
+                if (match) {
+                  const docChapterId = parseInt(match[1]);
+                  return docChapterId === chapterId;
+                }
+                return false;
+              }
+            );
             console.log('✅ [自动保存] 已同步到服务器:', {
               documentId,
               contentLength: editorContent.length,
@@ -238,13 +275,30 @@ export function useChapterAutoSave({
                 updated_at: new Date().toISOString(),
               };
               
-              // 尝试修复：删除错误的缓存，重新保存
-              await localCacheManager.delete(documentId);
-              await documentCache.updateDocument(documentId, editorContent, retryMetadata);
-              // 重新同步到服务器
-              // 关键修复：传递 metadata 到 syncDocumentState
+              // 关键修复：只在 sync 请求中进行缓存操作
+              // syncDocumentState 内部会处理缓存更新，不需要手动删除和更新
+              // 关键修复：添加验证函数，确保只有当前章节才会同步
               try {
-                await documentCache.syncDocumentState(documentId, editorContent, undefined, retryMetadata);
+                await documentCache.syncDocumentState(
+                  documentId, 
+                  editorContent, 
+                  undefined, 
+                  retryMetadata,
+                  (docId: string) => {
+                    // 验证是否是当前章节
+                    const currentChapterIdCheck = currentChapterIdRef.current;
+                    if (currentChapterIdCheck !== chapterId) {
+                      return false;
+                    }
+                    // 从 documentId 中提取章节ID
+                    const match = docId.match(/work_\d+_chapter_(\d+)/);
+                    if (match) {
+                      const docChapterId = parseInt(match[1]);
+                      return docChapterId === chapterId;
+                    }
+                    return false;
+                  }
+                );
               } catch (retryErr) {
                 console.warn('⚠️ [自动保存] 重试同步失败:', retryErr);
               }
@@ -252,15 +306,15 @@ export function useChapterAutoSave({
           }
           
           // 验证保存
-          const saved = await localCacheManager.get(documentId);
-          if (saved) {
+          // 关键修复：只在 document 请求中进行缓存读取操作
+          const saved = await documentCache.getDocument(documentId);
+          if (saved && saved.content) {
             // 进一步验证内容是否正确保存
-            const savedDoc = saved as any;
-            if (savedDoc && savedDoc.content === editorContent) {
+            if (saved.content === editorContent) {
               // 保存成功
             } else {
               console.warn('⚠️ [自动保存] 内容验证失败，内容不匹配', {
-                savedContentLength: savedDoc?.content?.length || 0,
+                savedContentLength: saved.content.length,
                 expectedContentLength: editorContent.length,
               });
             }

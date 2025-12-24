@@ -379,8 +379,8 @@ class LocalCacheManager {
     try {
       const metadataStr = localStorage.getItem(METADATA_KEY);
       if (metadataStr) {
-        const metadata = JSON.parse(metadataStr);
         // 可以在这里加载额外的元数据
+        JSON.parse(metadataStr);
       }
     } catch (e) {
       console.error('加载缓存元数据失败:', e);

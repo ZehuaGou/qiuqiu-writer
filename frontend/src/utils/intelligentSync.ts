@@ -5,172 +5,10 @@
  */
 
 import { useRef, useCallback, useEffect } from 'react';
-import { localCacheManager } from './localCacheManager';
-import { chaptersApi } from './chaptersApi';
-
-// 类型定义
-interface ShareDBDocument {
-  document_id: string;
-  content: any;
-  version?: number;
-  metadata?: {
-    work_id?: number;
-    chapter_id?: number;
-    chapter_number?: number;
-    created_by?: number;
-    created_at?: string;
-    updated_at?: string;
-    outline?: string;  // 章节大纲
-    detailed_outline?: string;  // 章节细纲
-  };
-}
-
-interface SyncResponse {
-  success: boolean;
-  version: number;
-  content: string;
-  operations: Array<{
-    doc_id: string;
-    version: number;
-    operation: any;
-    user_id: number;
-    timestamp: string;
-  }>;
-  error?: string;
-}
-
-// 文档缓存（与 NovelEditorPage 中的 documentCache 保持一致）
-const documentCache = {
-  currentVersion: new Map<string, number>(),
-  currentContent: new Map<string, string>(),
-  
-  async getDocument(documentId: string): Promise<ShareDBDocument | null> {
-    // 先尝试从服务器获取
-    let serverDoc: ShareDBDocument | null = null;
-    try {
-      const fetchPromise = this.fetchFromServer(documentId);
-      const timeoutPromise = new Promise<null>((resolve) => 
-        setTimeout(() => resolve(null), 2000)
-      );
-      serverDoc = await Promise.race([fetchPromise, timeoutPromise]) as ShareDBDocument | null;
-      
-      if (serverDoc) {
-        const contentStr = typeof serverDoc.content === 'string' ? serverDoc.content : JSON.stringify(serverDoc.content);
-        this.currentVersion.set(documentId, serverDoc.version || 1);
-        this.currentContent.set(documentId, contentStr);
-        await localCacheManager.set(documentId, serverDoc, serverDoc.version || 1).catch(console.error);
-        return serverDoc;
-      }
-    } catch (error) {
-      console.warn('从服务器获取文档失败:', error);
-    }
-    
-    // 从缓存获取
-    try {
-      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
-      if (cached) {
-        const contentStr = typeof cached.content === 'string' ? cached.content : JSON.stringify(cached.content);
-        this.currentVersion.set(documentId, cached.version || 1);
-        this.currentContent.set(documentId, contentStr);
-        return cached;
-      }
-    } catch (error) {
-      console.error('从缓存获取文档失败:', error);
-    }
-    return null;
-  },
-  
-  async syncDocumentState(documentId: string, content: string): Promise<SyncResponse> {
-    const localVersion = this.currentVersion.get(documentId) || 0;
-    const localContent = this.currentContent.get(documentId) || content;
-
-    try {
-      // 仅保存到本地缓存，定时任务会处理服务器同步
-      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
-      if (cached) {
-        cached.content = localContent;
-        cached.version = (cached.version || 0) + 1;
-        await localCacheManager.set(documentId, cached, cached.version);
-        this.currentVersion.set(documentId, cached.version);
-        this.currentContent.set(documentId, localContent);
-      } else {
-        // 如果缓存不存在，创建新的
-        const newDoc: ShareDBDocument = {
-          document_id: documentId,
-          content: localContent,
-          version: 1,
-        };
-        await localCacheManager.set(documentId, newDoc, 1);
-        this.currentVersion.set(documentId, 1);
-        this.currentContent.set(documentId, localContent);
-      }
-
-      return {
-        success: true,
-        version: this.currentVersion.get(documentId) || localVersion,
-        content: localContent,
-        operations: [],
-      };
-    } catch (error) {
-      return {
-        success: false,
-        version: localVersion,
-        content: localContent,
-        operations: [],
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  },
-  
-  async fetchFromServer(documentId: string): Promise<ShareDBDocument | null> {
-    let chapterId: number | null = null;
-    
-    if (documentId.startsWith('chapter_')) {
-      chapterId = parseInt(documentId.replace('chapter_', ''));
-    } else if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-      const match = documentId.match(/work_\d+_chapter_(\d+)/);
-      if (match) {
-        chapterId = parseInt(match[1]);
-      }
-    }
-    
-    if (!chapterId || isNaN(chapterId)) {
-      return null;
-    }
-
-    try {
-      const result = await chaptersApi.getChapterDocument(chapterId);
-      let content: any = result.content;
-      
-      if (typeof content === 'object' && content !== null) {
-        if ('content' in content) {
-          content = content.content;
-        } else {
-          content = JSON.stringify(content);
-        }
-      }
-      
-      return {
-        document_id: documentId,
-        content: content || '',
-        version: result.chapter_info?.id || chapterId,
-        metadata: {
-          work_id: result.chapter_info?.work_id,
-          chapter_id: result.chapter_info?.id || chapterId,
-          chapter_number: result.chapter_info?.chapter_number,
-          outline: result.chapter_info?.metadata?.outline,
-          detailed_outline: result.chapter_info?.metadata?.detailed_outline,
-        },
-      };
-    } catch (error) {
-      return null;
-    }
-  },
-};
+// 关键修复：统一使用 documentCache，移除重复的缓存逻辑
+import { documentCache } from './documentCache';
 
 export interface IntelligentSyncOptions {
-  /** 同步防抖延迟（毫秒），默认 1000ms */
-  syncDebounceDelay?: number;
   /** 轮询间隔（毫秒），默认 10000ms */
   pollInterval?: number;
   /** 用户输入检测时间窗口（毫秒），默认 5000ms */
@@ -215,7 +53,6 @@ export function useIntelligentSync(
   options: IntelligentSyncOptions = {}
 ): IntelligentSyncResult {
   const {
-    syncDebounceDelay = 1000,
     pollInterval = 5000,
     userInputWindow = 5000,
     syncCheckInterval = 3000,
@@ -270,6 +107,14 @@ export function useIntelligentSync(
 
     try {
       
+      
+      // 🔍 [调试] 智能同步调用 syncDocumentState
+      console.log('🔍 [IntelligentSync] 调用 syncDocumentState:', {
+        documentId,
+        currentContentLength: currentContent.length,
+        currentContentPreview: currentContent.substring(0, 100),
+        timestamp: new Date().toISOString(),
+      });
       
       // 使用 documentCache 的同步方法
       const result = await documentCache.syncDocumentState(documentId, currentContent);
@@ -406,13 +251,11 @@ export function useIntelligentSync(
         
         
 
-        const serverContent = typeof serverDoc.content === 'string' 
-          ? serverDoc.content 
-          : JSON.stringify(serverDoc.content);
+        // 统一格式：content 必须是字符串
+        const serverContent = typeof serverDoc.content === 'string' ? serverDoc.content : '';
         
-        // 关键修复：立即更新 documentCache 的缓存
-        documentCache.currentVersion.set(documentId, serverVersion);
-        documentCache.currentContent.set(documentId, serverContent);
+        // 关键修复：统一使用 documentCache，缓存操作已在 getDocument 中完成
+        // documentCache.currentVersion 和 currentContent 会在 getDocument 时自动更新
         
         documentStateRef.current = {
           version: serverVersion,

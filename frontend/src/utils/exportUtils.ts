@@ -119,21 +119,13 @@ export async function exportAsText(work: Work): Promise<void> {
           const docResponse = await chaptersApi.getChapterDocument(chapter.id);
           
           
-          // docResponse.content 是一个对象，包含 content 字段
+          // 统一格式：content 必须是字符串
           if (docResponse && docResponse.content) {
-            if (typeof docResponse.content === 'object' && docResponse.content !== null) {
-              // 如果 content 是对象，尝试获取 content 字段
-              chapterContent = docResponse.content.content || docResponse.content.text || '';
-              
-              
-              // 如果还是空，尝试直接使用整个对象（可能是字符串化的）
-              if (!chapterContent && typeof docResponse.content === 'object') {
-                chapterContent = JSON.stringify(docResponse.content);
-                
-              }
-            } else if (typeof docResponse.content === 'string') {
+            if (typeof docResponse.content === 'string') {
               chapterContent = docResponse.content;
-              
+            } else {
+              console.warn(`⚠️ [导出Text] 章节 ${chapter.id} ShareDB 响应中 content 格式错误，应为字符串:`, typeof docResponse.content);
+              chapterContent = '';
             }
           } else {
             console.warn(`⚠️ [导出Text] 章节 ${chapter.id} ShareDB 响应中没有 content`);
@@ -333,13 +325,12 @@ export async function exportAsWord(work: Work): Promise<void> {
         try {
           const docResponse = await chaptersApi.getChapterDocument(chapter.id);
           if (docResponse.content) {
-            if (typeof docResponse.content === 'object' && docResponse.content !== null) {
-              chapterContent = docResponse.content.content || docResponse.content.text || '';
-              if (!chapterContent && typeof docResponse.content === 'object') {
-                chapterContent = JSON.stringify(docResponse.content);
-              }
-            } else if (typeof docResponse.content === 'string') {
+            // 统一格式：content 必须是字符串
+            if (typeof docResponse.content === 'string') {
               chapterContent = docResponse.content;
+            } else {
+              console.warn(`⚠️ [导出] 章节 ${chapter.id} ShareDB 响应中 content 格式错误，应为字符串:`, typeof docResponse.content);
+              chapterContent = '';
             }
           }
         } catch (docErr) {
@@ -491,13 +482,12 @@ export async function exportAsPdf(work: Work): Promise<void> {
         try {
           const docResponse = await chaptersApi.getChapterDocument(chapter.id);
           if (docResponse.content) {
-            if (typeof docResponse.content === 'object' && docResponse.content !== null) {
-              chapterContent = docResponse.content.content || docResponse.content.text || '';
-              if (!chapterContent && typeof docResponse.content === 'object') {
-                chapterContent = JSON.stringify(docResponse.content);
-              }
-            } else if (typeof docResponse.content === 'string') {
+            // 统一格式：content 必须是字符串
+            if (typeof docResponse.content === 'string') {
               chapterContent = docResponse.content;
+            } else {
+              console.warn(`⚠️ [导出] 章节 ${chapter.id} ShareDB 响应中 content 格式错误，应为字符串:`, typeof docResponse.content);
+              chapterContent = '';
             }
           }
         } catch (docErr) {

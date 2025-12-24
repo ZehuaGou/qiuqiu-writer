@@ -636,11 +636,29 @@ export default function NovelEditorPage(){
         updated_at: new Date().toISOString(),
       };
       
-      await documentCache.updateDocument(documentId, editorContent, metadata);
-
-      // 2. 同步到服务器
-      // 关键修复：传递 metadata 到 syncDocumentState
-      const result = await documentCache.syncDocumentState(documentId, editorContent, undefined, metadata);
+      // 关键修复：只在 sync 请求中进行缓存操作
+      // syncDocumentState 内部会调用 updateDocument 进行缓存更新
+      // 关键修复：添加验证函数，确保只有当前章节才会同步
+      const result = await documentCache.syncDocumentState(
+        documentId, 
+        editorContent, 
+        undefined, 
+        metadata,
+        (docId: string) => {
+          // 验证是否是当前章节
+          const currentChapterIdCheck = currentChapterIdRef.current;
+          if (currentChapterIdCheck !== chapterId) {
+            return false;
+          }
+          // 从 documentId 中提取章节ID
+          const match = docId.match(/work_\d+_chapter_(\d+)/);
+          if (match) {
+            const docChapterId = parseInt(match[1]);
+            return docChapterId === chapterId;
+          }
+          return false;
+        }
+      );
 
       if (result.success) {
         console.log('✅ [手动保存] 保存成功:', {
@@ -755,12 +773,63 @@ export default function NovelEditorPage(){
         return;
       }
       
+      // 🔍 [调试] 智能同步更新编辑器内容
+      console.log('🔍 [智能同步-updateContent] 准备更新编辑器内容:', {
+        chapterId,
+        newContentLength: newContent.length,
+        newContentPreview: newContent.substring(0, 100),
+        currentContentLength: currentContentCheck.length,
+        currentContentPreview: currentContentCheck.substring(0, 100),
+        timestamp: new Date().toISOString(),
+        stackTrace: new Error().stack?.split('\n').slice(0, 5).join('\n'),
+      });
+      
+      // 关键修复：检查新内容是否为空
+      if (!newContent || newContent.trim() === '' || newContent.trim() === '<p></p>') {
+        console.warn('⚠️ [智能同步-updateContent] 新内容为空，跳过更新:', {
+          chapterId,
+          newContent,
+          timestamp: new Date().toISOString(),
+        });
+        return; // 不更新，避免清空编辑器
+      }
+      
       // 安全更新编辑器内容
       // 关键修复：从智能同步更新内容时，先清除历史再设置内容
       // 这样可以避免撤销到旧内容
       editor.commands.setContent('<p></p>', { emitUpdate: false });
       setTimeout(() => {
+        // 🔍 [调试] 设置新内容
+        console.log('🔍 [智能同步-updateContent] 设置新内容到编辑器:', {
+          chapterId,
+          newContentLength: newContent.length,
+          newContentPreview: newContent.substring(0, 100),
+          timestamp: new Date().toISOString(),
+        });
+        
         editor.commands.setContent(newContent, { emitUpdate: false });
+        
+        // 🔍 [调试] 验证设置后的内容
+        setTimeout(() => {
+          const editorContentAfterUpdate = editor.getHTML();
+          console.log('🔍 [智能同步-updateContent] 设置后的编辑器内容:', {
+            chapterId,
+            editorContentLength: editorContentAfterUpdate.length,
+            editorContentPreview: editorContentAfterUpdate.substring(0, 100),
+            newContentLength: newContent.length,
+            isContentEmpty: editorContentAfterUpdate.trim() === '<p></p>' || editorContentAfterUpdate.trim() === '',
+            timestamp: new Date().toISOString(),
+          });
+          
+          if (editorContentAfterUpdate.trim() === '<p></p>' || editorContentAfterUpdate.trim() === '') {
+            console.error('❌ [智能同步-updateContent] 设置后编辑器内容为空！', {
+              chapterId,
+              newContentLength: newContent.length,
+              newContentPreview: newContent.substring(0, 200),
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }, 100);
       }, 0);
       lastSetContentRef.current = newContent; // 记录已设置的内容
       
@@ -779,7 +848,6 @@ export default function NovelEditorPage(){
     getCurrentContent,
     updateContent,
     {
-      syncDebounceDelay: 1000,      // 同步防抖延迟 1 秒
       pollInterval: 30000,          // 每 30 秒轮询一次（降低频率，减少请求）
       userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
       syncCheckInterval: 5000,      // 每 5 秒检查一次是否需要同步（降低频率）

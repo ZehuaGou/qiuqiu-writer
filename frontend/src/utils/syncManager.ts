@@ -3,168 +3,13 @@
  * 处理离线/在线状态、同步队列、冲突解决
  */
 
+// 关键修复：统一使用 documentCache，移除重复的缓存逻辑
+import { documentCache } from './documentCache';
 import { localCacheManager } from './localCacheManager';
-import { chaptersApi } from './chaptersApi';
+import type { ShareDBDocument } from '../types/document';
 
-// 类型定义
-interface ShareDBDocument {
-  document_id: string;
-  content: any;
-  version?: number;
-  metadata?: {
-    work_id?: number;
-    chapter_id?: number;
-    chapter_number?: number;
-    created_by?: number;
-    created_at?: string;
-    updated_at?: string;
-    outline?: string;  // 章节大纲
-    detailed_outline?: string;  // 章节细纲
-  };
-}
-
-interface SyncResponse {
-  success: boolean;
-  version: number;
-  content: string;
-  operations: Array<{
-    doc_id: string;
-    version: number;
-    operation: any;
-    user_id: number;
-    timestamp: string;
-  }>;
-  error?: string;
-}
-
-// 文档缓存工具
-const documentCache = {
-  currentVersion: new Map<string, number>(),
-  currentContent: new Map<string, string>(),
-  
-  async getDocument(documentId: string): Promise<ShareDBDocument | null> {
-    // 先尝试从服务器获取
-    let serverDoc: ShareDBDocument | null = null;
-    try {
-      const fetchPromise = this.fetchFromServer(documentId);
-      const timeoutPromise = new Promise<null>((resolve) => 
-        setTimeout(() => resolve(null), 2000)
-      );
-      serverDoc = await Promise.race([fetchPromise, timeoutPromise]) as ShareDBDocument | null;
-      
-      if (serverDoc) {
-        const contentStr = typeof serverDoc.content === 'string' ? serverDoc.content : JSON.stringify(serverDoc.content);
-        this.currentVersion.set(documentId, serverDoc.version || 1);
-        this.currentContent.set(documentId, contentStr);
-        await localCacheManager.set(documentId, serverDoc, serverDoc.version || 1).catch(console.error);
-        return serverDoc;
-      }
-    } catch (error) {
-      console.warn('从服务器获取文档失败:', error);
-    }
-    
-    // 从缓存获取
-    try {
-      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
-      if (cached) {
-        const contentStr = typeof cached.content === 'string' ? cached.content : JSON.stringify(cached.content);
-        this.currentVersion.set(documentId, cached.version || 1);
-        this.currentContent.set(documentId, contentStr);
-        return cached;
-      }
-    } catch (error) {
-      console.error('从缓存获取文档失败:', error);
-    }
-    return null;
-  },
-  
-  async syncDocumentState(documentId: string, content: string): Promise<SyncResponse> {
-    const localVersion = this.currentVersion.get(documentId) || 0;
-    const localContent = this.currentContent.get(documentId) || content;
-
-    try {
-      // 仅保存到本地缓存，定时任务会处理服务器同步
-      const cached = await localCacheManager.get<ShareDBDocument>(documentId);
-      if (cached) {
-        cached.content = localContent;
-        cached.version = (cached.version || 0) + 1;
-        await localCacheManager.set(documentId, cached, cached.version);
-        this.currentVersion.set(documentId, cached.version);
-        this.currentContent.set(documentId, localContent);
-      } else {
-        // 如果缓存不存在，创建新的
-        const newDoc: ShareDBDocument = {
-          document_id: documentId,
-          content: localContent,
-          version: 1,
-        };
-        await localCacheManager.set(documentId, newDoc, 1);
-        this.currentVersion.set(documentId, 1);
-        this.currentContent.set(documentId, localContent);
-      }
-
-      return {
-        success: true,
-        version: this.currentVersion.get(documentId) || localVersion,
-        content: localContent,
-        operations: [],
-      };
-    } catch (error) {
-      return {
-        success: false,
-        version: localVersion,
-        content: localContent,
-        operations: [],
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  },
-  
-  async fetchFromServer(documentId: string): Promise<ShareDBDocument | null> {
-    let chapterId: number | null = null;
-    
-    if (documentId.startsWith('chapter_')) {
-      chapterId = parseInt(documentId.replace('chapter_', ''));
-    } else if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-      const match = documentId.match(/work_\d+_chapter_(\d+)/);
-      if (match) {
-        chapterId = parseInt(match[1]);
-      }
-    }
-    
-    if (!chapterId || isNaN(chapterId)) {
-      return null;
-    }
-
-    try {
-      const result = await chaptersApi.getChapterDocument(chapterId);
-      let content: any = result.content;
-      
-      if (typeof content === 'object' && content !== null) {
-        if ('content' in content) {
-          content = content.content;
-        } else {
-          content = JSON.stringify(content);
-        }
-      }
-      
-      return {
-        document_id: documentId,
-        content: content || '',
-        version: result.chapter_info?.id || chapterId,
-        metadata: {
-          work_id: result.chapter_info?.work_id,
-          chapter_id: result.chapter_info?.id || chapterId,
-          chapter_number: result.chapter_info?.chapter_number,
-          outline: result.chapter_info?.metadata?.outline,
-          detailed_outline: result.chapter_info?.metadata?.detailed_outline,
-        },
-      };
-    } catch (error) {
-      return null;
-    }
-  },
-};
+// 关键修复：使用统一的类型定义，不再重复定义
+// 关键修复：移除重复的 documentCache 实现，统一使用 documentCache.ts 中的实现
 
 export interface SyncStatus {
   isOnline: boolean;
@@ -286,11 +131,8 @@ class SyncManager {
       }
 
       // 根据文档类型选择同步方式
-      if (documentId.startsWith('chapter_')) {
-        await this.syncChapterDocument(documentId, cached);
-      } else {
-        await this.syncGenericDocument(documentId, cached);
-      }
+      await this.syncChapterDocument(documentId, cached);
+      
 
       localCacheManager.markAsSynced(documentId);
     } catch (error) {
@@ -411,24 +253,27 @@ class SyncManager {
     documentId: string,
     cached: any
   ): Promise<void> {
+    // 统一格式：content 必须是字符串
     const content = cached.data?.content || cached.content;
-    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+    const contentStr = typeof content === 'string' ? content : '';
+
+    // 关键修复：检查内容是否为空，如果为空则跳过同步
+    if (!contentStr || contentStr.trim() === '' || contentStr.trim() === '<p></p>') {
+      console.warn('⚠️ [syncManager] 章节内容为空，跳过同步:', {
+        documentId,
+        contentLength: contentStr?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+      // 标记为已同步（因为空内容不需要同步）
+      localCacheManager.markAsSynced(documentId);
+      return;
+    }
 
     // 使用新的同步方法（借鉴 nexcode_web 的实现）
     // 这会自动处理版本控制和冲突解决
     await documentCache.syncDocumentState(documentId, contentStr);
   }
 
-  private async syncGenericDocument(
-    documentId: string,
-    cached: any
-  ): Promise<void> {
-    const content = cached.data || cached;
-    const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-
-    // 使用新的同步方法
-    await documentCache.syncDocumentState(documentId, contentStr);
-  }
 
   private notifyStatusChange(): void {
     const status = this.getStatus();

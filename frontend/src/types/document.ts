@@ -5,14 +5,14 @@
 // ShareDB 文档类型定义
 export interface ShareDBDocument {
   document_id: string;
-  content: any;
+  content: string; // 统一格式：content 必须是字符串，不再支持对象格式
   version?: number;
-  document_exists?: boolean; // 关键修复：添加 document_exists 字段，表示文档是否存在于 MongoDB
+  document_exists?: boolean; // 表示文档是否存在于 MongoDB
   metadata?: {
     work_id?: number;
     chapter_id?: number;
     chapter_number?: number;
-    title?: string; // 关键修复：添加 title 字段
+    title?: string;
     created_by?: number;
     created_at?: string;
     updated_at?: string;
