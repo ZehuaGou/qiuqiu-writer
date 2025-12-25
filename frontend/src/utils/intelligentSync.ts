@@ -66,6 +66,8 @@ export function useIntelligentSync(
   const syncTimer = useRef<number | undefined>(undefined);
   const pollTimer = useRef<number | undefined>(undefined);
   const syncCheckTimer = useRef<number | undefined>(undefined);
+  // 关键修复：使用 ref 存储最新的 documentId，确保轮询时使用最新值
+  const documentIdRef = useRef(documentId);
   const lastSyncedContent = useRef<string>('');
   const lastSyncedVersion = useRef<number>(0);
   const syncInProgress = useRef<boolean>(false);
@@ -185,13 +187,19 @@ export function useIntelligentSync(
    * 轮询检查更新
    */
   const pollForUpdates = useCallback(async () => {
+    console.log('🔄 [pollForUpdates] 开始执行轮询:', {
+      documentId,
+      syncInProgress: syncInProgress.current,
+      timestamp: new Date().toISOString(),
+    });
+    
     if (!documentId) {
-      
+      console.log('⏸️ [pollForUpdates] documentId 为空，跳过');
       return;
     }
 
     if (syncInProgress.current) {
-      
+      console.log('⏸️ [pollForUpdates] 同步正在进行中，跳过');
       return;
     }
 
@@ -214,11 +222,25 @@ export function useIntelligentSync(
       }
       
       
-      // 获取服务器最新状态
-      const serverDoc = await documentCache.getDocument(documentId);
+      // 关键修复：使用 fetchFromServer 而不是 getDocument，避免重复请求
+      // getDocument 会先检查本地缓存，然后才从服务器获取，可能导致重复请求
+      // fetchFromServer 直接从服务器获取，有请求去重机制
+      console.log('🔄 [IntelligentSync-pollForUpdates] 开始从服务器获取文档:', {
+        documentId,
+        timestamp: new Date().toISOString(),
+      });
+      const serverDoc = await documentCache.fetchFromServer(documentId);
+      
+      console.log('📥 [pollForUpdates] 获取到服务器文档:', {
+        documentId,
+        hasServerDoc: !!serverDoc,
+        version: serverDoc?.version,
+        contentLength: serverDoc?.content?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
       
       if (!serverDoc) {
-        
+        console.log('⏸️ [pollForUpdates] 服务器文档为空，跳过');
         return;
       }
 
@@ -377,6 +399,11 @@ export function useIntelligentSync(
     };
   }, [getCurrentContent]);
 
+  // 关键修复：更新 documentIdRef，确保轮询时使用最新值
+  useEffect(() => {
+    documentIdRef.current = documentId;
+  }, [documentId]);
+
   // 移除 WebSocket 订阅，只使用轮询
   // 初始化轮询（主要更新方式）
   // 关键修复：使用 useRef 存储最新的 pollForUpdates，避免依赖项变化导致 useEffect 重新运行
@@ -387,36 +414,54 @@ export function useIntelligentSync(
     // 关键修复：同时检查 enablePolling 和 documentId
     // 如果 documentId 为空，不启动轮询
     if (!enablePolling) {
-      
+      console.log('⏸️ [IntelligentSync] 轮询已禁用');
       return;
     }
 
-    if (!documentId || documentId.trim() === '') {
-      
+    const currentDocumentId = documentIdRef.current;
+    if (!currentDocumentId || currentDocumentId.trim() === '') {
+      console.log('⏸️ [IntelligentSync] documentId 为空，不启动轮询:', {
+        documentId: currentDocumentId,
+        timestamp: new Date().toISOString(),
+      });
       return;
     }
+
+    console.log('🔄 [IntelligentSync] 启动轮询机制:', {
+      documentId: currentDocumentId,
+      pollInterval,
+      timestamp: new Date().toISOString(),
+    });
 
     // 关键修复：清理之前的定时器，避免重复创建
     if (pollTimer.current) {
-      
+      console.log('🧹 [IntelligentSync] 清理之前的轮询定时器');
       clearInterval(pollTimer.current);
       pollTimer.current = undefined;
     }
 
     
     
-    // 延迟执行第一次轮询，避免与章节加载冲突
+    // 关键修复：延迟执行第一次轮询，避免与章节加载冲突
+    // 延迟时间改为10秒，与轮询间隔一致，避免打开章节时连续请求
     const firstPollDelay = setTimeout(() => {
-      
-      pollForUpdatesRef.current().catch(error => {
-        console.error('[IntelligentSync] 第一次轮询失败:', error);
+      const docId = documentIdRef.current;
+      console.log('🔄 [IntelligentSync] 执行第一次轮询:', {
+        documentId: docId,
+        timestamp: new Date().toISOString(),
       });
-    }, 2000); // 延迟2秒，让章节加载完成
+      if (docId && docId.trim() !== '') {
+        pollForUpdatesRef.current().catch(error => {
+          console.error('[IntelligentSync] 第一次轮询失败:', error);
+        });
+      }
+    }, 10000); // 延迟10秒，与轮询间隔一致，避免打开章节时连续请求
 
     // 设置固定间隔轮询（轮询是主要更新方式）
     pollTimer.current = setInterval(() => {
-      if (!documentId || documentId.trim() === '') {
-        
+      const docId = documentIdRef.current;
+      if (!docId || docId.trim() === '') {
+        console.log('⏸️ [IntelligentSync] documentId 为空，停止轮询');
         if (pollTimer.current) {
           clearInterval(pollTimer.current);
           pollTimer.current = undefined;
@@ -424,20 +469,24 @@ export function useIntelligentSync(
         return;
       }
       
+      console.log('🔄 [IntelligentSync] 执行定期轮询:', {
+        documentId: docId,
+        timestamp: new Date().toISOString(),
+      });
       pollForUpdatesRef.current().catch(error => {
         console.error('[IntelligentSync] 轮询失败:', error);
       });
     }, pollInterval); // 使用正常的轮询间隔
 
     return () => {
-      
+      console.log('🧹 [IntelligentSync] 清理轮询定时器');
       clearTimeout(firstPollDelay);
       if (pollTimer.current) {
         clearInterval(pollTimer.current);
         pollTimer.current = undefined;
       }
     };
-  }, [enablePolling, pollInterval, documentId]); // 移除 pollForUpdates 依赖，使用 ref
+  }, [enablePolling, pollInterval, documentId]); // 当 documentId 变化时重新启动轮询
 
   // 关键修复：禁用自动同步检查，避免与 useChapterAutoSave 重复同步
   // useChapterAutoSave 已经负责了自动保存，useIntelligentSync 只负责轮询更新

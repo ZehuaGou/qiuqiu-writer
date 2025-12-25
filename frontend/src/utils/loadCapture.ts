@@ -302,19 +302,31 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
         // 如果 forcePullFromServer 已经成功获取，直接使用它，避免重复请求
         cachedDoc = serverDoc;
       } else {
-        // 只有在 serverDoc 不存在时，才从缓存获取
+        // 关键修复：如果 forcePullFromServer 失败，直接从本地缓存获取，不再调用 getDocument
+        // getDocument 会再次调用 fetchFromServer，导致重复请求
         try {
-          // 关键修复：确保使用正确的文档ID，避免缓存键冲突
-          console.log('🔍 [缓存检查] 开始获取缓存，文档ID:', {
+          // 关键修复：直接从本地缓存获取，不调用 getDocument（避免重复请求）
+          console.log('🔍 [缓存检查] 从本地缓存获取，文档ID:', {
             documentId,
             chapterId,
             workId,
           });
           
-          // 先尝试新格式
-          cachedDoc = await documentCache.getDocument(documentId);
+          // 关键修复：如果 forcePullFromServer 失败，不再调用 getDocument（会再次请求服务器）
+          // 直接从 documentCache 的内存缓存获取，如果内存缓存也没有，就返回 null
+          // 这样不会触发额外的服务器请求
+          const memoryContent = documentCache.currentContent.get(documentId);
+          const memoryVersion = documentCache.currentVersion.get(documentId);
+          if (memoryContent !== undefined && memoryVersion !== undefined) {
+            cachedDoc = {
+              document_id: documentId,
+              content: memoryContent,
+              version: memoryVersion,
+              metadata: {},
+            };
+          }
         } catch (cacheErr) {
-          console.warn('⚠️ 从缓存加载失败，将从服务器获取:', cacheErr);
+          console.warn('⚠️ 从缓存加载失败:', cacheErr);
         }
       }
       

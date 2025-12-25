@@ -149,28 +149,8 @@ export default function NovelEditorPage(){
       setSyncStatus(status);
     });
 
-    // 预加载当前作品的章节（智能预测）
-    if (workId) {
-      const preloadChapters = async () => {
-        try {
-          const response = await chaptersApi.listChapters({
-            work_id: Number(workId),
-            page: 1,
-            size: 20,
-            sort_by: 'chapter_number',
-            sort_order: 'asc',
-          });
-          
-          // 关键修复：统一使用新格式 work_${workId}_chapter_${chapterId}
-          const documentIds = response.chapters.map(ch => `work_${workId}_chapter_${ch.id}`);
-          await syncManager.preloadDocuments(documentIds);
-        } catch (err) {
-          console.error('预加载章节失败:', err);
-        }
-      };
-      
-      preloadChapters();
-    }
+    // 关键修复：取消预加载章节机制，只在用户点击章节时才加载内容
+    // 这样可以减少初始加载时的网络请求，提升性能
 
     return () => {
       unsubscribe();
@@ -848,7 +828,7 @@ export default function NovelEditorPage(){
     getCurrentContent,
     updateContent,
     {
-      pollInterval: 30000,          // 每 30 秒轮询一次（降低频率，减少请求）
+      pollInterval: 10000,          // 每 10 秒轮询一次
       userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
       syncCheckInterval: 5000,      // 每 5 秒检查一次是否需要同步（降低频率）
       enablePolling: true,          // 始终启用轮询（内部会根据 documentId 判断）

@@ -147,20 +147,20 @@ export const documentCache = {
                     serverDoc.document_exists = true; // 同步后，文档已存在
                     serverDoc.version = syncResult.version;
                     
-                    // 关键修复：验证同步是否真的成功（检查后端是否真的保存了）
-                    // 延迟一小段时间后验证，确保后端已经保存完成
-                    setTimeout(async () => {
-                      try {
-                        const verifyDoc = await documentCache.fetchFromServer(documentId);
-                        if (verifyDoc && verifyDoc.document_exists === true) {
-                          console.log('✅ [getDocument] 验证成功：MongoDB 中已存在文档');
-                        } else {
-                          console.warn('⚠️ [getDocument] 验证失败：MongoDB 中仍然没有文档');
-                        }
-                      } catch (verifyErr) {
-                        console.warn('⚠️ [getDocument] 验证时出错:', verifyErr);
-                      }
-                    }, 1000);
+                    // 关键修复：移除验证逻辑，避免额外的 document 请求
+                    // 验证会在下次轮询时自动进行，不需要立即验证
+                    // setTimeout(async () => {
+                    //   try {
+                    //     const verifyDoc = await documentCache.fetchFromServer(documentId);
+                    //     if (verifyDoc && verifyDoc.document_exists === true) {
+                    //       console.log('✅ [getDocument] 验证成功：MongoDB 中已存在文档');
+                    //     } else {
+                    //       console.warn('⚠️ [getDocument] 验证失败：MongoDB 中仍然没有文档');
+                    //     }
+                    //   } catch (verifyErr) {
+                    //     console.warn('⚠️ [getDocument] 验证时出错:', verifyErr);
+                    //   }
+                    // }, 1000);
                   } else {
                     console.warn('⚠️ [getDocument] 同步回 MongoDB 失败:', syncResult.error);
                     // 关键修复：如果同步失败，打印完整的错误信息
@@ -685,10 +685,24 @@ export const documentCache = {
 
     try {
       // 创建请求并记录
+      console.log('📡 [fetchFromServer] 发起 document 请求:', {
+        documentId,
+        chapterId,
+        requestKey,
+        timestamp: new Date().toISOString(),
+        stackTrace: new Error().stack?.split('\n').slice(0, 5).join('\n'),
+      });
       const requestPromise = chaptersApi.getChapterDocument(chapterId);
       documentCache.pendingRequests.set(requestKey, requestPromise);
       
       const result = await requestPromise;
+      console.log('✅ [fetchFromServer] document 请求完成:', {
+        documentId,
+        chapterId,
+        hasContent: !!result?.content,
+        contentLength: result?.content?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
       
       // 请求完成后移除
       documentCache.pendingRequests.delete(requestKey);
