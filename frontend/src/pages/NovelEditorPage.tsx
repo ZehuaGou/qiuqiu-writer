@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Info, Coins, Settings, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
@@ -39,6 +39,8 @@ export default function NovelEditorPage(){
   
   const [activeNav, setActiveNav] = useState<'work-info' | 'tags' | 'outline' | 'characters' | 'settings' | 'map' | 'factions'>('work-info');
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+  // 同步状态（保留用于内部逻辑，不显示在UI上）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [syncStatus, setSyncStatus] = useState(syncManager.getStatus());
   
   // 作品数据
@@ -50,6 +52,10 @@ export default function NovelEditorPage(){
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
+  // 章节名编辑状态
+  const [isEditingChapterName, setIsEditingChapterName] = useState(false);
+  const [chapterNameValue, setChapterNameValue] = useState('');
+  const chapterNameInputRef = useRef<HTMLInputElement>(null);
   // 分析本书状态
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
@@ -65,6 +71,10 @@ export default function NovelEditorPage(){
   
   // 标题下拉菜单状态
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
+  
+  // 侧边栏折叠状态
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
 
   // 关键修复：为每个章节维护独立的编辑器实例
   // 通过 editorKey 来强制重新创建编辑器实例
@@ -243,6 +253,97 @@ export default function NovelEditorPage(){
     } else if (e.key === 'Escape') {
       e.preventDefault();
       handleCancelEditTitle();
+    }
+  };
+
+  // 开始编辑章节名
+  const handleStartEditChapterName = () => {
+    if (!selectedChapter || !chaptersData[selectedChapter]) return;
+    const currentTitle = chaptersData[selectedChapter].title || '';
+    setChapterNameValue(currentTitle);
+    setIsEditingChapterName(true);
+    // 使用 setTimeout 确保 DOM 更新后再聚焦
+    setTimeout(() => {
+      chapterNameInputRef.current?.focus();
+      chapterNameInputRef.current?.select();
+    }, 0);
+  };
+
+  // 保存章节名
+  const handleSaveChapterName = async () => {
+    if (!selectedChapter || !chaptersData[selectedChapter]) {
+      setIsEditingChapterName(false);
+      return;
+    }
+
+    const chapterId = parseInt(selectedChapter);
+    const currentTitle = chaptersData[selectedChapter].title || '';
+    const newTitle = chapterNameValue.trim();
+
+    // 如果没有变化，直接退出编辑模式
+    if (newTitle === currentTitle) {
+      setIsEditingChapterName(false);
+      return;
+    }
+
+    // 如果新标题为空，恢复原值
+    if (!newTitle) {
+      setChapterNameValue(currentTitle);
+      setIsEditingChapterName(false);
+      return;
+    }
+
+    try {
+      // 调用 API 更新章节名
+      await chaptersApi.updateChapter(chapterId, {
+        title: newTitle,
+      });
+
+      // 更新本地状态
+      setChaptersData({
+        ...chaptersData,
+        [selectedChapter]: {
+          ...chaptersData[selectedChapter],
+          title: newTitle,
+        },
+      });
+
+      // 同步更新 volumes 数据，使侧边栏立即更新
+      setVolumes(prev => prev.map(vol => ({
+        ...vol,
+        chapters: vol.chapters.map(chap =>
+          chap.id === selectedChapter
+            ? { ...chap, title: newTitle }
+            : chap
+        ),
+      })));
+
+      setIsEditingChapterName(false);
+      console.log('✅ 章节名已更新:', newTitle);
+    } catch (err) {
+      console.error('更新章节名失败:', err);
+      alert(err instanceof Error ? err.message : '更新章节名失败');
+      setChapterNameValue(currentTitle);
+      setIsEditingChapterName(false);
+    }
+  };
+
+  // 取消编辑章节名
+  const handleCancelEditChapterName = () => {
+    if (!selectedChapter || !chaptersData[selectedChapter]) return;
+    const currentTitle = chaptersData[selectedChapter].title || '';
+    setChapterNameValue(currentTitle);
+    setIsEditingChapterName(false);
+  };
+
+  // 处理章节名输入框的键盘事件
+  const handleChapterNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveChapterName();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEditChapterName();
     }
   };
 
@@ -962,6 +1063,23 @@ export default function NovelEditorPage(){
 
       // 如果是编辑现有章节
       if (data.id && !isNaN(parseInt(data.id))) {
+        const chapterId = parseInt(data.id);
+        
+        // 准备更新数据
+        const updateData: any = {
+          title: data.title,
+        };
+
+        // 如果有大纲或细纲，添加到更新数据中
+        if (data.outline || data.detailOutline) {
+          updateData.chapter_metadata = {
+            outline: data.outline || '',
+            detailed_outline: data.detailOutline || '',
+          };
+        }
+
+        // 调用 API 更新章节到数据库
+        await chaptersApi.updateChapter(chapterId, updateData);
         
         // 更新本地状态
         setChaptersData(prev => ({
@@ -1232,46 +1350,7 @@ export default function NovelEditorPage(){
     }
   };
 
-  // 获取当前章节/草稿标题
-  const getCurrentChapterTitle = () => {
-    if (!selectedChapter) return '';
-    const data = chaptersData[selectedChapter];
-    if (data) {
-      // 如果是草稿，只显示标题
-      if (data.volumeId === 'draft') {
-        return data.title;
-      }
-      // 构建标题：卷名 + 章节号 + 标题
-      let titleParts: string[] = [];
-      
-      // 添加卷名（如果有）
-      if (data.volumeTitle && data.volumeTitle !== '未分卷') {
-        titleParts.push(data.volumeTitle);
-      }
-      
-      // 添加章节号（如果有）
-      if (data.chapter_number !== undefined && data.chapter_number !== null) {
-        titleParts.push(`第${data.chapter_number}章`);
-      }
-      
-      // 添加章节标题
-      titleParts.push(data.title);
-      
-      return titleParts.join(' · ');
-    }
-    // 从 ID 生成默认标题
-    const parts = selectedChapter.split('-');
-    if (parts.length >= 2) {
-      if (parts[0] === 'draft') {
-        return parts[1] || selectedChapter;
-      }
-      const volNum = parts[0].replace('vol', '');
-      const chapNum = parts[1].replace('chap', '');
-      return `第${volNum}卷 · 第${chapNum}章`;
-    }
-    return selectedChapter;
-  };
-
+  // 获取当前章节/草稿标题（保留以备将来使用）
   // 打开当前章节/草稿的编辑弹框
   const handleEditCurrentChapter = async () => {
     if (!selectedChapter) return;
@@ -1431,53 +1510,47 @@ export default function NovelEditorPage(){
             <span>退出</span>
           </button>
           <div className="work-info">
-            {isEditingTitle ? (
-              <input
-                ref={titleInputRef}
-                type="text"
-                className="work-title-input"
-                value={titleValue}
-                onChange={(e) => setTitleValue(e.target.value)}
-                onBlur={handleSaveTitle}
-                onKeyDown={handleTitleKeyDown}
-                placeholder="请输入作品标题"
-              />
-            ) : (
-              <h1 
-                className="work-title"
-                onClick={() => setIsEditingTitle(true)}
-                title="点击编辑标题"
-              >
-                {work?.title || ''}
-              </h1>
-            )}
-            <div className="work-tags">
-              {work?.work_type && (
-                <span className="tag">
-                  {work.work_type === 'long' ? '长篇' : work.work_type === 'short' ? '短篇' : work.work_type}
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              {isEditingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  className="work-title-input"
+                  value={titleValue}
+                  onChange={(e) => setTitleValue(e.target.value)}
+                  onBlur={handleSaveTitle}
+                  onKeyDown={handleTitleKeyDown}
+                  placeholder="请输入作品标题"
+                />
+              ) : (
+                <h1 
+                  className="work-title"
+                  onClick={() => setIsEditingTitle(true)}
+                  title="点击编辑标题"
+                >
+                  {work?.title || ''}
+                </h1>
               )}
+              <span className="word-count-inline">总字数: {work?.word_count || 0}</span>
+            </div>
+            <div className="work-tags">
               {work?.category && <span className="tag">{work.category}</span>}
               {work?.genre && <span className="tag">{work.genre}</span>}
-              <span className={`status-tag ${syncStatus.isOnline ? 'online' : 'offline'}`}>
-                {syncStatus.isOnline 
-                  ? (syncStatus.pendingCount > 0 
-                      ? `同步中 (${syncStatus.pendingCount})` 
-                      : '已同步')
-                  : '离线模式'}
-              </span>
             </div>
           </div>
         </div>
         <div className="header-center">
-          <div className="word-count">
-            <span>本章字数: {currentChapterWordCount}</span>
-            <span>总字数: {work?.word_count || 0}</span>
-            <Info size={14} />
-          </div>
         </div>
         <div className="header-right">
           <div className="header-actions">
+            {/* 同步状态 */}
+            <span className={`status-tag-header ${syncStatus.isOnline ? 'online' : 'offline'}`}>
+              {syncStatus.isOnline 
+                ? (syncStatus.pendingCount > 0 
+                    ? `同步中 (${syncStatus.pendingCount})` 
+                    : '已同步')
+                : '离线模式'}
+            </span>
             <ThemeSelector />
             <button 
               className="action-btn analyze-work-btn" 
@@ -1509,38 +1582,63 @@ export default function NovelEditorPage(){
             <button className="action-btn">回收站</button>
             <button className="action-btn">分享</button>
           </div>
-          <div className="coin-section">
-            <div className="coin-display">
-              <Coins size={16} />
-              <span>494+</span>
-            </div>
-            <button className="member-btn">开会员得蛙币</button>
+          {/* 侧边栏折叠按钮组 */}
+          <div className="sidebar-toggle-buttons">
+            <button
+              className={`sidebar-toggle-btn-header left-toggle-header ${leftSidebarCollapsed ? 'collapsed' : ''}`}
+              onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+              title={leftSidebarCollapsed ? '展开左侧边栏' : '折叠左侧边栏'}
+            >
+              {leftSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
+            <button
+              className={`sidebar-toggle-btn-header right-toggle-header ${rightSidebarCollapsed ? 'collapsed' : ''}`}
+              onClick={() => setRightSidebarCollapsed(!rightSidebarCollapsed)}
+              title={rightSidebarCollapsed ? '展开右侧边栏' : '折叠右侧边栏'}
+            >
+              {rightSidebarCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            </button>
           </div>
         </div>
         {/* 分析进度已移除，改为后台运行，不显示弹窗 */}
       </header>
 
-      <div className="novel-editor-body">
+      {/* 第二行工具栏 - 编辑器工具 */}
+      {selectedChapter !== null && (
+        <div className="editor-toolbar-row">
+          <ChapterEditorToolbar
+            editor={editor}
+            onManualSave={handleManualSave}
+            onEditChapter={handleEditCurrentChapter}
+            headingMenuOpen={headingMenuOpen}
+            setHeadingMenuOpen={setHeadingMenuOpen}
+          />
+        </div>
+      )}
+
+      <div className={`novel-editor-body ${leftSidebarCollapsed ? 'left-collapsed' : ''} ${rightSidebarCollapsed ? 'right-collapsed' : ''}`}>
         {/* 左侧边栏 */}
-        <SideNav
-          activeNav={activeNav}
-          onNavChange={setActiveNav}
-          selectedChapter={selectedChapter}
-          onChapterSelect={(chapterId) => {
-            setSelectedChapter(chapterId);
-            // 选择章节时，清除 activeNav，让编辑器显示
-            setActiveNav('work-info');
-          }}
-          onOpenChapterModal={handleOpenChapterModal}
-          onChapterDelete={handleDeleteChapter}
-          onChapterAnalyze={handleAnalyzeChapter}
-          drafts={drafts}
-          onDraftsChange={setDrafts}
-          volumes={volumes}
-          onVolumesChange={setVolumes}
-          workType={work?.work_type}
-          workId={workId}
-        />
+        <div className={`sidebar-wrapper left-sidebar-wrapper ${leftSidebarCollapsed ? 'collapsed' : ''}`}>
+          <SideNav
+            activeNav={activeNav}
+            onNavChange={setActiveNav}
+            selectedChapter={selectedChapter}
+            onChapterSelect={(chapterId) => {
+              setSelectedChapter(chapterId);
+              // 选择章节时，清除 activeNav，让编辑器显示
+              setActiveNav('work-info');
+            }}
+            onOpenChapterModal={handleOpenChapterModal}
+            onChapterDelete={handleDeleteChapter}
+            onChapterAnalyze={handleAnalyzeChapter}
+            drafts={drafts}
+            onDraftsChange={setDrafts}
+            volumes={volumes}
+            onVolumesChange={setVolumes}
+            workType={work?.work_type}
+            workId={workId}
+          />
+        </div>
 
         {/* 主编辑区 */}
         <div className="novel-editor-main">
@@ -1561,47 +1659,51 @@ export default function NovelEditorPage(){
           {/* 文本编辑器（当选择了章节时显示） */}
           {selectedChapter !== null && !['tags', 'outline', 'map', 'characters', 'settings', 'factions'].includes(activeNav) && (
             <div className="chapter-editor-container">
-              {/* 标题和工具栏合并在一起 */}
-              <div className="chapter-header-toolbar">
-                {/* 左侧工具栏 */}
-                <ChapterEditorToolbar
-                  editor={editor}
-                  onManualSave={handleManualSave}
-                  headingMenuOpen={headingMenuOpen}
-                  setHeadingMenuOpen={setHeadingMenuOpen}
-                />
-                
-                {/* 中间标题 */}
-                <div className="chapter-title-center">
-                  <h2 className="chapter-title-centered">{getCurrentChapterTitle()}</h2>
-                </div>
-                
-                {/* 右侧设置栏 */}
-                <div className="editor-settings">
-                  <button 
-                    className="chapter-settings-btn"
-                    onClick={handleEditCurrentChapter}
-                    title="章节设置"
-                  >
-                    <Settings size={18} />
-                  </button>
-                  {/* <div className="setting-item">
-                    <span>智能补全</span>
-                    <button
-                      className="toggle-btn"
-                      onClick={() => setSmartCompletion(!smartCompletion)}
-                      title={smartCompletion ? '关闭智能补全' : '开启智能补全'}
-                      data-active={smartCompletion}
-                      aria-label={smartCompletion ? '关闭智能补全' : '开启智能补全'}
-                      role="switch"
-                      aria-checked={smartCompletion}
-                    />
-                  </div> */}
-                </div>
-              </div>
               {/* 文本编辑区域 */}
               <div className="novel-editor-wrapper">
-                <EditorContent editor={editor} />
+                <div style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                  {/* 章节头部信息 */}
+                  {selectedChapter && chaptersData[selectedChapter] && (
+                    <div className="chapter-header-info">
+                      <div className="chapter-number">
+                        {chaptersData[selectedChapter].chapter_number !== undefined 
+                          ? `第${chaptersData[selectedChapter].chapter_number}章`
+                          : chaptersData[selectedChapter].volumeTitle || ''}
+                      </div>
+                      <div className="chapter-name">
+                        {isEditingChapterName ? (
+                          <input
+                            ref={chapterNameInputRef}
+                            type="text"
+                            className="chapter-name-input"
+                            value={chapterNameValue}
+                            onChange={(e) => setChapterNameValue(e.target.value)}
+                            onBlur={handleSaveChapterName}
+                            onKeyDown={handleChapterNameKeyDown}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                          />
+                        ) : (
+                          <span
+                            className="chapter-name-editable"
+                            onClick={handleStartEditChapterName}
+                            title="点击编辑章节名"
+                          >
+                            {chaptersData[selectedChapter].title || '未命名章节'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="chapter-stats">
+                        <span>{currentChapterWordCount.toLocaleString()} 字</span>
+                        <span>•</span>
+                        <span>预计阅读 {Math.ceil(currentChapterWordCount / 500)} 分钟</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 编辑器内容 */}
+                  <EditorContent editor={editor} />
+                </div>
                 {/* 章节加载弹窗 */}
                 {chapterLoading && (
                   <div className="chapter-loading-overlay">
@@ -1619,7 +1721,9 @@ export default function NovelEditorPage(){
         </div>
 
         {/* 右侧边栏 */}
-        <AIAssistant workId={workId} />
+        <div className={`sidebar-wrapper right-sidebar-wrapper ${rightSidebarCollapsed ? 'collapsed' : ''}`}>
+          <AIAssistant workId={workId} />
+        </div>
       </div>
 
       {/* 章节设置弹框 */}

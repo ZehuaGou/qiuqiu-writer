@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
-import { Undo2, Redo2, Save, Type, Bold, Underline, ChevronDown } from 'lucide-react';
+import { Undo2, Redo2, Save, Type, Bold, Underline, ChevronDown, Settings } from 'lucide-react';
 
 interface ChapterEditorToolbarProps {
   editor: Editor | null;
   onManualSave: () => void;
+  onEditChapter?: () => void;
   headingMenuOpen: boolean;
   setHeadingMenuOpen: (open: boolean) => void;
 }
@@ -12,6 +13,7 @@ interface ChapterEditorToolbarProps {
 export default function ChapterEditorToolbar({
   editor,
   onManualSave,
+  onEditChapter,
   headingMenuOpen,
   setHeadingMenuOpen,
 }: ChapterEditorToolbarProps) {
@@ -64,17 +66,6 @@ export default function ChapterEditorToolbar({
       </div>
       <div className="toolbar-divider" />
       <div className="toolbar-group">
-        <button
-          className="toolbar-btn manual-save-btn"
-          onClick={onManualSave}
-          title="手动保存当前章节内容"
-        >
-          <Save size={16} />
-          <span>保存</span>
-        </button>
-      </div>
-      <div className="toolbar-divider" />
-      <div className="toolbar-group">
         {/* 标题下拉菜单 */}
         <div className="toolbar-dropdown" ref={headingMenuRef}>
           <button
@@ -83,7 +74,7 @@ export default function ChapterEditorToolbar({
             title="标题样式"
           >
             <Type size={16} />
-            <span>标题</span>
+            <span>H1</span>
             <ChevronDown size={14} style={{ marginLeft: '4px' }} />
           </button>
           {headingMenuOpen && (
@@ -183,6 +174,25 @@ export default function ChapterEditorToolbar({
         >
           <Underline size={16} />
         </button>
+      </div>
+      <div className="toolbar-divider" />
+      <div className="toolbar-group">
+        <button
+          className="toolbar-btn"
+          onClick={onManualSave}
+          title="保存当前章节"
+        >
+          <Save size={16} />
+        </button>
+        {onEditChapter && (
+          <button
+            className="toolbar-btn"
+            onClick={onEditChapter}
+            title="章节设置"
+          >
+            <Settings size={16} />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -35,10 +35,6 @@ export default function ScriptEditorPage() {
             <div className="work-tags">
               <span className="status-tag">剧本已保存到云端</span>
               <span className="word-count-tag">
-                本章字数: 0
-                <Info size={12} />
-              </span>
-              <span className="word-count-tag">
                 总字数: 0
                 <Info size={12} />
               </span>
@@ -54,13 +50,6 @@ export default function ScriptEditorPage() {
             <button className="btn btn-secondary btn-sm">替换</button>
             <button className="btn btn-secondary btn-sm">回收站</button>
             <button className="btn btn-secondary btn-sm">分享</button>
-          </div>
-          <div className="coin-section">
-            <div className="coin-display">
-              <Coins size={16} />
-              <span>442+</span>
-            </div>
-            <button className="btn btn-primary btn-sm">开会员得蛙币</button>
           </div>
         </div>
       </header>

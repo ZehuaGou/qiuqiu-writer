@@ -321,31 +321,33 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                                 : chapter.title
                               }
                             </span>
-                            <div className="nav-chapter-actions">
-                              {workId && onChapterAnalyze && !isNaN(parseInt(chapter.id)) && (
-                                <button
-                                  className="nav-chapter-analyze-btn"
-                                  onClick={(e) => handleAnalyzeChapter(chapter, e)}
-                                  title="分析本章（生成大纲和细纲）"
-                                >
-                                  <Sparkles size={12} />
-                                </button>
-                              )}
-                              <button
-                                className="nav-chapter-edit-btn"
-                                onClick={(e) => handleEditChapter(chapter, volume.title, e)}
-                                title="编辑章节设置"
-                              >
-                                <Settings size={12} />
-                              </button>
-                              <button
-                                className="nav-chapter-delete-btn"
-                                onClick={(e) => handleDeleteChapter(chapter, e)}
-                                title="删除章节"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
+                                {selectedChapter === chapter.id && (
+                                  <div className="nav-chapter-actions">
+                                    {workId && onChapterAnalyze && !isNaN(parseInt(chapter.id)) && (
+                                      <button
+                                        className="nav-chapter-analyze-btn"
+                                        onClick={(e) => handleAnalyzeChapter(chapter, e)}
+                                        title="分析本章（生成大纲和细纲）"
+                                      >
+                                        <Sparkles size={12} />
+                                      </button>
+                                    )}
+                                    <button
+                                      className="nav-chapter-edit-btn"
+                                      onClick={(e) => handleEditChapter(chapter, volume.title, e)}
+                                      title="编辑章节设置"
+                                    >
+                                      <Settings size={12} />
+                                    </button>
+                                    <button
+                                      className="nav-chapter-delete-btn"
+                                      onClick={(e) => handleDeleteChapter(chapter, e)}
+                                      title="删除章节"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                )}
                           </div>
                         </div>
                       ))}
@@ -389,31 +391,33 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                                     : chapter.title
                                   }
                                 </span>
-                                <div className="nav-chapter-actions">
-                                  {workId && onChapterAnalyze && !isNaN(parseInt(chapter.id)) && (
+                                {selectedChapter === chapter.id && (
+                                  <div className="nav-chapter-actions">
+                                    {workId && onChapterAnalyze && !isNaN(parseInt(chapter.id)) && (
+                                      <button
+                                        className="nav-chapter-analyze-btn"
+                                        onClick={(e) => handleAnalyzeChapter(chapter, e)}
+                                        title="分析本章（生成大纲和细纲）"
+                                      >
+                                        <Sparkles size={12} />
+                                      </button>
+                                    )}
                                     <button
-                                      className="nav-chapter-analyze-btn"
-                                      onClick={(e) => handleAnalyzeChapter(chapter, e)}
-                                      title="分析本章（生成大纲和细纲）"
+                                      className="nav-chapter-edit-btn"
+                                      onClick={(e) => handleEditChapter(chapter, volume?.title || '未分卷', e)}
+                                      title="编辑章节设置"
                                     >
-                                      <Sparkles size={12} />
+                                      <Settings size={12} />
                                     </button>
-                                  )}
-                                  <button
-                                    className="nav-chapter-edit-btn"
-                                    onClick={(e) => handleEditChapter(chapter, volume?.title || '未分卷', e)}
-                                    title="编辑章节设置"
-                                  >
-                                    <Settings size={12} />
-                                  </button>
-                                  <button
-                                    className="nav-chapter-delete-btn"
-                                    onClick={(e) => handleDeleteChapter(chapter, e)}
-                                    title="删除章节"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
+                                    <button
+                                      className="nav-chapter-delete-btn"
+                                      onClick={(e) => handleDeleteChapter(chapter, e)}
+                                      title="删除章节"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -481,13 +485,15 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                   }}
                 >
                   <span>{draft.title}</span>
-                  <button
-                    className="nav-chapter-edit-btn"
-                    onClick={(e) => handleEditDraft(draft, e)}
-                    title="编辑草稿设置"
-                  >
-                    <Settings size={12} />
-                  </button>
+                  {selectedChapter === draft.id && (
+                    <button
+                      className="nav-chapter-edit-btn"
+                      onClick={(e) => handleEditDraft(draft, e)}
+                      title="编辑草稿设置"
+                    >
+                      <Settings size={12} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

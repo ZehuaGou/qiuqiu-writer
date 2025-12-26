@@ -691,12 +691,12 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
 
     // 检查登录状态和作品ID
     if (!isAuthenticated) {
-      setError('请先登录后再使用AI对话功能');
+      setError('请先登录后再使用球球AI功能');
       return;
     }
 
     if (!workId) {
-      setError('请先选择作品后再使用AI对话功能');
+      setError('请先选择作品后再使用球球AI功能');
       return;
     }
 
@@ -773,20 +773,17 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
   return (
     <aside className="ai-assistant">
       <div className="assistant-header">
-        <div className="assistant-title">
-          <MessageSquare size={20} />
-          <span>AI对话</span>
-        </div>
+
       </div>
 
       <div className="chat-content">
           <div className="chat-header">
             <div className="froggy-avatar">
-              <span className="froggy-icon">🐸</span>
+              <span className="froggy-icon">🌍</span>
             </div>
             <div className="froggy-greeting">
               <p className="greeting-text">
-                嗨!我是智能写作助手蛙蛙。今天想写什么故事?
+                嗨!我是球球。今天想写什么故事?
               </p>
               <p className="disclaimer">内容由AI生成,仅供参考</p>
             </div>
@@ -900,11 +897,11 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             </div>
             {!isAuthenticated ? (
               <div className="chat-login-prompt">
-                <p>请先登录后再使用AI对话功能</p>
+                <p>请先登录后再使用球球AI功能</p>
               </div>
             ) : !workId ? (
               <div className="chat-login-prompt">
-                <p>请先选择作品后再使用AI对话功能</p>
+                <p>请先选择作品后再使用球球AI功能</p>
               </div>
             ) : (
               <>
@@ -1004,29 +1001,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             )}
             {error && <div className="chat-error">{error}</div>}
           </div>
-
-          <div className="chat-prompt">
-            <p>写作遇到烦恼?试试问问蛙蛙!</p>
-          </div>
         </div>
-
-      <div className="assistant-footer">
-        <div className="footer-item">
-          <span>灵感思考版</span>
-        </div>
-        <div className="footer-item">
-          <span>蛙蛙默认工具</span>
-          <select className="tool-select">
-            <option>默认</option>
-          </select>
-        </div>
-        <div className="footer-item">
-          <span>16</span>
-          <button className="up-arrow">
-            <ChevronUp size={16} />
-          </button>
-        </div>
-      </div>
     </aside>
   );
 }

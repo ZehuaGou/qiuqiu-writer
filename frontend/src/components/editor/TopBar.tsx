@@ -35,7 +35,6 @@ export default function TopBar({ workTitle, workType, perspective, frequency }: 
           <span>已保存到云端</span>
         </div>
         <div className="word-count">
-          <span>本章字数:0</span>
           <span className="separator">总字数:0</span>
         </div>
       </div>
@@ -52,11 +51,6 @@ export default function TopBar({ workTitle, workType, perspective, frequency }: 
         <button className="action-button">替换</button>
         <button className="action-button">回收站</button>
         <button className="action-button">分享</button>
-        <div className="coin-display">
-          <Coins size={18} />
-          <span className="coin-amount">514+</span>
-          <span className="coin-hint">开会员得蛙币</span>
-        </div>
         <div className="user-menu">
           <button className="user-avatar" onClick={() => setShowMenu(!showMenu)}>
             <MoreVertical size={20} />

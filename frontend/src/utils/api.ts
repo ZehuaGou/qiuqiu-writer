@@ -1,5 +1,5 @@
 /**
- * API client for WawaWriter backend (MemOS)
+ * API client for 星球写作 backend (MemOS)
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';

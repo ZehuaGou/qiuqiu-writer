@@ -448,13 +448,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.nav-chapter-item-wrapper.active .nav-chapter-actions,
-.nav-chapter-item:hover .nav-chapter-actions {
-  opacity: 1;
 }
 
 .nav-chapter-analyze-btn,

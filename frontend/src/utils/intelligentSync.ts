@@ -63,9 +63,10 @@ export function useIntelligentSync(
     onContentChange,
   } = options;
 
-  const syncTimer = useRef<number | undefined>(undefined);
-  const pollTimer = useRef<number | undefined>(undefined);
-  const syncCheckTimer = useRef<number | undefined>(undefined);
+  // 关键修复：在浏览器环境中，setInterval 返回 number 类型
+  const syncTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const syncCheckTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   // 关键修复：使用 ref 存储最新的 documentId，确保轮询时使用最新值
   const documentIdRef = useRef(documentId);
   const lastSyncedContent = useRef<string>('');
@@ -185,15 +186,19 @@ export function useIntelligentSync(
 
   /**
    * 轮询检查更新
+   * 关键修复：使用 documentIdRef.current 而不是 documentId 参数，确保使用最新的 documentId
    */
   const pollForUpdates = useCallback(async () => {
+    // 关键修复：使用 documentIdRef.current 获取最新的 documentId
+    const currentDocumentId = documentIdRef.current;
+    
     console.log('🔄 [pollForUpdates] 开始执行轮询:', {
-      documentId,
+      documentId: currentDocumentId,
       syncInProgress: syncInProgress.current,
       timestamp: new Date().toISOString(),
     });
     
-    if (!documentId) {
+    if (!currentDocumentId) {
       console.log('⏸️ [pollForUpdates] documentId 为空，跳过');
       return;
     }
@@ -205,20 +210,20 @@ export function useIntelligentSync(
 
     try {
       // 关键修复：验证 documentId 格式，确保是当前章节的文档
-      if (!documentId || documentId.trim() === '') {
-        
+      if (!currentDocumentId || currentDocumentId.trim() === '') {
+        console.log('⏸️ [pollForUpdates] documentId 格式无效，跳过');
         return;
       }
       
       // 关键修复：从 documentId 中提取章节ID，用于验证
       let expectedChapterId: number | null = null;
-      if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-        const match = documentId.match(/work_\d+_chapter_(\d+)/);
+      if (currentDocumentId.startsWith('work_') && currentDocumentId.includes('_chapter_')) {
+        const match = currentDocumentId.match(/work_\d+_chapter_(\d+)/);
         if (match) {
           expectedChapterId = parseInt(match[1]);
         }
-      } else if (documentId.startsWith('chapter_')) {
-        expectedChapterId = parseInt(documentId.replace('chapter_', ''));
+      } else if (currentDocumentId.startsWith('chapter_')) {
+        expectedChapterId = parseInt(currentDocumentId.replace('chapter_', ''));
       }
       
       
@@ -226,13 +231,13 @@ export function useIntelligentSync(
       // getDocument 会先检查本地缓存，然后才从服务器获取，可能导致重复请求
       // fetchFromServer 直接从服务器获取，有请求去重机制
       console.log('🔄 [IntelligentSync-pollForUpdates] 开始从服务器获取文档:', {
-        documentId,
+        documentId: currentDocumentId,
         timestamp: new Date().toISOString(),
       });
-      const serverDoc = await documentCache.fetchFromServer(documentId);
+      const serverDoc = await documentCache.fetchFromServer(currentDocumentId);
       
       console.log('📥 [pollForUpdates] 获取到服务器文档:', {
-        documentId,
+        documentId: currentDocumentId,
         hasServerDoc: !!serverDoc,
         version: serverDoc?.version,
         contentLength: serverDoc?.content?.length || 0,
@@ -251,7 +256,7 @@ export function useIntelligentSync(
           console.error('❌ [IntelligentSync] 严重错误：服务器文档属于其他章节！', {
             serverChapterId,
             expectedChapterId,
-            documentId,
+            documentId: currentDocumentId,
           });
           return; // 不更新，避免覆盖错误的内容
         }
@@ -377,14 +382,24 @@ export function useIntelligentSync(
    * 停止同步
    */
   const stop = useCallback(() => {
+    console.log('🛑 [IntelligentSync] stop 被调用，清理所有定时器:', {
+      hasSyncTimer: !!syncTimer.current,
+      hasPollTimer: !!pollTimer.current,
+      hasSyncCheckTimer: !!syncCheckTimer.current,
+      documentId: documentIdRef.current,
+      timestamp: new Date().toISOString(),
+    });
     if (syncTimer.current) {
       clearTimeout(syncTimer.current);
+      syncTimer.current = undefined;
     }
     if (pollTimer.current) {
       clearInterval(pollTimer.current);
+      pollTimer.current = undefined;
     }
     if (syncCheckTimer.current) {
       clearTimeout(syncCheckTimer.current);
+      syncCheckTimer.current = undefined;
     }
   }, []);
 
@@ -472,14 +487,28 @@ export function useIntelligentSync(
       console.log('🔄 [IntelligentSync] 执行定期轮询:', {
         documentId: docId,
         timestamp: new Date().toISOString(),
+        pollTimerExists: !!pollTimer.current,
       });
-      pollForUpdatesRef.current().catch(error => {
-        console.error('[IntelligentSync] 轮询失败:', error);
-      });
+      
+      // 关键修复：确保轮询函数存在且定时器仍然有效
+      if (pollForUpdatesRef.current && pollTimer.current) {
+        pollForUpdatesRef.current().catch(error => {
+          console.error('[IntelligentSync] 轮询失败:', error);
+          // 关键修复：即使轮询失败，也不清理定时器，继续下一次轮询
+        });
+      } else {
+        console.warn('⚠️ [IntelligentSync] 轮询函数或定时器不存在，重新启动轮询');
+        // 如果定时器被意外清理，尝试重新启动（但这里不应该发生）
+      }
     }, pollInterval); // 使用正常的轮询间隔
 
     return () => {
-      console.log('🧹 [IntelligentSync] 清理轮询定时器');
+      console.log('🧹 [IntelligentSync] 清理轮询定时器:', {
+        documentId: documentIdRef.current,
+        hasPollTimer: !!pollTimer.current,
+        timestamp: new Date().toISOString(),
+        reason: 'useEffect cleanup',
+      });
       clearTimeout(firstPollDelay);
       if (pollTimer.current) {
         clearInterval(pollTimer.current);
@@ -487,6 +516,20 @@ export function useIntelligentSync(
       }
     };
   }, [enablePolling, pollInterval, documentId]); // 当 documentId 变化时重新启动轮询
+  
+  // 关键修复：添加调试日志，检查定时器状态（每5秒检查一次）
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      console.log('🔍 [IntelligentSync-调试] 定时器状态检查:', {
+        hasPollTimer: !!pollTimer.current,
+        documentId: documentIdRef.current,
+        pollInterval,
+        timestamp: new Date().toISOString(),
+      });
+    }, 5000); // 每5秒检查一次
+    
+    return () => clearInterval(checkInterval);
+  }, [pollInterval]);
 
   // 关键修复：禁用自动同步检查，避免与 useChapterAutoSave 重复同步
   // useChapterAutoSave 已经负责了自动保存，useIntelligentSync 只负责轮询更新

@@ -11,32 +11,36 @@
   z-index: 2000;
 }
 
-/* 顶部工具栏 */
+/* 顶部工具栏 - 优化版 */
 .novel-editor-header {
-  height: 80px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light, #e2e8f0);
   background: var(--bg-primary);
   flex-shrink: 0;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  gap: 24px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .exit-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 8px 12px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-secondary, #64748b);
   font-size: 14px;
   cursor: pointer;
   border-radius: 6px;
@@ -44,8 +48,8 @@
 }
 
 .exit-btn:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--text-primary, #0f172a);
 }
 
 .work-info {
@@ -55,18 +59,22 @@
 }
 
 .work-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary, #0f172a);
   margin: 0;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   transition: all 0.2s ease;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .work-title:hover {
-  background: #f3f4f6;
+  background: var(--bg-secondary, #f8fafc);
 }
 
 .work-title-input {
@@ -88,14 +96,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
+  color: var(--text-tertiary, #94a3b8);
 }
 
 .tag {
   padding: 4px 10px;
   border-radius: 4px;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 12px;
+  background: transparent;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -108,48 +118,97 @@
   font-weight: 500;
 }
 
+/* 顶部导航栏中的同步状态标签 */
+.status-tag-header {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+}
+
+.status-tag-header.online {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.status-tag-header.offline {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
 .header-center {
   display: flex;
   align-items: center;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
 }
 
 .word-count {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary, #64748b);
+}
+
+.word-count span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.word-count .stat-value {
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+/* 作品名后的字数统计 */
+.word-count-inline {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .action-btn {
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-secondary, #64748b);
   font-size: 14px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
 }
 
 .action-btn:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--text-primary, #0f172a);
 }
 
 .coin-section {
@@ -185,13 +244,176 @@
   background: #059669;
 }
 
+/* 第二行工具栏 - 编辑器工具 */
+.editor-toolbar-row {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light, #e2e8f0);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  min-height: 48px;
+}
+
 /* 编辑器主体 */
 .novel-editor-body {
   flex: 1;
   display: flex;
   overflow: hidden;
   min-height: 0; /* 允许 flex 子元素缩小 */
-  height: calc(100vh - 80px); /* 减去顶部工具栏高度 */
+  background: var(--bg-secondary, #f8fafc);
+  position: relative;
+}
+
+/* 侧边栏包装器 */
+.sidebar-wrapper {
+  position: relative;
+  transition: width 0.3s ease;
+  flex-shrink: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.left-sidebar-wrapper {
+  width: 280px;
+}
+
+.right-sidebar-wrapper {
+  width: 320px;
+}
+
+/* 折叠状态 */
+.left-sidebar-wrapper.collapsed {
+  width: 0;
+  overflow: visible;
+}
+
+.right-sidebar-wrapper.collapsed {
+  width: 0;
+  overflow: visible;
+}
+
+.left-sidebar-wrapper.collapsed .side-nav,
+.right-sidebar-wrapper.collapsed .ai-assistant {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  width: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+/* 侧边栏内容 */
+.sidebar-wrapper .side-nav {
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.2s ease;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-wrapper .ai-assistant {
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.2s ease;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 编辑区占满整个页面（当侧边栏折叠时） */
+.novel-editor-body:has(.left-sidebar-wrapper.collapsed):has(.right-sidebar-wrapper.collapsed) .novel-editor-main {
+  width: 100%;
+}
+
+/* 兼容性：使用类名控制 */
+.novel-editor-body.full-width .novel-editor-main {
+  width: 100%;
+}
+
+/* 侧边栏折叠按钮组 */
+.sidebar-toggle-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-light, #e2e8f0);
+}
+
+/* 顶部导航栏中的折叠按钮 */
+.sidebar-toggle-btn-header {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary, #f8fafc);
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary, #64748b);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn-header:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+  color: var(--text-primary, #0f172a);
+  border-color: var(--border-light, #e2e8f0);
+  transform: translateY(-1px);
+}
+
+.sidebar-toggle-btn-header.collapsed {
+  background: var(--primary-color, #2563eb);
+  color: white;
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.sidebar-toggle-btn-header.collapsed:hover {
+  background: var(--primary-hover, #1d4ed8);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+/* 折叠后的悬浮按钮 */
+.novel-editor-body.left-collapsed .left-toggle-header {
+  position: fixed;
+  left: 16px;
+  top: 108px; /* 60px 顶部导航栏 + 48px 第二行工具栏 */
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.novel-editor-body.right-collapsed .right-toggle-header {
+  position: fixed;
+  right: 16px;
+  top: 108px; /* 60px 顶部导航栏 + 48px 第二行工具栏 */
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* 如果两个都折叠，调整位置 */
+.novel-editor-body.left-collapsed.right-collapsed .left-toggle-header {
+  left: 16px;
+}
+
+.novel-editor-body.left-collapsed.right-collapsed .right-toggle-header {
+  right: 16px;
+}
+
+/* 如果没有第二行工具栏，调整位置 */
+.novel-editor-body:not(:has(.editor-toolbar-row)).left-collapsed .left-toggle-header,
+.novel-editor-body:not(:has(.editor-toolbar-row)).right-collapsed .right-toggle-header {
+  top: 76px; /* 60px 顶部导航栏 + 16px 间距 */
 }
 
 .novel-editor-main {
@@ -222,45 +444,61 @@
   color: #1f2937;
 }
 
-/* 文本编辑工具栏 */
+/* 文本编辑工具栏 - 优化版 */
 .editor-toolbar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 12px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fafafa;
+  border-bottom: 1px solid var(--border-light, #e2e8f0);
+  background: var(--bg-primary);
 }
 
-.toolbar-btn {
+.toolbar-group {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
-  border: none;
-  background: white;
-  color: #6b7280;
+  padding: 4px;
+  background: var(--bg-secondary, #f8fafc);
   border-radius: 6px;
+}
+
+.toolbar-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text-secondary, #64748b);
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 13px;
 }
 
 .toolbar-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--bg-primary);
+  color: var(--text-primary, #0f172a);
+}
+
+.toolbar-btn.active {
+  background: var(--primary-color, #2563eb);
+  color: white;
 }
 
 .toolbar-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .toolbar-divider {
   width: 1px;
   height: 20px;
-  background: #e5e7eb;
-  margin: 0 4px;
+  background: var(--border-light, #e2e8f0);
+  margin: 0 8px;
 }
 
 /* 工具栏下拉菜单 */
@@ -509,55 +747,39 @@
   position: relative;
 }
 
-/* 标题和工具栏合并容器 */
-.chapter-header-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-  gap: 16px;
-}
-
-/* 左侧工具栏 */
-.chapter-header-toolbar .novel-editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-  flex: 0 0 auto;
-}
-
-/* 中间标题区域 */
-.chapter-title-center {
+/* 第二行工具栏中的编辑器工具栏样式 */
+.editor-toolbar-row .novel-editor-toolbar {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
-  min-width: 0;
-}
-
-.chapter-title-centered {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin: 0;
-  text-align: center;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 右侧设置栏 */
-.chapter-header-toolbar .editor-settings {
-  display: flex;
-  align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  flex: 0 0 auto;
+}
+
+/* 顶部导航栏中的保存和设置按钮 */
+.header-right .primary-btn {
+  padding: 8px 16px;
+  background: var(--primary-color, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-right .primary-btn:hover {
+  background: var(--primary-hover, #1d4ed8);
+}
+
+.chapter-settings-btn-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chapter-header-toolbar .setting-item {
@@ -713,48 +935,112 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 32px;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-  max-width: 100%;
-  min-height: 0;
+  padding: 40px 24px;
   display: flex;
-  flex-direction: column;
-  background: var(--bg-secondary);
+  justify-content: center;
+  min-height: 0;
+  background: var(--bg-secondary, #f8fafc);
   box-sizing: border-box;
-  /* 确保滚动条显示 */
   -webkit-overflow-scrolling: touch;
 }
 
 .chapter-editor-container .novel-editor-wrapper > div {
   width: 100%;
-  max-width: 100%;
-  min-height: 100%;
+  max-width: 800px;
   display: flex;
   flex-direction: column;
   background: transparent;
-  flex: 1;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+  margin: 0 auto;
+}
+
+/* 章节头部信息 */
+.chapter-header-info {
+  text-align: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light, #e2e8f0);
+}
+
+.chapter-number {
+  font-size: 13px;
+  color: var(--text-tertiary, #94a3b8);
+  margin-bottom: 4px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.chapter-name {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  margin-bottom: 6px;
+}
+
+.chapter-name-editable {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: inline-block;
+}
+
+.chapter-name-editable:hover {
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--primary-color, #2563eb);
+}
+
+.chapter-name-input {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  border: 2px solid var(--primary-color, #2563eb);
+  border-radius: 6px;
+  padding: 4px 12px;
+  background: var(--bg-primary);
+  width: 100%;
+  max-width: 600px;
+  outline: none;
+  font-family: inherit;
+}
+
+.chapter-name-input:focus {
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.chapter-stats {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+}
+
+.chapter-editor-container .novel-editor-wrapper > div > div {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .chapter-editor-container .novel-editor-wrapper .ProseMirror {
   width: 100%;
   max-width: 100%;
-  min-height: 100%;
   outline: none;
   background: var(--bg-primary);
-  border-radius: 0;
-  padding: 48px 60px;
-  box-shadow: none;
+  border-radius: 12px;
+  padding: 12px 80px 60px 80px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   color: var(--text-primary);
   word-wrap: break-word;
   word-break: break-word;
   overflow-wrap: break-word;
-  /* 允许内容超出，由父容器处理滚动 */
-  height: auto;
-  flex-shrink: 0;
+  min-height: auto;
   box-sizing: border-box;
   overflow-x: hidden;
 }
@@ -773,6 +1059,14 @@
   overflow-wrap: break-word;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* 优化段落样式 - 阅读模式 */
+.chapter-editor-container .novel-editor-wrapper .ProseMirror p {
+  margin-bottom: 1.5em;
+  text-indent: 2em;
+  font-size: 16px;
+  line-height: 2;
 }
 
 .chapter-title-centered {
@@ -865,12 +1159,41 @@
   }
 }
 
+/* 美化滚动条 */
+.novel-editor-wrapper::-webkit-scrollbar,
+.chapter-editor-container .novel-editor-wrapper .ProseMirror::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.novel-editor-wrapper::-webkit-scrollbar-track,
+.chapter-editor-container .novel-editor-wrapper .ProseMirror::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.novel-editor-wrapper::-webkit-scrollbar-thumb,
+.chapter-editor-container .novel-editor-wrapper .ProseMirror::-webkit-scrollbar-thumb {
+  background: var(--border-light, #e2e8f0);
+  border-radius: 4px;
+}
+
+.novel-editor-wrapper::-webkit-scrollbar-thumb:hover,
+.chapter-editor-container .novel-editor-wrapper .ProseMirror::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary, #94a3b8);
+}
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
+  .chapter-editor-container .novel-editor-wrapper .ProseMirror {
+    padding: 48px 60px;
+  }
+}
+
+@media (max-width: 768px) {
   .novel-editor-header {
     flex-wrap: wrap;
     height: auto;
-    min-height: 80px;
+    min-height: 60px;
     padding: 12px 16px;
   }
 
@@ -880,6 +1203,10 @@
     width: 100%;
     justify-content: flex-start;
     margin-bottom: 8px;
+  }
+
+  .chapter-editor-container .novel-editor-wrapper .ProseMirror {
+    padding: 32px 24px;
   }
 }
 
