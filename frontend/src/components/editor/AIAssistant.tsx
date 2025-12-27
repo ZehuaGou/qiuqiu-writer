@@ -815,7 +815,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
                 >
                   {msg.role === 'assistant' && (
                     <div className="chat-message-avatar">
-                      <span className="froggy-icon-small">🐸</span>
+                      <span className="froggy-icon-small">🌍</span>
                     </div>
                   )}
                   <div className="chat-message-content">
@@ -857,7 +857,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             {isSending && (
               <div className="chat-message chat-message-assistant">
                 <div className="chat-message-avatar">
-                  <span className="froggy-icon-small">🐸</span>
+                  <span className="froggy-icon-small">🌍</span>
                 </div>
                 <div className="chat-message-content">
                   <div className="chat-message-bubble assistant-bubble chat-message-loading">

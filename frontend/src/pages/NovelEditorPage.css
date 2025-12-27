@@ -176,6 +176,41 @@
   white-space: nowrap;
 }
 
+/* 总字数 tooltip */
+.word-count-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.word-count-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: var(--bg-secondary, #1f2937);
+  color: var(--text-primary, #ffffff);
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.word-count-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-bottom-color: var(--bg-secondary, #1f2937);
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -935,7 +970,7 @@
   position: relative;
   flex: 1;
   overflow: visible;
-  padding: 40px 24px;
+  padding: 60px 24px;
   display: flex;
   justify-content: center;
   min-height: min-content;
@@ -1063,7 +1098,7 @@
   box-sizing: border-box;
   overflow: visible;
   /* 确保编辑器内容区域可以自然增长 */
-  min-height: 400px;
+  min-height: 600px;
 }
 
 /* 确保章节编辑器内所有文本元素颜色一致 */

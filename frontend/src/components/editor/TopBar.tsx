@@ -1,4 +1,4 @@
-import { ArrowLeft, Cloud, Coins, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Cloud, Coins, Info, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import './TopBar.css';
 
@@ -35,6 +35,7 @@ export default function TopBar({ workTitle, workType, perspective, frequency }: 
           <span>已保存到云端</span>
         </div>
         <div className="word-count">
+          <Info size={12} />
           <span className="separator">总字数:0</span>
         </div>
       </div>

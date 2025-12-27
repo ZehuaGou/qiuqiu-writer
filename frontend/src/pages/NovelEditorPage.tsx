@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
@@ -52,6 +52,7 @@ export default function NovelEditorPage(){
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [showWordCountTooltip, setShowWordCountTooltip] = useState(false);
   // 章节名编辑状态
   const chapterNameInputRef = useRef<HTMLDivElement>(null);
   // 分析本书状态
@@ -1526,7 +1527,18 @@ export default function NovelEditorPage(){
                   {work?.title || ''}
                 </h1>
               )}
-              <span className="word-count-inline">总字数: {work?.word_count || 0}</span>
+              <span 
+                className="word-count-tooltip-wrapper"
+                onMouseEnter={() => setShowWordCountTooltip(true)}
+                onMouseLeave={() => setShowWordCountTooltip(false)}
+              >
+                <Info size={14} />
+                {showWordCountTooltip && (
+                  <div className="word-count-tooltip">
+                    总字数: {work?.word_count || 0}
+                  </div>
+                )}
+              </span>
             </div>
             <div className="work-tags">
               {work?.category && <span className="tag">{work.category}</span>}
