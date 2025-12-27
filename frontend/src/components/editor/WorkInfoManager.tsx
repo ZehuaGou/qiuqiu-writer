@@ -506,6 +506,122 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
   );
 }
 
+// ============ 自定义下拉选择组件 ============
+
+interface CustomSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  placeholder?: string;
+}
+
+function CustomSelect({ value, onChange, options, placeholder = '请选择...' }: CustomSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const selectRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 计算下拉菜单位置
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, [isOpen]);
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        selectRef.current &&
+        !selectRef.current.contains(event.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isOpen]);
+
+  // 滚动时更新位置
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const updatePosition = () => {
+        const rect = triggerRef.current!.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width,
+        });
+      };
+
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+  }, [isOpen]);
+
+  const selectedOption = options.find(opt => opt.value === value);
+  const displayText = selectedOption ? selectedOption.label : placeholder;
+
+  return (
+    <>
+      <div className="custom-select-wrapper" ref={selectRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          className={`custom-select-trigger ${isOpen ? 'open' : ''} ${!value ? 'placeholder' : ''}`}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span className="custom-select-value">{displayText}</span>
+          <ChevronDown size={16} className={`custom-select-arrow ${isOpen ? 'open' : ''}`} />
+        </button>
+      </div>
+      {isOpen && (
+        <div
+          ref={dropdownRef}
+          className="custom-select-dropdown"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+          }}
+        >
+          {options.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              className={`custom-select-option ${value === option.value ? 'selected' : ''}`}
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+            >
+              <span className="custom-select-option-label">{option.label}</span>
+              {value === option.value && <Check size={16} className="custom-select-check" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ============ 数据依赖选择器组件 ============
 
 interface DataDependenciesSelectorProps {
@@ -2538,16 +2654,12 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
 
       case 'select':
         return (
-          <select
-            className="comp-select"
+          <CustomSelect
             value={comp.value || ''}
-            onChange={(e) => updateValue(e.target.value)}
-          >
-            <option value="">请选择...</option>
-            {comp.config.options?.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            onChange={updateValue}
+            options={comp.config.options || []}
+            placeholder="请选择..."
+          />
         );
 
       case 'multiselect':
