@@ -50,7 +50,6 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
   const [charCount, setCharCount] = useState(0);
   const [messages, setMessages] = useState<MessageWithTime[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -493,7 +492,6 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
   const handleClearMessages = () => {
     if (window.confirm('确定要清空所有对话记录吗？')) {
       setMessages([]);
-      setError(null);
     }
   };
 
@@ -695,16 +693,14 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
 
     // 检查登录状态和作品ID
     if (!isAuthenticated) {
-      setError('请先登录后再使用球球AI功能');
+      console.warn('[AIAssistant] 未登录，无法使用聊天功能');
       return;
     }
 
     if (!workId) {
-      setError('请先选择作品后再使用球球AI功能');
+      console.warn('[AIAssistant] 未选择作品，无法使用聊天功能');
       return;
     }
-
-    setError(null);
     setShowMentionMenu(false);
     
     // 解析提及
@@ -754,7 +750,8 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             });
           } else if (event.type === 'error') {
             const msg = typeof event.data === 'string' ? event.data : '对话出错';
-            setError(msg);
+            // 只记录到控制台，不显示给用户
+            console.error('[AIAssistant] 对话错误:', msg);
           } else if (event.type === 'end') {
             setIsSending(false);
           }
@@ -765,9 +762,8 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
       // 如果服务端没有显式发送 end 事件，也在结束时确保状态复位
       setIsSending(false);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '发送失败，请稍后重试';
-      setError(msg);
-      console.error('对话发送失败:', e);
+      // 只记录到控制台，不显示给用户
+      console.error('[AIAssistant] 对话发送失败:', e);
     } finally {
       // 避免重复调用，但确保异常情况下也能复位
       setIsSending(false);
@@ -1003,7 +999,6 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
                 </div>
               </>
             )}
-            {error && <div className="chat-error">{error}</div>}
           </div>
         </div>
     </aside>
