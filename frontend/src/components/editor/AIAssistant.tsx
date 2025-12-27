@@ -410,9 +410,13 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
       }
     }
     
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      handleSend();
+    // Shift+Enter 或 Ctrl+Enter / Cmd+Enter 发送消息
+    if (e.key === 'Enter') {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        handleSend();
+      }
+      // 普通 Enter 键保持默认行为（换行）
     }
   };
 
@@ -909,7 +913,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
                   <textarea
                     ref={textareaRef}
                     className="chat-input"
-                    placeholder="输入你的问题... 使用 @ 引用章节或角色 (Ctrl+Enter 发送)"
+                    placeholder="输入你的问题... 使用 @ 引用章节或角色 (Shift+Enter 或 Ctrl+Enter 发送)"
                     value={message}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
