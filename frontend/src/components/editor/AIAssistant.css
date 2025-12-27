@@ -740,14 +740,13 @@
 }
 
 .tool-select {
-  padding: 2px 6px;
-  border: 1px solid var(--border-light);
+  /* 继承全局样式，保留小尺寸 */
+  padding: 2px 24px 2px 6px;
   border-radius: var(--radius-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
   font-size: 12px;
-  cursor: pointer;
-  outline: none;
+  min-height: 24px;
+  background-size: 8px 8px;
+  background-position: right 6px center;
 }
 
 .up-arrow {

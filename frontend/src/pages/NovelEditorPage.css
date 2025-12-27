@@ -728,13 +728,12 @@
 }
 
 .font-select {
-  padding: 4px 8px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  border-radius: 6px;
+  /* 继承全局样式 */
+  padding: 4px 28px 4px 8px;
   font-size: 13px;
-  color: #1f2937;
-  cursor: pointer;
+  min-height: 28px;
+  background-size: 10px 10px;
+  background-position: right 8px center;
 }
 
 /* 文本编辑区域 */

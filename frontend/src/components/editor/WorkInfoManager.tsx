@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import CharacterRelations from './CharacterRelations';
 import type { CharacterRelationsData } from './CharacterRelations';
+import CustomSelect from '../CustomSelect';
+import type { SelectOption } from '../CustomSelect';
 import { templatesApi } from '../../utils/templatesApi';
 import { worksApi } from '../../utils/worksApi';
 import './WorkInfoManager.css';
@@ -2535,17 +2537,20 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         );
 
       case 'select':
+        const selectOptions: SelectOption[] = comp.config.options?.map(opt => ({
+          value: opt.value,
+          label: opt.label,
+          disabled: opt.disabled,
+        })) || [];
         return (
-          <select
-            className="comp-select"
+          <CustomSelect
             value={comp.value || ''}
-            onChange={(e) => updateValue(e.target.value)}
-          >
-            <option value="">请选择...</option>
-            {comp.config.options?.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            onChange={updateValue}
+            options={selectOptions}
+            placeholder="请选择..."
+            className="comp-select"
+            fullWidth
+          />
         );
 
       case 'multiselect':

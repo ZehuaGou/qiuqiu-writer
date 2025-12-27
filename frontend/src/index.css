@@ -66,6 +66,129 @@ button span,
   height: 16px !important;
 }
 
+/* ============ 统一的下拉选择器样式 ============ */
+select {
+  /* 基础样式 */
+  padding: 8px 32px 8px 12px;
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 8px;
+  color: var(--text-primary, #1f2937);
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+/* 悬停状态 */
+select:hover {
+  border-color: var(--accent-primary, #34d399);
+  background-color: var(--bg-secondary, #f0fdf4);
+}
+
+/* 聚焦状态 */
+select:focus {
+  outline: none;
+  border-color: var(--accent-primary, #34d399);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.1);
+  background-color: var(--bg-primary, #ffffff);
+}
+
+/* 禁用状态 */
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--bg-secondary, #f0fdf4);
+}
+
+/* Option 样式 - 基础样式（浏览器支持有限） */
+select option {
+  padding: 10px 12px;
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #1f2937);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 36px;
+}
+
+/* Option 悬停状态（部分浏览器支持） */
+select option:hover {
+  background: var(--accent-light, rgba(52, 211, 153, 0.1));
+  color: var(--accent-primary, #34d399);
+}
+
+/* Option 选中状态 */
+select option:checked {
+  background: var(--accent-primary, #34d399);
+  color: white;
+  font-weight: 500;
+}
+
+/* Option 焦点状态 */
+select option:focus {
+  background: var(--accent-light, rgba(52, 211, 153, 0.15));
+}
+
+/* 特定类的样式覆盖 */
+.comp-select,
+.deps-select,
+.font-select,
+.sort-select,
+.field-type-select,
+.character-gender-select,
+.character-type-select,
+.tool-select {
+  /* 继承基础样式，可以在这里添加特定覆盖 */
+}
+
+/* 小尺寸选择器 */
+select.small {
+  padding: 6px 28px 6px 10px;
+  font-size: 13px;
+  min-height: 32px;
+  background-size: 10px 10px;
+  background-position: right 10px center;
+}
+
+/* 大尺寸选择器 */
+select.large {
+  padding: 12px 40px 12px 16px;
+  font-size: 16px;
+  min-height: 44px;
+  background-size: 14px 14px;
+  background-position: right 16px center;
+}
+
+/* 全宽选择器 */
+select.full-width {
+  width: 100%;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  select {
+    padding: 10px 36px 10px 14px;
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+    min-height: 44px; /* 更大的触摸目标 */
+  }
+  
+  select option {
+    padding: 12px 14px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
 :root {
   /* 主色调 - 浅绿色系 */
   --bg-primary: #ffffff;
