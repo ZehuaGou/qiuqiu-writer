@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { ArrowLeft, Trash2, Sparkles, Loader2, ChevronLeft, ChevronRight, Info, Menu, X, MessageSquare } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
@@ -18,6 +18,7 @@ import ThemeSelector from '../components/ThemeSelector';
 import ChapterEditorToolbar from '../components/editor/ChapterEditorToolbar';
 import { useWorkInfoCache } from '../hooks/useWorkInfoCache';
 import { useChapterAutoSave } from '../hooks/useChapterAutoSave';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import { worksApi, type Work } from '../utils/worksApi';
 import { chaptersApi, type Chapter } from '../utils/chaptersApi';
 import { syncManager } from '../utils/syncManager';
@@ -83,6 +84,15 @@ export default function NovelEditorPage(){
   // 侧边栏折叠状态
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
+  
+  // 移动端检测
+  const isMobile = useIsMobile();
+  
+  // 移动端菜单抽屉状态
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // 移动端对话抽屉状态
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
   // 关键修复：为每个章节维护独立的编辑器实例
   // 通过 editorKey 来强制重新创建编辑器实例
@@ -1759,7 +1769,7 @@ export default function NovelEditorPage(){
             <span>退出</span>
           </button>
           <div className="work-info">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div className="work-info-row">
               {isEditingTitle ? (
                 <input
                   ref={titleInputRef}
@@ -1802,74 +1812,96 @@ export default function NovelEditorPage(){
         <div className="header-center">
         </div>
         <div className="header-right">
-          <div className="header-actions">
-            {/* 同步状态 */}
-            <span className={`status-tag-header ${syncStatus.isOnline ? 'online' : 'offline'}`}>
-              {syncStatus.isOnline 
-                ? (syncStatus.pendingCount > 0 
-                    ? `同步中 (${syncStatus.pendingCount})` 
-                    : '已同步')
-                : '离线模式'}
-            </span>
-            <ThemeSelector />
-            <button 
-              className="action-btn analyze-work-btn" 
-              onClick={handleAnalyzeWork}
-              disabled={isAnalyzing || !workId}
-              title="分析本书的所有章节"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 size={16} className="spinner" />
-                  <span>分析中...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  <span>分析本书</span>
-                </>
-              )}
-            </button>
-            <button 
-              className="action-btn delete-work-btn" 
-              onClick={handleDeleteWork}
-              title="删除作品"
-            >
-              <Trash2 size={16} />
-              <span>删除</span>
-            </button>
-            <button 
-              className="action-btn" 
-              onClick={handleReplace}
-              title="查找和替换文字"
-            >
-              <span>替换</span>
-            </button>
-          </div>
-          {/* 侧边栏折叠按钮组 */}
-          <div className="sidebar-toggle-buttons">
-            <button
-              className={`sidebar-toggle-btn-header left-toggle-header ${leftSidebarCollapsed ? 'collapsed' : ''}`}
-              onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
-              title={leftSidebarCollapsed ? '展开左侧边栏' : '折叠左侧边栏'}
-            >
-              {leftSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </button>
-            <button
-              className={`sidebar-toggle-btn-header right-toggle-header ${rightSidebarCollapsed ? 'collapsed' : ''}`}
-              onClick={() => setRightSidebarCollapsed(!rightSidebarCollapsed)}
-              title={rightSidebarCollapsed ? '展开右侧边栏' : '折叠右侧边栏'}
-            >
-              {rightSidebarCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-            </button>
-          </div>
+          {isMobile ? (
+            <>
+              {/* 移动端：菜单按钮和对话按钮 */}
+              <button
+                className="mobile-menu-btn"
+                onClick={() => setMobileMenuOpen(true)}
+                title="菜单"
+              >
+                <Menu size={20} />
+              </button>
+              <button
+                className="mobile-chat-btn"
+                onClick={() => setMobileChatOpen(true)}
+                title="对话"
+              >
+                <MessageSquare size={20} />
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="header-actions">
+                {/* 同步状态 */}
+                <span className={`status-tag-header ${syncStatus.isOnline ? 'online' : 'offline'}`}>
+                  {syncStatus.isOnline 
+                    ? (syncStatus.pendingCount > 0 
+                        ? `同步中 (${syncStatus.pendingCount})` 
+                        : '已同步')
+                    : '离线模式'}
+                </span>
+                <ThemeSelector />
+                <button 
+                  className="action-btn analyze-work-btn" 
+                  onClick={handleAnalyzeWork}
+                  disabled={isAnalyzing || !workId}
+                  title="分析本书的所有章节"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 size={16} className="spinner" />
+                      <span>分析中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      <span>分析本书</span>
+                    </>
+                  )}
+                </button>
+                <button 
+                  className="action-btn delete-work-btn" 
+                  onClick={handleDeleteWork}
+                  title="删除作品"
+                >
+                  <Trash2 size={16} />
+                  <span>删除</span>
+                </button>
+                <button 
+                  className="action-btn" 
+                  onClick={handleReplace}
+                  title="查找和替换文字"
+                >
+                  <span>替换</span>
+                </button>
+              </div>
+              {/* 侧边栏折叠按钮组 */}
+              <div className="sidebar-toggle-buttons">
+                <button
+                  className={`sidebar-toggle-btn-header left-toggle-header ${leftSidebarCollapsed ? 'collapsed' : ''}`}
+                  onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+                  title={leftSidebarCollapsed ? '展开左侧边栏' : '折叠左侧边栏'}
+                >
+                  {leftSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+                </button>
+                <button
+                  className={`sidebar-toggle-btn-header right-toggle-header ${rightSidebarCollapsed ? 'collapsed' : ''}`}
+                  onClick={() => setRightSidebarCollapsed(!rightSidebarCollapsed)}
+                  title={rightSidebarCollapsed ? '展开右侧边栏' : '折叠右侧边栏'}
+                >
+                  {rightSidebarCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                </button>
+              </div>
+            </>
+          )}
         </div>
         {/* 分析进度已移除，改为后台运行，不显示弹窗 */}
       </header>
 
       {/* 第二行工具栏 - 编辑器工具 */}
       {selectedChapter !== null && (
-        <div className="editor-toolbar-row">
+        <div className={`editor-toolbar-row ${isMobile ? 'mobile' : ''}`}>
           <ChapterEditorToolbar
             editor={editor}
             onManualSave={handleManualSave}
@@ -1880,29 +1912,119 @@ export default function NovelEditorPage(){
         </div>
       )}
 
-      <div className={`novel-editor-body ${leftSidebarCollapsed ? 'left-collapsed' : ''} ${rightSidebarCollapsed ? 'right-collapsed' : ''}`}>
-        {/* 左侧边栏 */}
-        <div className={`sidebar-wrapper left-sidebar-wrapper ${leftSidebarCollapsed ? 'collapsed' : ''}`}>
-          <SideNav
-            activeNav={activeNav}
-            onNavChange={setActiveNav}
-            selectedChapter={selectedChapter}
-            onChapterSelect={(chapterId) => {
-              setSelectedChapter(chapterId);
-              // 选择章节时，清除 activeNav，让编辑器显示
-              setActiveNav('work-info');
-            }}
-            onOpenChapterModal={handleOpenChapterModal}
-            onChapterDelete={handleDeleteChapter}
-            onChapterAnalyze={handleAnalyzeChapter}
-            drafts={drafts}
-            onDraftsChange={setDrafts}
-            volumes={volumes}
-            onVolumesChange={setVolumes}
-            workType={work?.work_type}
-            workId={workId}
-          />
-        </div>
+      <div className={`novel-editor-body ${leftSidebarCollapsed ? 'left-collapsed' : ''} ${rightSidebarCollapsed ? 'right-collapsed' : ''} ${isMobile ? 'mobile' : ''}`}>
+        {/* 左侧边栏 - 桌面端 */}
+        {!isMobile && (
+          <div className={`sidebar-wrapper left-sidebar-wrapper ${leftSidebarCollapsed ? 'collapsed' : ''}`}>
+            <SideNav
+              activeNav={activeNav}
+              onNavChange={setActiveNav}
+              selectedChapter={selectedChapter}
+              onChapterSelect={(chapterId) => {
+                setSelectedChapter(chapterId);
+                // 选择章节时，清除 activeNav，让编辑器显示
+                setActiveNav('work-info');
+              }}
+              onOpenChapterModal={handleOpenChapterModal}
+              onChapterDelete={handleDeleteChapter}
+              onChapterAnalyze={handleAnalyzeChapter}
+              drafts={drafts}
+              onDraftsChange={setDrafts}
+              volumes={volumes}
+              onVolumesChange={setVolumes}
+              workType={work?.work_type}
+              workId={workId}
+            />
+          </div>
+        )}
+        
+        {/* 移动端菜单抽屉 */}
+        {isMobile && mobileMenuOpen && (
+          <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+            <div className="mobile-menu-drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="mobile-menu-header">
+                <h2>菜单</h2>
+                <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="mobile-menu-content">
+                <SideNav
+                  activeNav={activeNav}
+                  onNavChange={(nav) => {
+                    setActiveNav(nav);
+                    setMobileMenuOpen(false);
+                  }}
+                  selectedChapter={selectedChapter}
+                  onChapterSelect={(chapterId) => {
+                    setSelectedChapter(chapterId);
+                    setActiveNav('work-info');
+                    setMobileMenuOpen(false);
+                  }}
+                  onOpenChapterModal={handleOpenChapterModal}
+                  onChapterDelete={handleDeleteChapter}
+                  onChapterAnalyze={handleAnalyzeChapter}
+                  drafts={drafts}
+                  onDraftsChange={setDrafts}
+                  volumes={volumes}
+                  onVolumesChange={setVolumes}
+                  workType={work?.work_type}
+                  workId={workId}
+                />
+                <div className="mobile-menu-actions">
+                  <div className="mobile-menu-section">
+                    <h3>操作</h3>
+                    <button 
+                      className="mobile-menu-item" 
+                      onClick={() => {
+                        handleAnalyzeWork();
+                        setMobileMenuOpen(false);
+                      }}
+                      disabled={isAnalyzing || !workId}
+                    >
+                      <Sparkles size={20} />
+                      <span>分析本书</span>
+                    </button>
+                    <button 
+                      className="mobile-menu-item" 
+                      onClick={() => {
+                        handleReplace();
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <span>查找替换</span>
+                    </button>
+                    <button 
+                      className="mobile-menu-item delete" 
+                      onClick={() => {
+                        handleDeleteWork();
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <Trash2 size={20} />
+                      <span>删除作品</span>
+                    </button>
+                  </div>
+                  <div className="mobile-menu-section">
+                    <h3>设置</h3>
+                    <div className="mobile-menu-item">
+                      <ThemeSelector />
+                    </div>
+                    <div className="mobile-menu-item">
+                      <span className={`status-tag ${syncStatus.isOnline ? 'online' : 'offline'}`}>
+                        {syncStatus.isOnline 
+                          ? (syncStatus.pendingCount > 0 
+                              ? `同步中 (${syncStatus.pendingCount})` 
+                              : '已同步')
+                          : '离线模式'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 主编辑区 */}
         <div className="novel-editor-main">
@@ -1978,10 +2100,29 @@ export default function NovelEditorPage(){
           )}
         </div>
 
-        {/* 右侧边栏 */}
-        <div className={`sidebar-wrapper right-sidebar-wrapper ${rightSidebarCollapsed ? 'collapsed' : ''}`}>
-          <AIAssistant workId={workId} />
-        </div>
+        {/* 右侧边栏 - 桌面端 */}
+        {!isMobile && (
+          <div className={`sidebar-wrapper right-sidebar-wrapper ${rightSidebarCollapsed ? 'collapsed' : ''}`}>
+            <AIAssistant workId={workId} />
+          </div>
+        )}
+        
+        {/* 移动端对话抽屉 */}
+        {isMobile && mobileChatOpen && (
+          <div className="mobile-chat-overlay" onClick={() => setMobileChatOpen(false)}>
+            <div className="mobile-chat-drawer" onClick={(e) => e.stopPropagation()}>
+              <div className="mobile-chat-header">
+                <h2>球球AI</h2>
+                <button className="mobile-chat-close" onClick={() => setMobileChatOpen(false)}>
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="mobile-chat-content">
+                <AIAssistant workId={workId} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* VSCode风格的查找替换面板 */}

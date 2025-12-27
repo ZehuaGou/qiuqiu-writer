@@ -4,6 +4,68 @@
   box-sizing: border-box;
 }
 
+/* 全局文字横向排列规则 */
+button,
+.btn,
+.action-btn,
+.exit-btn,
+.toolbar-btn,
+.mobile-menu-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button span,
+.btn span,
+.action-btn span,
+.exit-btn span,
+.toolbar-btn span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 确保 flex 容器中的文字不换行 */
+.header-left,
+.header-right,
+.header-actions,
+.work-info-row,
+.toolbar-group,
+.novel-editor-toolbar {
+  flex-wrap: nowrap !important;
+}
+
+/* 确保所有按钮和文字元素在 flex 容器中不换行 */
+[class*="btn"],
+[class*="button"],
+.action-btn,
+.exit-btn {
+  flex-shrink: 0;
+}
+
+/* 保存按钮特殊处理 - 确保固定宽度和图标显示 */
+.save-btn {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  display: inline-flex !important;
+}
+
+.save-btn svg {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
 :root {
   /* 主色调 - 浅绿色系 */
   --bg-primary: #ffffff;

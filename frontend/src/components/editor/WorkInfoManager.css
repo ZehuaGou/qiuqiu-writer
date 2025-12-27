@@ -15,6 +15,9 @@
   padding: 12px 20px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-light);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .toolbar-left,
@@ -22,6 +25,17 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.toolbar-right {
+  flex-shrink: 0;
+}
+
+.toolbar-right > * {
+  flex-shrink: 0;
 }
 
 .save-status {
@@ -29,6 +43,10 @@
   padding: 4px 10px;
   border-radius: var(--radius-full);
   transition: all var(--transition-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .save-status.saved {
@@ -42,17 +60,40 @@
 }
 
 .save-btn {
-  display: flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  padding: 0 !important;
+  margin: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-base);
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  white-space: nowrap;
+  overflow: visible;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.save-btn svg {
+  flex-shrink: 0;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px;
+  min-height: 16px;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .save-btn:hover {
@@ -73,6 +114,17 @@
   font-size: 14px;
   cursor: pointer;
   transition: all var(--transition-base);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.template-btn span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .template-btn:hover {
@@ -95,6 +147,15 @@
   font-size: 13px;
   cursor: pointer;
   transition: all var(--transition-base);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.edit-btn span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .edit-btn:hover {
