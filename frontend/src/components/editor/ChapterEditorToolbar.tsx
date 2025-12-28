@@ -1,6 +1,6 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Editor } from '@tiptap/react';
-import { Undo2, Redo2, Save, Type, Bold, Underline, ChevronDown, Settings } from 'lucide-react';
+import { Undo2, Redo2, Save, Heading, Bold, Underline, ChevronDown, Settings } from 'lucide-react';
 
 interface ChapterEditorToolbarProps {
   editor: Editor | null;
@@ -18,6 +18,7 @@ export default function ChapterEditorToolbar({
   setHeadingMenuOpen,
 }: ChapterEditorToolbarProps) {
   const headingMenuRef = useRef<HTMLDivElement>(null);
+  const [currentHeading, setCurrentHeading] = useState<string>('P');
 
   // 点击外部关闭标题下拉菜单
   useEffect(() => {
@@ -35,6 +36,53 @@ export default function ChapterEditorToolbar({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [headingMenuOpen, setHeadingMenuOpen]);
+
+  // 监听编辑器状态变化，更新当前标题类型显示
+  useEffect(() => {
+    if (!editor) {
+      setCurrentHeading('P');
+      return;
+    }
+
+    const updateHeading = () => {
+      // 检查当前选中的节点类型
+      if (editor.isActive('heading', { level: 1 })) {
+        setCurrentHeading('H1');
+      } else if (editor.isActive('heading', { level: 2 })) {
+        setCurrentHeading('H2');
+      } else if (editor.isActive('heading', { level: 3 })) {
+        setCurrentHeading('H3');
+      } else if (editor.isActive('heading', { level: 4 })) {
+        setCurrentHeading('H4');
+      } else if (editor.isActive('heading', { level: 5 })) {
+        setCurrentHeading('H5');
+      } else if (editor.isActive('heading', { level: 6 })) {
+        setCurrentHeading('H6');
+      } else if (editor.isActive('paragraph')) {
+        setCurrentHeading('P');
+      } else {
+        // 默认显示段落
+        setCurrentHeading('P');
+      }
+    };
+
+    // 延迟初始更新，确保编辑器完全初始化
+    const timer = setTimeout(() => {
+      updateHeading();
+    }, 100);
+
+    // 监听选择变化和更新事件
+    editor.on('selectionUpdate', updateHeading);
+    editor.on('update', updateHeading);
+    editor.on('transaction', updateHeading);
+
+    return () => {
+      clearTimeout(timer);
+      editor.off('selectionUpdate', updateHeading);
+      editor.off('update', updateHeading);
+      editor.off('transaction', updateHeading);
+    };
+  }, [editor]);
 
   return (
     <div className="novel-editor-toolbar">
@@ -73,14 +121,14 @@ export default function ChapterEditorToolbar({
             onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
             title="标题样式"
           >
-            <Type size={16} />
-            <span>H1</span>
-            <ChevronDown size={14} style={{ marginLeft: '4px' }} />
+            <Heading size={16} />
+            <span className="heading-text">{currentHeading}</span>
+            <ChevronDown size={14} className="dropdown-arrow" />
           </button>
           {headingMenuOpen && (
             <div className="toolbar-dropdown-menu">
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('heading', { level: 1 }) ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().toggleHeading({ level: 1 }).run();
                   setHeadingMenuOpen(false);
@@ -91,7 +139,7 @@ export default function ChapterEditorToolbar({
                 <span className="heading-preview">一级标题</span>
               </button>
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('heading', { level: 2 }) ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().toggleHeading({ level: 2 }).run();
                   setHeadingMenuOpen(false);
@@ -102,7 +150,7 @@ export default function ChapterEditorToolbar({
                 <span className="heading-preview">二级标题</span>
               </button>
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('heading', { level: 3 }) ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().toggleHeading({ level: 3 }).run();
                   setHeadingMenuOpen(false);
@@ -113,7 +161,7 @@ export default function ChapterEditorToolbar({
                 <span className="heading-preview">三级标题</span>
               </button>
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('heading', { level: 4 }) ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().toggleHeading({ level: 4 }).run();
                   setHeadingMenuOpen(false);
@@ -124,7 +172,7 @@ export default function ChapterEditorToolbar({
                 <span className="heading-preview">四级标题</span>
               </button>
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('heading', { level: 5 }) ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().toggleHeading({ level: 5 }).run();
                   setHeadingMenuOpen(false);
@@ -135,7 +183,7 @@ export default function ChapterEditorToolbar({
                 <span className="heading-preview">五级标题</span>
               </button>
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('heading', { level: 6 }) ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().toggleHeading({ level: 6 }).run();
                   setHeadingMenuOpen(false);
@@ -147,7 +195,7 @@ export default function ChapterEditorToolbar({
               </button>
               <div className="toolbar-dropdown-divider" />
               <button
-                className="toolbar-dropdown-item"
+                className={`toolbar-dropdown-item ${editor?.isActive('paragraph') && !editor?.isActive('heading') ? 'active' : ''}`}
                 onClick={() => {
                   editor?.chain().focus().setParagraph().run();
                   setHeadingMenuOpen(false);

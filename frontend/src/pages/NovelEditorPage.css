@@ -322,6 +322,9 @@
   flex-shrink: 0;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   min-height: 48px;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
 }
 
 /* 编辑器主体 */
@@ -571,19 +574,18 @@
 .toolbar-dropdown {
   position: relative;
   display: inline-block;
+  z-index: 10000;
 }
 
 .toolbar-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed;
   min-width: 160px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10001;
+  overflow: visible;
   animation: slideDown 0.2s ease-out;
 }
 
@@ -616,6 +618,21 @@
 .toolbar-dropdown-item:hover {
   background: #f3f4f6;
   color: #1f2937;
+}
+
+.toolbar-dropdown-item.active {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.toolbar-dropdown-item.active .heading-label {
+  color: #1e40af;
+  font-weight: 700;
+}
+
+.toolbar-dropdown-item.active .heading-preview {
+  color: #1e40af;
+  font-weight: 500;
 }
 
 .toolbar-dropdown-item .heading-label {
@@ -1740,7 +1757,25 @@
   .editor-toolbar-row {
     padding: 8px 16px;
     overflow-x: auto;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* 移动端下拉菜单样式 */
+  .editor-toolbar-row .toolbar-dropdown {
+    z-index: 10000;
+  }
+
+  .editor-toolbar-row .toolbar-dropdown-menu {
+    z-index: 10001;
+    min-width: 140px;
+    max-width: 200px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
   }
 
   /* 动画 */

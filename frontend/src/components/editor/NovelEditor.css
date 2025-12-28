@@ -51,8 +51,8 @@
 .toolbar-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 6px 10px;
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   color: var(--text-secondary);
@@ -61,18 +61,43 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 36px;
+  min-width: auto;
+  width: auto;
   justify-content: center;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
+.toolbar-btn svg {
+  display: block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+}
+
 .toolbar-btn span {
-  font-weight: 600;
-  letter-spacing: 0.3px;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.2px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  display: inline-block;
+}
+
+.toolbar-btn .heading-text {
+  min-width: 20px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.toolbar-btn .dropdown-arrow {
+  flex-shrink: 0;
+  margin-left: 2px;
+  opacity: 0.7;
 }
 
 .toolbar-btn:hover:not(:disabled) {
@@ -84,6 +109,25 @@
 .toolbar-btn:active:not(:disabled) {
   background: var(--bg-secondary);
   transform: scale(0.98);
+}
+
+.toolbar-btn.active {
+  background: var(--primary-color, #2563eb);
+  color: white;
+  border-color: var(--primary-color, #2563eb);
+}
+
+.toolbar-btn.active svg {
+  color: white;
+}
+
+.toolbar-btn.active span {
+  color: white;
+}
+
+.toolbar-btn.active:hover {
+  background: var(--primary-color-hover, #1d4ed8);
+  border-color: var(--primary-color-hover, #1d4ed8);
 }
 
 .toolbar-btn:disabled {
