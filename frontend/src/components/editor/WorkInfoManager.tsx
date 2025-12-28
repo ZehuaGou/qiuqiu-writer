@@ -4,7 +4,7 @@ import {
   Settings, Tag, Users, Building2, Map, FileText,
   Image, List, LayoutGrid, Heart, Zap, Sparkles,
   LayoutTemplate, Check, GitBranch, Clock, Table2,
-  CheckSquare, Type, AlignLeft, Save, TrendingUp
+  CheckSquare, Type, AlignLeft, Save, TrendingUp, Search
 } from 'lucide-react';
 import CharacterRelations from './CharacterRelations';
 import type { CharacterRelationsData } from './CharacterRelations';
@@ -651,6 +651,162 @@ function DataDependenciesSelector({ value, onChange, template, currentComponentI
 
 interface WorkInfoManagerProps {
   workId?: string | null;
+}
+
+// 时间线角色选择器组件
+interface TimelineCharacterSelectorProps {
+  availableCharacters: Array<{ id: string; name: string }>;
+  selectedCharacterIds: string[];
+  selectedCharacters: string[];
+  onSelectionChange: (characterIds: string[], characters: string[]) => void;
+}
+
+function TimelineCharacterSelector({
+  availableCharacters,
+  selectedCharacterIds,
+  selectedCharacters,
+  onSelectionChange
+}: TimelineCharacterSelectorProps) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  
+  // 点击外部关闭
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+        setSearchQuery('');
+      }
+    }
+    
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+  
+  // 过滤角色
+  const filteredCharacters = availableCharacters.filter(char => {
+    const matchesSearch = char.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const notSelected = !selectedCharacterIds.includes(char.id);
+    return matchesSearch && notSelected;
+  });
+  
+  // 计算下拉菜单位置（如果需要向上展开）
+  useEffect(() => {
+    if (isDropdownOpen && triggerRef.current && dropdownRef.current) {
+      const triggerRect = triggerRef.current.getBoundingClientRect();
+      const dropdown = dropdownRef.current;
+      const dropdownHeight = 300;
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+      
+      // 如果下方空间不足且上方空间更大，则向上展开
+      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+        dropdown.classList.add('timeline-character-dropdown-upward');
+      } else {
+        dropdown.classList.remove('timeline-character-dropdown-upward');
+      }
+    }
+  }, [isDropdownOpen, filteredCharacters.length]);
+  
+  const handleRemoveCharacter = (charId: string) => {
+    const newCharacterIds = selectedCharacterIds.filter(id => id !== charId);
+    const newCharacters = selectedCharacters.filter((name, idx) => 
+      selectedCharacterIds[idx] !== charId
+    );
+    onSelectionChange(newCharacterIds, newCharacters);
+  };
+  
+  const handleAddCharacter = (char: { id: string; name: string }) => {
+    onSelectionChange([...selectedCharacterIds, char.id], [...selectedCharacters, char.name]);
+    setSearchQuery('');
+  };
+  
+  return (
+    <div className="timeline-characters-selector">
+      <label className="timeline-characters-label">关联角色：</label>
+      <div className="timeline-characters-tags">
+        {selectedCharacterIds.map((charId) => {
+          const char = availableCharacters.find(c => c.id === charId);
+          if (!char) return null;
+          return (
+            <span key={charId} className="timeline-character-tag">
+              {char.name}
+              <button
+                type="button"
+                className="timeline-character-tag-remove"
+                onClick={() => handleRemoveCharacter(charId)}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          );
+        })}
+      </div>
+      <div className="timeline-character-dropdown-wrapper">
+        <div
+          ref={triggerRef}
+          className="timeline-character-dropdown-trigger"
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+        >
+          <span className="timeline-character-dropdown-text">
+            {selectedCharacterIds.length > 0 ? `已选择 ${selectedCharacterIds.length} 个角色` : '选择角色'}
+          </span>
+          <ChevronDown size={16} className={`timeline-character-dropdown-arrow ${isDropdownOpen ? 'open' : ''}`} />
+        </div>
+        {isDropdownOpen && (
+          <div ref={dropdownRef} className="timeline-character-dropdown">
+            <div className="timeline-character-search">
+              <Search size={16} className="timeline-character-search-icon" />
+              <input
+                type="text"
+                className="timeline-character-search-input"
+                placeholder="搜索角色..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="timeline-character-search-clear"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <div className="timeline-character-dropdown-options">
+              {filteredCharacters.length > 0 ? (
+                filteredCharacters.map(char => (
+                  <button
+                    key={char.id}
+                    type="button"
+                    className="timeline-character-dropdown-option"
+                    onClick={() => handleAddCharacter(char)}
+                  >
+                    <span>{char.name}</span>
+                    <Plus size={14} />
+                  </button>
+                ))
+              ) : (
+                <div className="timeline-character-dropdown-empty">
+                  {searchQuery ? '未找到匹配的角色' : '所有角色已选择'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
@@ -2925,12 +3081,28 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           availableCharacters = Object.values(charMap);
         }
         
-        // 确保时间线数据格式正确
+        // 确保时间线数据格式正确（支持多个角色，向后兼容单个角色）
         const ensureEventFormat = (item: any) => {
+          // 兼容旧格式：如果存在 characterId/character，转换为数组格式
+          let characterIds: string[] = [];
+          let characters: string[] = [];
+          
+          if (item.characterIds && Array.isArray(item.characterIds)) {
+            characterIds = item.characterIds;
+          } else if (item.characterId) {
+            characterIds = [item.characterId];
+          }
+          
+          if (item.characters && Array.isArray(item.characters)) {
+            characters = item.characters;
+          } else if (item.character) {
+            characters = [item.character];
+          }
+          
           return {
             id: item.id || `event-${Date.now()}-${Math.random()}`,
-            characterId: item.characterId || '',
-            character: item.character || '',
+            characterIds: characterIds,
+            characters: characters,
             time: item.time || '',
             event: item.event || '',
             description: item.description || '',
@@ -2957,8 +3129,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                 const isEditing = editingTimelineEvents[comp.id] === item.id;
                 const editFormKey = `${comp.id}-${item.id}`;
                 const editForm = timelineEditForms[editFormKey] || {
-                  characterId: item.characterId || '',
-                  character: item.character || '',
+                  characterIds: item.characterIds || [],
+                  characters: item.characters || [],
                   time: item.time || '',
                   event: item.event || '',
                   description: item.description || '',
@@ -2975,26 +3147,21 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                           <div className="timeline-event-header">
                             <div className="timeline-event-meta">
                               {availableCharacters.length > 0 && (
-                                <select
-                                  className="timeline-character-select"
-                                  value={editForm.characterId}
-                                  onChange={(e) => {
-                                    const selectedChar = availableCharacters.find(c => c.id === e.target.value);
+                                <TimelineCharacterSelector
+                                  availableCharacters={availableCharacters}
+                                  selectedCharacterIds={editForm.characterIds || []}
+                                  selectedCharacters={editForm.characters || []}
+                                  onSelectionChange={(characterIds, characters) => {
                                     setTimelineEditForms(prev => ({
                                       ...prev,
                                       [editFormKey]: {
                                         ...editForm,
-                                        characterId: e.target.value,
-                                        character: selectedChar?.name || ''
+                                        characterIds,
+                                        characters
                                       }
                                     }));
                                   }}
-                                >
-                                  <option value="">选择角色</option>
-                                  {availableCharacters.map(char => (
-                                    <option key={char.id} value={char.id}>{char.name}</option>
-                                  ))}
-                                </select>
+                                />
                               )}
                               <input
                                 type="text"
@@ -3084,8 +3251,12 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                         <>
                           <div className="timeline-event-header">
                             <div className="timeline-event-meta">
-                              {item.character && (
-                                <span className="timeline-character-name">{item.character}</span>
+                              {item.characters && item.characters.length > 0 && (
+                                <div className="timeline-characters-display">
+                                  {item.characters.map((charName: string, idx: number) => (
+                                    <span key={idx} className="timeline-character-name">{charName}</span>
+                                  ))}
+                                </div>
                               )}
                               {item.time && (
                                 <span className="timeline-time">{item.time}</span>
@@ -3099,8 +3270,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                                   setTimelineEditForms(prev => ({
                                     ...prev,
                                     [editFormKey]: {
-                                      characterId: item.characterId || '',
-                                      character: item.character || '',
+                                      characterIds: item.characterIds || [],
+                                      characters: item.characters || [],
                                       time: item.time || '',
                                       event: item.event || '',
                                       description: item.description || '',
@@ -3149,8 +3320,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               onClick={() => {
                 const newEvent = {
                   id: `event-${Date.now()}-${Math.random()}`,
-                  characterId: '',
-                  character: '',
+                  characterIds: [],
+                  characters: [],
                   time: '',
                   event: '',
                   description: '',
