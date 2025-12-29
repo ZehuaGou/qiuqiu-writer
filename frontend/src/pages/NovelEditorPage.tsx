@@ -432,9 +432,12 @@ export default function NovelEditorPage(){
     }
 
     try {
-      const content = editor.getText();
-      let regex: RegExp;
+      // 使用 Tiptap 的 state 来获取文档
+      const { state } = editor;
+      const { doc } = state;
       
+      // 构建正则表达式
+      let regex: RegExp;
       if (wholeWord) {
         // 全字匹配
         const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -450,15 +453,35 @@ export default function NovelEditorPage(){
       }
 
       const foundMatches: Array<{ start: number; end: number }> = [];
-      let match;
-      const textContent = content;
       
-      while ((match = regex.exec(textContent)) !== null) {
-        foundMatches.push({
-          start: match.index,
-          end: match.index + match[0].length,
-        });
-      }
+      // 遍历文档中的所有文本节点，在每个节点中查找匹配项
+      doc.descendants((node, pos) => {
+        if (node.isText && node.text) {
+          const nodeText = node.text;
+          let match;
+          
+          // 重置正则表达式的 lastIndex，确保每次都能正确匹配
+          regex.lastIndex = 0;
+          
+          while ((match = regex.exec(nodeText)) !== null) {
+            // pos 是节点在文档中的位置（从节点开始计算）
+            // match.index 是匹配在节点文本中的位置
+            // ProseMirror 位置从 1 开始（0 是文档开始标记）
+            const matchStart = pos + match.index;
+            const matchEnd = pos + match.index + match[0].length;
+            
+            foundMatches.push({
+              start: matchStart,
+              end: matchEnd,
+            });
+            
+            // 如果匹配的是空字符串，避免无限循环
+            if (match[0].length === 0) {
+              regex.lastIndex++;
+            }
+          }
+        }
+      });
 
       setMatches(foundMatches);
       if (foundMatches.length > 0) {
@@ -532,48 +555,19 @@ export default function NovelEditorPage(){
 
     try {
       const match = matches[currentMatchIndex];
-      const htmlContent = editor.getHTML();
       
-      // 在 HTML 中找到对应的位置并替换（简化处理）
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlContent;
-      const textNodes: Array<{ node: Node; start: number; end: number }> = [];
+      // 使用 Tiptap 的 API 来替换文本
+      // 先选中要替换的文本
+      editor.commands.setTextSelection({ from: match.start, to: match.end });
       
-      const walker = document.createTreeWalker(
-        tempDiv,
-        NodeFilter.SHOW_TEXT,
-        null
-      );
+      // 删除选中的文本并插入新文本
+      editor.commands.deleteSelection();
+      editor.commands.insertContent(replaceText);
       
-      let currentTextPos = 0;
-      let node;
-      while ((node = walker.nextNode())) {
-        const nodeText = node.textContent || '';
-        const nodeStart = currentTextPos;
-        const nodeEnd = currentTextPos + nodeText.length;
-        textNodes.push({ node, start: nodeStart, end: nodeEnd });
-        currentTextPos = nodeEnd;
-      }
-      
-      // 找到包含匹配项的文本节点并替换
-      for (const textNode of textNodes) {
-        if (match.start >= textNode.start && match.start < textNode.end) {
-          const offset = match.start - textNode.start;
-          const nodeText = textNode.node.textContent || '';
-          const beforeMatch = nodeText.substring(0, offset);
-          const afterMatch = nodeText.substring(offset + (match.end - match.start));
-          
-          textNode.node.textContent = beforeMatch + replaceText + afterMatch;
-          break;
-        }
-      }
-      
-      editor.commands.setContent(tempDiv.innerHTML);
-      
-      // 重新查找匹配项
+      // 重新查找匹配项（需要等待编辑器更新）
       setTimeout(() => {
         findMatches();
-      }, 100);
+      }, 50);
     } catch (err) {
       console.error('替换失败:', err);
     }
