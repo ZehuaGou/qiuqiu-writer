@@ -76,6 +76,7 @@ class SenTranEmbedder(BaseEmbedder):
         
         for attempt in range(max_retries):
             try:
+                start_time = time.time()
                 logger.info(
                     f"Loading SentenceTransformer model: {self.config.model_name_or_path} "
                     f"(attempt {attempt + 1}/{max_retries})"
@@ -87,7 +88,11 @@ class SenTranEmbedder(BaseEmbedder):
                     trust_remote_code=self.config.trust_remote_code,
                 )
                 
-                logger.info(f"✅ Successfully loaded SentenceTransformer model: {self.config.model_name_or_path}")
+                load_time = time.time() - start_time
+                logger.info(
+                    f"✅ Successfully loaded SentenceTransformer model: {self.config.model_name_or_path} "
+                    f"(took {load_time:.2f}s)"
+                )
                 break
                 
             except Exception as e:

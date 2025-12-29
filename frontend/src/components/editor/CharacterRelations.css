@@ -31,20 +31,23 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  border: 1px solid #10b981;
-  background: white;
-  color: #10b981;
-  border-radius: 8px;
+  width: auto;
+  min-width: 120px;
+  padding: 12px 24px;
+  border: 1px solid var(--accent-primary);
+  background: var(--bg-primary);
+  color: var(--accent-primary);
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .action-btn:hover {
-  background: #ecfdf5;
-  border-color: #059669;
+  background: var(--accent-light);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 .relations-content {
@@ -390,8 +393,8 @@
   gap: 6px;
 }
 
-.save-btn,
-.cancel-btn {
+.edit-actions .save-btn,
+.edit-actions .cancel-btn {
   flex: 1;
   padding: 6px 12px;
   border: none;
@@ -402,21 +405,21 @@
   transition: all 0.2s ease;
 }
 
-.save-btn {
+.edit-actions .save-btn {
   background: #10b981;
   color: white;
 }
 
-.save-btn:hover {
+.edit-actions .save-btn:hover {
   background: #059669;
 }
 
-.cancel-btn {
+.edit-actions .cancel-btn {
   background: #f3f4f6;
   color: #6b7280;
 }
 
-.cancel-btn:hover {
+.edit-actions .cancel-btn:hover {
   background: #e5e7eb;
   color: #1f2937;
 }
@@ -424,24 +427,44 @@
 /* 编辑模态框 */
 .edit-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .edit-modal {
-  background: white;
-  border-radius: 12px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
   padding: 24px;
   min-width: 400px;
   max-width: 500px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .edit-modal h4 {
@@ -489,15 +512,52 @@
 
 .modal-actions {
   display: flex;
+  align-items: center;
   gap: 12px;
   margin-top: 8px;
 }
 
+.modal-actions .footer-spacer {
+  flex: 1;
+}
+
 .modal-actions .save-btn,
 .modal-actions .cancel-btn {
-  flex: 1;
-  padding: 10px 20px;
-  font-size: 14px;
+  width: auto !important;
+  min-width: 120px !important;
+  max-width: none !important;
+  padding: 12px 24px !important;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px !important;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex: none !important;
+  height: auto !important;
+  line-height: normal !important;
+}
+
+.modal-actions .save-btn {
+  background: var(--accent-gradient) !important;
+  color: white !important;
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-actions .save-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.modal-actions .cancel-btn {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-light) !important;
+  color: var(--text-secondary) !important;
+}
+
+.modal-actions .cancel-btn:hover {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
 }
 
 /* 关系信息显示样式 */

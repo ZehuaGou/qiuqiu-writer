@@ -24,24 +24,44 @@
 /* 编辑模态框样式 */
 .edit-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .edit-modal {
-  background: white;
-  border-radius: 12px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
   padding: 24px;
   min-width: 400px;
   max-width: 500px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .edit-modal h4 {
@@ -96,39 +116,48 @@
 
 .modal-actions {
   display: flex;
+  align-items: center;
   gap: 12px;
   margin-top: 8px;
 }
 
+.modal-actions .footer-spacer {
+  flex: 1;
+}
+
 .save-btn,
 .cancel-btn {
-  flex: 1;
-  padding: 10px 20px;
+  width: auto;
+  min-width: 120px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .save-btn {
-  background: #10b981;
+  background: var(--accent-gradient);
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .save-btn:hover {
-  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .cancel-btn {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
 }
 
 .cancel-btn:hover {
-  background: #e5e7eb;
-  color: #1f2937;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 /* 关系信息显示样式 */
@@ -636,63 +665,3 @@
   color: #1f2937;
 }
 
-/* 编辑模态框 */
-.edit-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.edit-modal {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  min-width: 400px;
-  max-width: 500px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
-.edit-modal h4 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 20px 0;
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.modal-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.modal-form label span {
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.modal-actions .save-btn,
-.modal-actions .cancel-btn {
-  flex: 1;
-  padding: 10px 20px;
-  font-size: 14px;
-}

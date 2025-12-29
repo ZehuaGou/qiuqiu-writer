@@ -2614,7 +2614,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   };
 
   // 开始编辑组件
-  const startEditComponent = (comp: ComponentConfig, tabsComponentId?: string, tabId?: string) => {
+  const startEditComponent = async (comp: ComponentConfig, tabsComponentId?: string, tabId?: string) => {
     setEditingComponentId(comp.id);
     setEditingComponentContext(tabsComponentId && tabId ? { tabsComponentId, tabId } : null);
     
@@ -2628,13 +2628,58 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       ? comp.config.cardFields.map((f: any) => ({ key: f.key, label: f.label, type: f.type }))
       : [];
     
+    // 按需加载 prompt 内容（如果有 promptId 但没有 prompt 内容）
+    let generatePrompt = comp.generatePrompt || '';
+    let validatePrompt = comp.validatePrompt || '';
+    let analysisPrompt = comp.analysisPrompt || '';
+    
+    // 收集需要加载的 promptId
+    const promptIdsToLoad: number[] = [];
+    if (comp.generatePromptId && !generatePrompt) {
+      promptIdsToLoad.push(comp.generatePromptId);
+    }
+    if (comp.validatePromptId && !validatePrompt) {
+      promptIdsToLoad.push(comp.validatePromptId);
+    }
+    if (comp.analysisPromptId && !analysisPrompt) {
+      promptIdsToLoad.push(comp.analysisPromptId);
+    }
+    
+    // 如果有需要加载的 prompt，批量获取
+    if (promptIdsToLoad.length > 0) {
+      try {
+        const promptMap = await promptTemplateApi.getPromptTemplatesByIds(promptIdsToLoad);
+        
+        if (comp.generatePromptId && !generatePrompt) {
+          const prompt = promptMap.get(comp.generatePromptId);
+          if (prompt) {
+            generatePrompt = prompt.prompt_content || '';
+          }
+        }
+        if (comp.validatePromptId && !validatePrompt) {
+          const prompt = promptMap.get(comp.validatePromptId);
+          if (prompt) {
+            validatePrompt = prompt.prompt_content || '';
+          }
+        }
+        if (comp.analysisPromptId && !analysisPrompt) {
+          const prompt = promptMap.get(comp.analysisPromptId);
+          if (prompt) {
+            analysisPrompt = prompt.prompt_content || '';
+          }
+        }
+      } catch (error) {
+        console.error('加载组件 prompt 内容失败:', error);
+      }
+    }
+    
     setNewComponentForm({
       type: comp.type,
       label: comp.label,
       config: { ...comp.config },
-      generatePrompt: comp.generatePrompt || '',
-      validatePrompt: comp.validatePrompt || '',
-      analysisPrompt: comp.analysisPrompt || '',
+      generatePrompt,
+      validatePrompt,
+      analysisPrompt,
       tabsConfig,
       cardFields,
       dataKey: comp.dataKey || '',
@@ -4443,6 +4488,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
               <button className="btn-secondary" onClick={() => setShowCreateTemplate(false)}>
                 取消
               </button>
+              <div className="footer-spacer" />
               <button className="btn-primary" onClick={handleCreateTemplate}>
                 创建
               </button>

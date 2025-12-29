@@ -116,6 +116,9 @@ def init_server() -> dict[str, Any]:
     logger.debug("Component configurations built successfully")
 
     # Create component instances
+    import time
+    start_time = time.time()
+    
     graph_db = GraphStoreFactory.from_config(graph_db_config)
     vector_db = (
         VecDBFactory.from_config(vector_db_config)
@@ -123,7 +126,12 @@ def init_server() -> dict[str, Any]:
         else None
     )
     llm = LLMFactory.from_config(llm_config)
+    
+    logger.info("⏳ Loading embedder model (this may take a few seconds)...")
+    embedder_start = time.time()
     embedder = EmbedderFactory.from_config(embedder_config)
+    embedder_time = time.time() - embedder_start
+    logger.info(f"✅ Embedder loaded in {embedder_time:.2f}s")
     mem_reader = MemReaderFactory.from_config(mem_reader_config)
     reranker = RerankerFactory.from_config(reranker_config)
     internet_retriever = (
@@ -132,7 +140,8 @@ def init_server() -> dict[str, Any]:
         else None
     )
 
-    logger.debug("Core components instantiated")
+    total_time = time.time() - start_time
+    logger.info(f"✅ Core components instantiated in {total_time:.2f}s")
 
     # Initialize memory manager
     memory_manager = MemoryManager(

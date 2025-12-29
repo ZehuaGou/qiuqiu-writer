@@ -167,6 +167,7 @@ class PromptTemplate(Base):
                         value = getattr(chapter_data, key, '') or ''
                     return str(value) if value else ''
                 
+                # 如果都不匹配，返回空字符串
                 return ''
             
             # 处理 @work.xxx 格式
@@ -217,6 +218,8 @@ class PromptTemplate(Base):
                     else:
                         value = getattr(work_data, key, '') or ''
                     return str(value) if value else ''
+                
+                return ''
                 
                 return ''
             

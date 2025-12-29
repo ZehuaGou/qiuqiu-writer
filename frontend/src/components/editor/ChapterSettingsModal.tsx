@@ -430,6 +430,7 @@ export default function ChapterSettingsModal({
           <button className="modal-btn cancel" onClick={onClose}>
             取消
           </button>
+          <div className="footer-spacer" />
           <button className="modal-btn save" onClick={handleSave}>
             {mode === 'create' ? '创建章节' : '保存修改'}
           </button>

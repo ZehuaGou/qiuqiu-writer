@@ -488,9 +488,6 @@ export default function MapView() {
                 />
               </label>
               <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveNewLocation}>
-                  保存
-                </button>
                 <button
                   className="cancel-btn"
                   onClick={() => {
@@ -499,6 +496,10 @@ export default function MapView() {
                   }}
                 >
                   取消
+                </button>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveNewLocation}>
+                  保存
                 </button>
               </div>
             </div>
@@ -562,9 +563,6 @@ export default function MapView() {
                 />
               </label>
               <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveNewConnection}>
-                  保存
-                </button>
                 <button
                   className="cancel-btn"
                   onClick={() => {
@@ -573,6 +571,10 @@ export default function MapView() {
                   }}
                 >
                   取消
+                </button>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveNewConnection}>
+                  保存
                 </button>
               </div>
             </div>
@@ -608,9 +610,6 @@ export default function MapView() {
                 />
               </label>
               <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveLocation}>
-                  保存
-                </button>
                 <button
                   className="cancel-btn"
                   onClick={() => {
@@ -619,6 +618,10 @@ export default function MapView() {
                   }}
                 >
                   取消
+                </button>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveLocation}>
+                  保存
                 </button>
               </div>
             </div>
@@ -653,6 +656,16 @@ export default function MapView() {
                 </div>
                 <div className="modal-actions">
                   <button
+                    className="cancel-btn"
+                    onClick={() => {
+                      setEditingConnection(null);
+                      setEditForm({});
+                    }}
+                  >
+                    关闭
+                  </button>
+                  <div className="footer-spacer" />
+                  <button
                     className="save-btn"
                     onClick={() => {
                       setEditingConnection(null);
@@ -664,15 +677,6 @@ export default function MapView() {
                     }}
                   >
                     编辑
-                  </button>
-                  <button
-                    className="cancel-btn"
-                    onClick={() => {
-                      setEditingConnection(null);
-                      setEditForm({});
-                    }}
-                  >
-                    关闭
                   </button>
                 </div>
               </div>

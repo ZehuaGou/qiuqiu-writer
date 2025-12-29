@@ -554,9 +554,6 @@ export default function Factions() {
                 </div>
               </div>
               <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveNewFaction}>
-                  保存
-                </button>
                 <button
                   className="cancel-btn"
                   onClick={() => {
@@ -567,6 +564,10 @@ export default function Factions() {
                   }}
                 >
                   取消
+                </button>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveNewFaction}>
+                  保存
                 </button>
               </div>
             </div>

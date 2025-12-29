@@ -842,9 +842,6 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                 />
               </label>
               <div className="modal-actions">
-                <button className="save-btn" onClick={handleSaveNewRelation}>
-                  保存
-                </button>
                 <button
                   className="cancel-btn"
                   onClick={() => {
@@ -853,6 +850,10 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                   }}
                 >
                   取消
+                </button>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveNewRelation}>
+                  保存
                 </button>
               </div>
             </div>
@@ -901,9 +902,6 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                   />
                 </label>
                 <div className="modal-actions">
-                  <button className="save-btn" onClick={handleSaveRelation}>
-                    保存
-                  </button>
                   <button
                     className="cancel-btn"
                     onClick={() => {
@@ -912,6 +910,10 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                     }}
                   >
                     取消
+                  </button>
+                  <div className="footer-spacer" />
+                  <button className="save-btn" onClick={handleSaveRelation}>
+                    保存
                   </button>
                 </div>
               </div>

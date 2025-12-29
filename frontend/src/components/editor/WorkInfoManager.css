@@ -2223,6 +2223,12 @@
   background: var(--bg-secondary);
 }
 
+.modal-footer .btn-primary {
+  width: auto;
+  min-width: 120px;
+  padding: 12px 24px;
+}
+
 .footer-spacer {
   flex: 1;
 }
@@ -3374,41 +3380,47 @@
 /* 角色编辑弹窗 */
 .character-modal {
   max-width: 520px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 20px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .character-modal .modal-header {
-  padding: 24px 28px 20px;
-  border-bottom: none;
-  background: transparent;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .character-modal .modal-header h3 {
-  font-size: 22px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
 }
 
 .character-modal .modal-close {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: #f1f5f9;
-  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all var(--transition-base);
 }
 
 .character-modal .modal-close:hover {
-  background: #e2e8f0;
-  transform: rotate(90deg);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .character-modal .modal-body {
-  padding: 8px 28px 24px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -3506,45 +3518,49 @@
 }
 
 .character-modal .modal-footer {
-  padding: 20px 28px 24px;
-  border-top: none;
-  background: transparent;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-secondary);
   gap: 12px;
 }
 
 .character-modal .btn-secondary {
+  width: auto;
+  min-width: 120px;
   padding: 12px 24px;
-  background: #f1f5f9;
-  border: none;
-  border-radius: 12px;
-  color: #64748b;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
 }
 
 .character-modal .btn-secondary:hover {
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .character-modal .btn-primary {
-  padding: 12px 28px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  width: auto;
+  min-width: 120px;
+  padding: 12px 24px;
+  background: var(--accent-gradient);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius);
   color: white;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
 }
 
 .character-modal .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  box-shadow: var(--shadow-md);
 }
 
 .character-modal .btn-primary:disabled {
@@ -3975,13 +3991,12 @@
   min-width: 500px;
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .faction-modal .modal-header {
-  padding: 24px 28px 20px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border-light);
-  background: transparent;
 }
 
 .faction-modal .modal-header h3 {
@@ -3991,26 +4006,32 @@
 }
 
 .faction-modal .modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius);
-  background: var(--bg-secondary);
+  padding: 0;
+  background: transparent;
+  border: none;
   color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius);
   transition: all var(--transition-base);
 }
 
 .faction-modal .modal-close:hover {
-  background: var(--accent-light);
-  color: var(--accent-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .faction-modal .modal-body {
-  padding: 24px 28px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-height: 70vh;
-  overflow-y: auto;
 }
 
 .faction-modal .form-group {
@@ -4219,14 +4240,16 @@
 }
 
 .faction-modal .modal-footer {
-  padding: 16px 28px 24px;
+  padding: 16px 24px;
   border-top: 1px solid var(--border-light);
   background: var(--bg-secondary);
   gap: 12px;
 }
 
 .faction-modal .btn-secondary {
-  padding: 10px 20px;
+  width: auto;
+  min-width: 120px;
+  padding: 12px 24px;
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
@@ -4243,7 +4266,9 @@
 }
 
 .faction-modal .btn-primary {
-  padding: 10px 20px;
+  width: auto;
+  min-width: 120px;
+  padding: 12px 24px;
   background: var(--accent-gradient);
   border: none;
   border-radius: var(--radius);
