@@ -624,6 +624,11 @@ class PromptContextService:
             vars_dict["作品"] = work_metadata
             # 同时提供work_metadata作为英文键
             vars_dict["work_metadata"] = work_metadata
+            
+            # 为了方便访问 component_data 中的数据，也提供 component_data 作为独立变量
+            component_data = work_metadata.get("component_data", {})
+            vars_dict["component_data"] = component_data
+            vars_dict["组件数据"] = component_data
         
         # 角色相关变量（英文和中文）
         all_chars = context_dict.get("all_characters", [])

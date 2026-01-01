@@ -7,6 +7,9 @@ import json
 import re
 from datetime import datetime
 from typing import Optional, Dict, Any
+from memos.log import get_logger
+
+logger = get_logger(__name__)
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, JSON,
@@ -186,21 +189,51 @@ class PromptTemplate(Base):
                     if isinstance(work_data, dict):
                         metadata = work_data.get('work_metadata') or work_data.get('metadata') or {}
                     else:
-                        metadata = getattr(work_data, 'work_metadata', None) or {}
+                        # 对于 Work 对象，work_metadata 字段在数据库中存储为 "metadata" 列
+                        # 但在 Python 对象中访问时使用 work_metadata 属性
+                        metadata = getattr(work_data, 'work_metadata', None)
+                        if metadata is None:
+                            # 如果 work_metadata 为 None，尝试获取 metadata 属性（向后兼容）
+                            metadata = getattr(work_data, 'metadata', None)
+                        if metadata is None:
+                            metadata = {}
                     
                     if not isinstance(metadata, dict):
                         metadata = {}
+                    
+                    # 调试日志：记录 metadata 的内容（仅当访问特定键时）
+                    if len(parts) > 2:
+                        requested_key = '.'.join(parts[2:])
+                        logger.debug(f"访问 @work.metadata.{requested_key}, metadata keys: {list(metadata.keys()) if metadata else 'empty'}")
                     
                     # @work.metadata（返回整个metadata）
                     if len(parts) == 2:
                         return json.dumps(metadata, ensure_ascii=False, indent=2)
                     
                     # @work.metadata.xxx（访问metadata中的键）
+                    # 支持嵌套键访问，如 @work.metadata.ticai_type
                     current_value = metadata
-                    for key in parts[2:]:
+                    requested_path = '.'.join(parts[2:])
+                    for i, key in enumerate(parts[2:]):
                         if isinstance(current_value, dict):
+                            prev_value = current_value
                             current_value = current_value.get(key)
+                            # 如果当前键不存在，记录调试信息并返回空字符串
+                            if current_value is None:
+                                available_keys = list(prev_value.keys()) if isinstance(prev_value, dict) else 'not a dict'
+                                logger.warning(
+                                    f"@work.metadata.{requested_path} 访问失败: "
+                                    f"键 '{key}' 不存在于路径 '{'.'.join(parts[2:i+2])}' 中。"
+                                    f"可用键: {available_keys}, metadata 顶层键: {list(metadata.keys()) if metadata else 'empty'}"
+                                )
+                                return ''
                         else:
+                            # 如果当前值不是字典，无法继续访问嵌套键
+                            logger.warning(
+                                f"@work.metadata.{requested_path} 访问失败: "
+                                f"路径 '{'.'.join(parts[2:i+2])}' 的值不是字典类型（类型: {type(current_value).__name__}），"
+                                f"无法访问键 '{parts[i+2]}'"
+                            )
                             return ''
                     
                     # 处理获取到的值

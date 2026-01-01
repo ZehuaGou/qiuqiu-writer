@@ -226,6 +226,45 @@ class GenerateChapterContentRequest(BaseModel):
     )
 
 
+class GenerateComponentDataRequest(BaseModel):
+    """生成组件数据请求模型"""
+
+    work_id: int = Field(
+        ...,
+        description="作品ID",
+        json_schema_extra={"example": 1},
+    )
+    component_id: str = Field(
+        ...,
+        description="组件ID",
+        json_schema_extra={"example": "comp_1"},
+    )
+    data_key: str = Field(
+        ...,
+        description="组件数据键（用于在component_data中存储）",
+        json_schema_extra={"example": "characters"},
+    )
+    generate_prompt_id: Optional[int] = Field(
+        None,
+        description="生成prompt模板ID（如果提供则使用模板，否则使用generate_prompt）",
+        json_schema_extra={"example": 1},
+    )
+    generate_prompt: Optional[str] = Field(
+        None,
+        description="生成prompt内容（如果generate_prompt_id未提供则使用此字段）",
+        json_schema_extra={"example": "请生成角色列表"},
+    )
+    chapter_id: Optional[int] = Field(
+        None,
+        description="章节ID（可选，用于获取章节上下文）",
+        json_schema_extra={"example": 1},
+    )
+    settings: AnalysisSettings | None = Field(
+        default_factory=AnalysisSettings,
+        description="AI生成设置",
+    )
+
+
 class ErrorResponse(BaseResponse[None]):
     """错误响应模型"""
 

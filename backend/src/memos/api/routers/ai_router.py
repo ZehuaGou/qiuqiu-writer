@@ -23,6 +23,7 @@ from memos.api.ai_models import (
     AnalyzeChapterByFileRequest,
     CreateWorkFromFileRequest,
     GenerateChapterContentRequest,
+    GenerateComponentDataRequest,
     DefaultPromptData,
     DefaultPromptResponse,
     ErrorResponse,
@@ -345,108 +346,317 @@ async def analyze_work_chapters(
             
             logger.info(f"开始分析作品《{work.title}》的所有章节，共 {total} 章")
             
-            accumulated_content = ""  # 累积的章节内容
             results = []  # 存储每章的分析结果
             skipped = []  # 存储跳过的章节
             errors = []  # 存储错误信息
             
-            for idx, chapter in enumerate(chapters, 1):
-                # 获取章节内容
-                chapter_content = ""
+            # 获取作品信息中的分析prompt
+            work_metadata = work.work_metadata or {}
+            template_config = work_metadata.get("template_config")
+            template_id = None
+            analysis_prompt_template = None
+            
+            # 从 work_metadata.template_config.templateId 中获取 template_id
+            if template_config and isinstance(template_config, dict):
+                template_id_str = template_config.get("templateId")
+                if template_id_str:
+                    # templateId 可能是 "db-1" 格式，需要提取数字
+                    if isinstance(template_id_str, str) and template_id_str.startswith("db-"):
+                        try:
+                            template_id = int(template_id_str.replace("db-", ""))
+                            logger.info(f"✅ 从 work_metadata.template_config.templateId 中获取到 template_id: {template_id_str} -> {template_id}")
+                        except ValueError:
+                            logger.warning(f"无法解析 templateId: {template_id_str}")
+                    elif isinstance(template_id_str, (int, str)):
+                        try:
+                            template_id = int(template_id_str)
+                            logger.info(f"✅ 从 work_metadata.template_config.templateId 中获取到 template_id: {template_id}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"无法解析 templateId: {template_id_str}")
+            
+            # 如果有 template_id，从 prompt_template 表查询章节分析的 prompt
+            if template_id:
                 try:
-                    # 优先从 ShareDB 获取
-                    document_id_new = f"work_{work_id}_chapter_{chapter.id}"
-                    document_id_old = f"chapter_{chapter.id}"
+                    # 优先查找章节分析类型的prompt（template_type == "chapter_analysis"），且不是组件相关的
+                    prompt_stmt = select(PromptTemplate).where(
+                        and_(
+                            PromptTemplate.work_template_id == template_id,
+                            PromptTemplate.template_type == "chapter_analysis",
+                            PromptTemplate.component_id.is_(None),  # 不是组件相关的
+                            PromptTemplate.is_active == True
+                        )
+                    ).order_by(PromptTemplate.is_default.desc(), PromptTemplate.id.asc())
+                    prompt_result = await db.execute(prompt_stmt)
+                    chapter_analysis_templates = prompt_result.scalars().all()
                     
-                    document = await sharedb_service.get_document(document_id_new)
-                    if not document:
-                        document = await sharedb_service.get_document(document_id_old)
-                    
-                    if document:
-                        content = document.get("content", "")
-                        if isinstance(content, dict):
-                            # 如果是对象，尝试提取内容
-                            content = content.get("content", "") or json.dumps(content, ensure_ascii=False)
-                        elif not isinstance(content, str):
-                            content = str(content)
-                        chapter_content = content
+                    if chapter_analysis_templates:
+                        # 使用第一个（默认的或第一个）
+                        analysis_prompt_template = chapter_analysis_templates[0]
+                        logger.info(f"✅ 找到作品的章节分析prompt模板: {analysis_prompt_template.id} (template_type: {analysis_prompt_template.template_type})")
                     else:
-                        # 如果 ShareDB 没有，尝试从章节元数据获取
-                        if chapter.chapter_metadata and isinstance(chapter.chapter_metadata, dict):
-                            chapter_content = chapter.chapter_metadata.get("content", "")
+                        # 如果没有找到章节分析类型的，尝试查找通用的analysis类型（但不是组件相关的）
+                        logger.debug(f"未找到章节分析类型的prompt，尝试查找通用的analysis类型")
+                        prompt_stmt = select(PromptTemplate).where(
+                            and_(
+                                PromptTemplate.work_template_id == template_id,
+                                PromptTemplate.prompt_category == "analysis",
+                                PromptTemplate.component_id.is_(None),  # 不是组件相关的
+                                PromptTemplate.is_active == True
+                            )
+                        ).order_by(PromptTemplate.is_default.desc(), PromptTemplate.id.asc())
+                        prompt_result = await db.execute(prompt_stmt)
+                        analysis_prompt_templates = prompt_result.scalars().all()
                         
-                        if not chapter_content:
-                            logger.warning(f"章节 {chapter.id} 没有找到内容，跳过")
-                            skipped.append({
-                                "chapter_index": idx,
-                                "chapter_id": chapter.id,
-                                "chapter_number": chapter.chapter_number,
-                                "chapter_title": chapter.title,
-                                "message": f"第 {idx} 章《{chapter.title}》没有内容，跳过"
-                            })
-                            continue
+                        if analysis_prompt_templates:
+                            analysis_prompt_template = analysis_prompt_templates[0]
+                            logger.info(f"✅ 找到作品的通用分析prompt模板: {analysis_prompt_template.id}")
+                        else:
+                            logger.warning(f"作品 {work_id} 的模板（template_id: {template_id}）中未找到章节分析prompt，将使用默认的单章分析prompt")
+                    
+                    # 检查找到的prompt是否是组件相关的，如果是则使用默认的章节分析prompt
+                    if analysis_prompt_template and analysis_prompt_template.component_id:
+                        logger.warning(f"找到的prompt是组件相关的（component_id: {analysis_prompt_template.component_id}），不适合用于章节分析，将使用默认的单章分析prompt")
+                        analysis_prompt_template = None
                 except Exception as e:
-                    logger.error(f"获取章节 {chapter.id} 内容失败: {traceback.format_exc()}")
-                    errors.append({
-                        "chapter_index": idx,
-                        "chapter_id": chapter.id,
-                        "message": f"第 {idx} 章《{chapter.title}》获取内容失败: {str(e)}",
-                        "error": str(e)
+                    logger.error(f"从 prompt_template 表查询章节分析prompt失败: {e}")
+                    logger.error(f"详细错误: {traceback.format_exc()}")
+            
+            # 如果没有找到分析prompt，使用默认的单章分析prompt
+            if not analysis_prompt_template:
+                logger.info("使用默认的单章分析prompt")
+                analysis_prompt_template = PromptTemplate()
+                analysis_prompt_template.prompt_content = book_analysis_service._get_builtin_chapter_analysis_prompt()
+            
+            # 初始化 PromptContextService 用于变量替换
+            from memos.api.services.prompt_context_service import PromptContextService
+            prompt_service = PromptContextService(db)
+            await prompt_service.initialize()
+            
+            # 每3章作为一个批次处理
+            batch_size = 3
+            chapter_batches = []
+            for i in range(0, len(chapters), batch_size):
+                batch = chapters[i:i + batch_size]
+                chapter_batches.append(batch)
+            
+            logger.info(f"将 {total} 章分为 {len(chapter_batches)} 个批次，每批次 {batch_size} 章")
+            
+            for batch_idx, chapter_batch in enumerate(chapter_batches, 1):
+                logger.info(f"开始处理第 {batch_idx} 批次，包含 {len(chapter_batch)} 章")
+                
+                # 收集当前批次的章节内容
+                batch_chapters_data = []  # 存储每章的内容和元数据
+                batch_content = ""  # 合并的章节内容
+                
+                for chapter in chapter_batch:
+                    chapter_content = ""
+                    try:
+                        # 优先从 ShareDB 获取
+                        document_id_new = f"work_{work_id}_chapter_{chapter.id}"
+                        document_id_old = f"chapter_{chapter.id}"
+                        
+                        document = await sharedb_service.get_document(document_id_new)
+                        if not document:
+                            document = await sharedb_service.get_document(document_id_old)
+                        
+                        if document:
+                            content = document.get("content", "")
+                            if isinstance(content, dict):
+                                content = content.get("content", "") or json.dumps(content, ensure_ascii=False)
+                            elif not isinstance(content, str):
+                                content = str(content)
+                            chapter_content = content
+                        else:
+                            # 如果 ShareDB 没有，尝试从章节元数据获取
+                            if chapter.chapter_metadata and isinstance(chapter.chapter_metadata, dict):
+                                chapter_content = chapter.chapter_metadata.get("content", "")
+                            
+                            if not chapter_content:
+                                logger.warning(f"章节 {chapter.id} 没有找到内容，跳过")
+                                skipped.append({
+                                    "chapter_index": chapter.chapter_number,
+                                    "chapter_id": chapter.id,
+                                    "chapter_number": chapter.chapter_number,
+                                    "chapter_title": chapter.title,
+                                    "message": f"第 {chapter.chapter_number} 章《{chapter.title}》没有内容，跳过"
+                                })
+                                continue
+                    except Exception as e:
+                        logger.error(f"获取章节 {chapter.id} 内容失败: {traceback.format_exc()}")
+                        errors.append({
+                            "chapter_index": chapter.chapter_number,
+                            "chapter_id": chapter.id,
+                            "message": f"第 {chapter.chapter_number} 章《{chapter.title}》获取内容失败: {str(e)}",
+                            "error": str(e)
+                        })
+                        continue
+                    
+                    # 保存章节数据和内容
+                    batch_chapters_data.append({
+                        "chapter": chapter,
+                        "content": chapter_content
                     })
+                    batch_content += f"第{chapter.chapter_number}章 {chapter.title}\n\n{chapter_content}\n\n"
+                
+                if not batch_chapters_data:
+                    logger.warning(f"批次 {batch_idx} 没有有效章节，跳过")
                     continue
                 
                 try:
-                    # 累积当前章节内容
-                    accumulated_content += f"第{chapter.chapter_number}章 {chapter.title}\n\n{chapter_content}\n\n"
+                    # 使用作品信息中的分析prompt，进行变量替换
+                    formatted_prompt = await prompt_service.format_prompt(
+                        template=analysis_prompt_template,
+                        work_id=work_id,
+                        auto_build_context=True
+                    )
                     
-                    # 构建包含所有已分析章节的prompt
-                    # 使用 replace 而不是 format，避免 JSON 示例中的大括号被误解析
-                    full_prompt = enhanced_prompt_template.replace("{content}", accumulated_content)
+                    # 替换 {content} 变量
+                    full_prompt = formatted_prompt.replace("{content}", batch_content)
                     
-                    logger.info(f"开始分析第 {idx} 章《{chapter.title}》")
+                    logger.info(f"开始分析批次 {batch_idx}，包含 {len(batch_chapters_data)} 章")
                     
-                    # 分析当前累积的内容
+                    # 调用AI分析（使用单章分析的逻辑）
                     full_response = await ai_service.analyze_chapter_stream(
-                        content=accumulated_content,
+                        content=batch_content,
                         prompt=full_prompt,
                         system_prompt=None,  # 使用默认 system_prompt
                         model=analysis_settings.model,
                         temperature=analysis_settings.temperature,
                         max_tokens=analysis_settings.max_tokens * 2,
+                        use_json_format=True,  # 使用JSON格式
                     )
                     
-                    # 解析AI响应并渐进式插入
-                    analysis_data = book_analysis_service.parse_ai_response(full_response)
+                    # 解析AI响应：尝试提取JSON数据
+                    logger.debug(f"批次 {batch_idx} AI响应长度: {len(full_response)}")
+                    logger.debug(f"批次 {batch_idx} AI响应前500字符: {full_response[:500]}")
                     
-                    if not analysis_data:
-                        raise ValueError(f"无法解析第 {idx} 章的AI响应，可能返回的不是有效的JSON格式")
+                    import re
+                    json_match = re.search(r'```json\s*(\[.*?\]|\{.*?\})\s*```', full_response, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1)
+                        logger.debug(f"批次 {batch_idx} 从 ```json 代码块中提取JSON")
+                    else:
+                        json_match = re.search(r'(\[.*?\]|\{.*\})', full_response, re.DOTALL)
+                        if json_match:
+                            json_str = json_match.group(0)
+                            logger.debug(f"批次 {batch_idx} 从纯文本中提取JSON")
+                        else:
+                            logger.error(f"批次 {batch_idx} 无法在AI响应中找到JSON数据，响应内容: {full_response[:1000]}")
+                            raise ValueError(f"无法在AI响应中找到JSON数据")
                     
-                    # 渐进式插入到作品
-                    result = await book_analysis_service.incremental_insert_to_work(
-                        work_id=work_id,
-                        analysis_data=analysis_data,
-                        user_id=current_user_id,
-                        chapter_index=idx
-                    )
+                    try:
+                        parsed_data = json.loads(json_str)
+                        logger.debug(f"批次 {batch_idx} JSON解析成功，类型: {type(parsed_data).__name__}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"批次 {batch_idx} JSON解析失败: {e}")
+                        logger.error(f"批次 {batch_idx} JSON字符串: {json_str[:500]}")
+                        raise ValueError(f"JSON解析失败: {str(e)}")
                     
-                    results.append({
-                        "chapter_index": idx,
-                        "chapter_id": chapter.id,
-                        "chapter_number": chapter.chapter_number,
-                        "chapter_title": chapter.title,
-                        "message": f"第 {idx} 章《{chapter.title}》分析完成并已插入作品",
-                        "data": result
-                    })
-                    logger.info(f"✅ 第 {idx} 章《{chapter.title}》分析完成并已插入作品")
+                    # 处理解析结果：可能是单个章节对象、包含chapters数组的对象，或直接是章节数组
+                    chapters_data = []
+                    if isinstance(parsed_data, dict):
+                        logger.debug(f"批次 {batch_idx} 解析结果为字典，键: {list(parsed_data.keys())}")
+                        if "chapters" in parsed_data and isinstance(parsed_data["chapters"], list):
+                            chapters_data = parsed_data["chapters"]
+                            logger.debug(f"批次 {batch_idx} 从 chapters 字段提取到 {len(chapters_data)} 个章节")
+                        elif "chapter_number" in parsed_data:
+                            # 单个章节对象
+                            chapters_data = [parsed_data]
+                            logger.debug(f"批次 {batch_idx} 识别为单个章节对象")
+                        else:
+                            # 可能是其他格式，尝试查找是否有章节相关的字段
+                            logger.warning(f"批次 {batch_idx} 字典中没有找到 chapters 或 chapter_number 字段，所有键: {list(parsed_data.keys())}")
+                    elif isinstance(parsed_data, list):
+                        # 如果直接返回章节数组
+                        chapters_data = parsed_data
+                        logger.debug(f"批次 {batch_idx} 解析结果为数组，长度: {len(chapters_data)}")
+                        # 验证数组中的元素是否是章节对象
+                        if chapters_data and isinstance(chapters_data[0], dict):
+                            if "chapter_number" not in chapters_data[0]:
+                                logger.warning(f"批次 {batch_idx} 数组中的元素没有 chapter_number 字段，第一个元素的键: {list(chapters_data[0].keys()) if chapters_data else 'empty'}")
+                    else:
+                        logger.warning(f"批次 {batch_idx} 解析结果类型不是字典或数组: {type(parsed_data).__name__}")
+                    
+                    if not chapters_data:
+                        # 如果直接解析失败，尝试使用 parse_single_chapter_response 方法
+                        logger.warning(f"批次 {batch_idx} 直接解析失败，尝试使用 parse_single_chapter_response 方法")
+                        try:
+                            single_chapter_data = book_analysis_service.parse_single_chapter_response(full_response)
+                            if single_chapter_data and isinstance(single_chapter_data, dict):
+                                if "chapter_number" in single_chapter_data:
+                                    chapters_data = [single_chapter_data]
+                                    logger.info(f"批次 {batch_idx} 使用 parse_single_chapter_response 成功提取到1个章节")
+                                elif "chapters" in single_chapter_data and isinstance(single_chapter_data["chapters"], list):
+                                    chapters_data = single_chapter_data["chapters"]
+                                    logger.info(f"批次 {batch_idx} 使用 parse_single_chapter_response 成功提取到 {len(chapters_data)} 个章节")
+                        except Exception as parse_error:
+                            logger.error(f"批次 {batch_idx} parse_single_chapter_response 也失败: {parse_error}")
+                        
+                        if not chapters_data:
+                            logger.error(f"批次 {batch_idx} 无法从AI响应中提取章节数据")
+                            logger.error(f"批次 {batch_idx} 解析后的数据: {json.dumps(parsed_data, ensure_ascii=False, indent=2)[:1000] if isinstance(parsed_data, (dict, list)) else str(parsed_data)[:1000]}")
+                            raise ValueError(f"无法从AI响应中提取章节数据，解析后的数据类型: {type(parsed_data).__name__}")
+                    
+                    logger.info(f"批次 {batch_idx} 成功提取到 {len(chapters_data)} 个章节数据")
+                    
+                    # 将解析结果与批次中的章节匹配
+                    for chapter_data in batch_chapters_data:
+                        chapter = chapter_data["chapter"]
+                        chapter_number = chapter.chapter_number
+                        
+                        # 查找匹配的章节数据
+                        matched_chapter_data = None
+                        for parsed_chapter in chapters_data:
+                            parsed_number = parsed_chapter.get("chapter_number")
+                            if parsed_number and (parsed_number == chapter_number or str(parsed_number) == str(chapter_number)):
+                                matched_chapter_data = parsed_chapter
+                                break
+                        
+                        # 如果没有找到匹配的，使用第一个（如果只有一个）
+                        if not matched_chapter_data and len(chapters_data) == 1 and len(batch_chapters_data) == 1:
+                            matched_chapter_data = chapters_data[0]
+                        
+                        if matched_chapter_data:
+                            # 构建分析数据（单章格式）
+                            analysis_data = {
+                                "chapters": [matched_chapter_data]
+                            }
+                            
+                            # 渐进式插入到作品
+                            result = await book_analysis_service.incremental_insert_to_work(
+                                work_id=work_id,
+                                analysis_data=analysis_data,
+                                user_id=current_user_id,
+                                chapter_index=chapter_number
+                            )
+                            
+                            results.append({
+                                "chapter_index": chapter_number,
+                                "chapter_id": chapter.id,
+                                "chapter_number": chapter_number,
+                                "chapter_title": chapter.title,
+                                "message": f"第 {chapter_number} 章《{chapter.title}》分析完成并已插入作品",
+                                "data": result
+                            })
+                            logger.info(f"✅ 第 {chapter_number} 章《{chapter.title}》分析完成并已插入作品")
+                        else:
+                            logger.warning(f"⚠️ 批次 {batch_idx} 中未找到章节 {chapter_number} 的匹配数据")
+                            errors.append({
+                                "chapter_index": chapter_number,
+                                "chapter_id": chapter.id,
+                                "message": f"第 {chapter_number} 章《{chapter.title}》在AI响应中未找到匹配数据",
+                            })
                     
                 except Exception as e:
-                    logger.error(f"渐进式插入失败 (章节 {idx}): {traceback.format_exc()}")
-                    errors.append({
-                        "chapter_index": idx,
-                        "chapter_id": chapter.id,
-                        "message": f"第 {idx} 章《{chapter.title}》插入失败: {str(e)}",
-                        "error": str(e)
-                    })
+                    logger.error(f"批次 {batch_idx} 分析失败: {traceback.format_exc()}")
+                    for chapter_data in batch_chapters_data:
+                        chapter = chapter_data["chapter"]
+                        errors.append({
+                            "chapter_index": chapter.chapter_number,
+                            "chapter_id": chapter.id,
+                            "message": f"第 {chapter.chapter_number} 章《{chapter.title}》分析失败: {str(e)}",
+                            "error": str(e)
+                        })
             
             # 返回JSON响应
             return JSONResponse({
@@ -1752,4 +1962,179 @@ async def create_work_from_file(
     except Exception as e:
         logger.error(f"Failed to create work from file: {traceback.format_exc()}")
         await db.rollback()
+        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
+
+
+@router.post(
+    "/generate-component-data",
+    summary="生成组件数据接口",
+    description="根据组件的生成prompt生成组件数据",
+    responses={
+        200: {"description": "生成成功，返回生成的数据"},
+        400: {"model": ErrorResponse, "description": "请求参数错误"},
+        500: {"model": ErrorResponse, "description": "服务器内部错误"},
+        503: {"model": ErrorResponse, "description": "AI服务不可用"},
+    },
+)
+async def generate_component_data(
+    request: GenerateComponentDataRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    """
+    生成组件数据
+    
+    根据组件的生成prompt生成数据，支持：
+    1. 使用prompt模板ID（generate_prompt_id）或直接使用prompt内容（generate_prompt）
+    2. 自动收集作品、角色、章节等上下文信息
+    3. 格式化prompt并调用AI生成内容
+    
+    Args:
+        request: 生成组件数据请求
+        db: 数据库会话
+        current_user_id: 当前用户ID
+    
+    Returns:
+        Dict: 生成的数据（根据组件类型可能是字符串、列表、对象等）
+    """
+    try:
+        # 验证作品是否存在并检查权限
+        work_service = WorkService(db)
+        work = await work_service.get_work_by_id(request.work_id)
+        if not work:
+            raise HTTPException(status_code=404, detail=f"作品 {request.work_id} 不存在")
+        
+        # 检查用户是否有权限访问该作品
+        if not await work_service.can_access_work(current_user_id, request.work_id):
+            raise HTTPException(status_code=403, detail="无权访问该作品")
+        
+        # 验证prompt参数
+        if not request.generate_prompt_id and not request.generate_prompt:
+            raise HTTPException(status_code=400, detail="必须提供 generate_prompt_id 或 generate_prompt")
+        
+        # 获取AI服务
+        ai_service = get_ai_service()
+        if not ai_service.is_healthy():
+            raise HTTPException(status_code=503, detail="AI服务不可用")
+        
+        # 初始化Prompt上下文服务
+        from memos.api.services.prompt_context_service import PromptContextService
+        prompt_service = PromptContextService(db)
+        await prompt_service.initialize()
+        
+        # 获取或构建prompt
+        formatted_prompt = None
+        if request.generate_prompt_id:
+            # 使用prompt模板
+            template = await prompt_service.get_prompt_template(
+                template_type="component_generate",
+                template_id=request.generate_prompt_id
+            )
+            if not template:
+                raise HTTPException(status_code=404, detail=f"Prompt模板 {request.generate_prompt_id} 不存在")
+            
+            # 格式化prompt（自动收集上下文）
+        else:
+            # 直接使用提供的prompt内容，但仍需要进行变量替换
+            if not request.generate_prompt:
+                raise HTTPException(status_code=400, detail="必须提供 generate_prompt_id 或 generate_prompt")
+            
+            # 创建一个临时模板对象用于变量替换
+            template = PromptTemplate()
+            template.prompt_content = request.generate_prompt
+            
+            # 格式化prompt（自动收集上下文）
+        formatted_prompt = await prompt_service.format_prompt(
+            template=template,
+            work_id=request.work_id,
+            chapter_id=request.chapter_id,
+            auto_build_context=True
+        )
+        
+        if not formatted_prompt:
+            raise HTTPException(status_code=400, detail="无法获取有效的prompt")
+        
+        logger.info(f"开始生成组件数据: work_id={request.work_id}, component_id={request.component_id}, data_key={request.data_key}")
+        logger.debug(f"Formatted prompt (前500字符): {formatted_prompt[:500]}")
+        
+        # 获取该 dataKey 的现有数据，用于构建格式提示（与分析章节逻辑相同）
+        component_data = work.work_metadata.get("component_data", {}) if work.work_metadata else {}
+        existing_data = component_data.get(request.data_key, [])
+        
+        # 构建现有数据的描述，用于指导模型生成合适的数据结构
+        existing_data_context = ""
+        if existing_data and isinstance(existing_data, list) and len(existing_data) > 0:
+            import json
+            # 只展示前3个数据作为示例，避免 prompt 过长
+            example_data = existing_data[:3]
+            existing_data_context = f"""
+# 现有作品数据结构参考
+以下是该作品已有的 {request.data_key} 数据结构示例（请参考此结构生成新数据）：
+
+```json
+{json.dumps(example_data, ensure_ascii=False, indent=2)}
+```
+**重要提示：**
+1. 新生成的数据应该与上述数据结构保持一致
+2. 如果生成的数据与已存在的数据有重复（通过唯一标识字段匹配，如 name、id、title 等），请保持该数据的现有字段结构，只更新或补充新信息
+3. 如果生成新数据，请按照上述数据结构格式生成完整的信息
+"""
+            logger.debug(f"找到现有数据，共 {len(existing_data)} 条，将使用前3条作为格式参考")
+        elif existing_data and not isinstance(existing_data, list):
+            # 如果现有数据不是列表，也提供格式参考
+            import json
+            existing_data_context = f"""
+# 现有作品数据结构参考
+以下是该作品已有的 {request.data_key} 数据结构示例（请参考此结构生成新数据）：
+
+```json
+{json.dumps(existing_data, ensure_ascii=False, indent=2)}
+```
+**重要提示：**
+新生成的数据应该与上述数据结构保持一致。
+"""
+            logger.debug(f"找到现有数据（非列表格式），将作为格式参考")
+        else:
+            logger.debug(f"未找到现有数据（data_key: {request.data_key}），将直接生成新数据")
+        
+        # 在 formatted_prompt 前添加现有数据结构上下文
+        if existing_data_context:
+            formatted_prompt = existing_data_context + "\n\n" + formatted_prompt
+            logger.debug(f"添加现有数据上下文后，formatted_prompt 长度: {len(formatted_prompt)}")
+        
+        # 获取AI设置
+        analysis_settings = request.settings or AnalysisSettings()
+        model = analysis_settings.model or ai_service.default_model
+        # 对于生成任务，使用更高的温度（默认0.9）以增加创造性和多样性
+        # 如果用户没有指定settings或使用默认温度0.7，则使用0.9；否则使用用户指定的值
+        if request.settings is None or (request.settings and request.settings.temperature == 0.7):
+            temperature = 0.9
+        else:
+            temperature = analysis_settings.temperature
+        max_tokens = analysis_settings.max_tokens
+        
+        # 调用AI生成内容（非流式，一次性返回）
+        ai_response = await ai_service.analyze_chapter_stream(
+            content="",  # 对于生成任务，content可以为空
+            prompt=formatted_prompt,
+            system_prompt=None,  # 使用默认系统prompt
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            use_json_format=False,  # 生成内容不需要强制JSON格式
+        )
+        
+        logger.info(f"✅ 组件数据生成完成: component_id={request.component_id}, data_key={request.data_key}, 响应长度={len(ai_response)}")
+        
+        # 返回生成的数据
+        return {
+            "component_id": request.component_id,
+            "data_key": request.data_key,
+            "generated_data": ai_response,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate component data: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")

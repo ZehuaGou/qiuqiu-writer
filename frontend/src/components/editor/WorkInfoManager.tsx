@@ -13,6 +13,7 @@ import type { SelectOption } from '../CustomSelect';
 import { templatesApi } from '../../utils/templatesApi';
 import { worksApi } from '../../utils/worksApi';
 import { promptTemplateApi } from '../../utils/promptTemplateApi';
+import { generateComponentData } from '../../utils/bookAnalysisApi';
 import './WorkInfoManager.css';
 
 // 递归收集所有组件的 promptId
@@ -478,10 +479,12 @@ interface TabsComponentProps {
   onUpdateTabs?: (tabs: { id: string; label: string; components: ComponentConfig[] }[]) => void;
   onAddComponentToTab?: (tabId: string) => void;
   onEditComponentInTab?: (comp: ComponentConfig, tabId: string) => void;
+  onGenerateComponent?: (comp: ComponentConfig, moduleId: string, tabsComponentId?: string, tabId?: string) => void;
+  generatingComponents?: Record<string, boolean>;
   isEditMode?: boolean;  // 是否处于编辑模式
 }
 
-function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpdateTabs, onAddComponentToTab, onEditComponentInTab, isEditMode = false }: TabsComponentProps) {
+function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpdateTabs, onAddComponentToTab, onEditComponentInTab, onGenerateComponent, generatingComponents = {}, isEditMode = false }: TabsComponentProps) {
   const [activeTab, setActiveTab] = useState(tabs[0]?.id || '');
 
   if (tabs.length === 0) {
@@ -514,16 +517,17 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
                   <div className="comp-header">
                     <label className="comp-label">{subComp.label}</label>
                     <div className="comp-header-actions">
-                      {showGenerateBtn && (
+                      {showGenerateBtn && onGenerateComponent && (
                         <button 
                           className="comp-generate-btn" 
                           onClick={() => {
-                            
+                            onGenerateComponent(subComp, moduleId, tabsComponentId, activeTab);
                           }}
+                          disabled={generatingComponents[`${moduleId}-${subComp.id}-${tabsComponentId}-${activeTab}`]}
                           title={subComp.generatePrompt || '生成内容'}
                         >
                           <Sparkles size={14} />
-                          <span>生成</span>
+                          <span>{generatingComponents[`${moduleId}-${subComp.id}-${tabsComponentId}-${activeTab}`] ? '生成中...' : '生成'}</span>
                         </button>
                       )}
                       {isEditMode && (
@@ -982,6 +986,29 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
   
   // 势力展开状态
   const [expandedFactions, setExpandedFactions] = useState<Record<string, boolean>>({});
+  
+  // 生成状态：key 是组件ID，value 是是否正在生成
+  const [generatingComponents, setGeneratingComponents] = useState<Record<string, boolean>>({});
+  
+  // 生成数据预览弹窗状态
+  const [generatePreviewModal, setGeneratePreviewModal] = useState<{
+    isOpen: boolean;
+    comp: ComponentConfig | null;
+    moduleId: string;
+    tabId?: string;
+    generatedData: any;
+    existingData: any;
+    editingIndex: number | null; // 正在编辑的角色索引
+    isGeneratingMore: boolean; // 是否正在继续生成
+  }>({
+    isOpen: false,
+    comp: null,
+    moduleId: '',
+    generatedData: null,
+    existingData: null,
+    editingIndex: null,
+    isGeneratingMore: false
+  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentImageId, setCurrentImageId] = useState<string | null>(null);
@@ -2125,6 +2152,239 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     });
   };
 
+  // 继续生成更多数据（在预览弹窗中）
+  const handleContinueGenerate = async () => {
+    if (!workId || !generatePreviewModal.comp) {
+      return;
+    }
+
+    const comp = generatePreviewModal.comp;
+    
+    // 检查是否有生成prompt
+    if (!comp.generatePromptId && !comp.generatePrompt) {
+      alert('该组件未配置生成prompt，无法生成内容');
+      return;
+    }
+
+    try {
+      // 设置生成状态
+      setGeneratePreviewModal(prev => ({ ...prev, isGeneratingMore: true }));
+
+      // 调用生成API
+      const result = await generateComponentData(
+        Number(workId),
+        comp.id,
+        comp.dataKey || '',
+        comp.generatePromptId,
+        comp.generatePrompt,
+        undefined, // chapterId，暂时不传
+        undefined  // settings，使用默认设置
+      );
+
+      // 解析生成的数据
+      let newGeneratedValue: any = result.generated_data;
+      
+      // 根据组件类型处理生成的数据
+      if (comp.type === 'text' || comp.type === 'textarea') {
+        // 文本类型：追加到现有生成数据
+        const existingText = typeof generatePreviewModal.generatedData === 'string' 
+          ? generatePreviewModal.generatedData 
+          : '';
+        newGeneratedValue = existingText + '\n\n' + newGeneratedValue.trim();
+      } else if (comp.type === 'list') {
+        // 列表类型：尝试解析为数组，如果失败则按行分割
+        try {
+          const parsed = JSON.parse(newGeneratedValue);
+          if (Array.isArray(parsed)) {
+            newGeneratedValue = parsed;
+          } else {
+            newGeneratedValue = newGeneratedValue.split('\n').filter((line: string) => line.trim());
+          }
+        } catch {
+          newGeneratedValue = newGeneratedValue.split('\n').filter((line: string) => line.trim());
+        }
+        // 追加到现有生成数据
+        const existingList = Array.isArray(generatePreviewModal.generatedData) 
+          ? generatePreviewModal.generatedData 
+          : [];
+        newGeneratedValue = [...existingList, ...newGeneratedValue];
+      } else if (comp.type === 'character-card') {
+        // 角色卡片类型：尝试解析为对象数组
+        try {
+          const parsed = JSON.parse(newGeneratedValue);
+          if (Array.isArray(parsed)) {
+            newGeneratedValue = parsed;
+          } else {
+            newGeneratedValue = [parsed];
+          }
+        } catch {
+          alert('生成的数据格式不正确，无法解析为角色列表。生成的内容：\n' + newGeneratedValue.substring(0, 200));
+          setGeneratePreviewModal(prev => ({ ...prev, isGeneratingMore: false }));
+          return;
+        }
+        // 追加到现有生成数据
+        const existingChars = Array.isArray(generatePreviewModal.generatedData) 
+          ? generatePreviewModal.generatedData 
+          : [];
+        newGeneratedValue = [...existingChars, ...newGeneratedValue];
+      } else if (comp.type === 'rank-system') {
+        // 等级体系类型：尝试解析为对象数组
+        try {
+          const parsed = JSON.parse(newGeneratedValue);
+          if (Array.isArray(parsed)) {
+            newGeneratedValue = parsed;
+          } else {
+            newGeneratedValue = [parsed];
+          }
+        } catch {
+          alert('生成的数据格式不正确，无法解析为等级体系。生成的内容：\n' + newGeneratedValue.substring(0, 200));
+          setGeneratePreviewModal(prev => ({ ...prev, isGeneratingMore: false }));
+          return;
+        }
+        // 追加到现有生成数据
+        const existingRanks = Array.isArray(generatePreviewModal.generatedData) 
+          ? generatePreviewModal.generatedData 
+          : [];
+        newGeneratedValue = [...existingRanks, ...newGeneratedValue];
+      }
+
+      // 更新生成数据，保持弹窗打开
+      setGeneratePreviewModal(prev => ({
+        ...prev,
+        generatedData: newGeneratedValue,
+        isGeneratingMore: false,
+        editingIndex: null // 关闭编辑模式
+      }));
+      
+      console.log(`✅ 继续生成完成，已追加到现有生成数据`);
+    } catch (error) {
+      console.error('继续生成失败:', error);
+      alert(`继续生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setGeneratePreviewModal(prev => ({ ...prev, isGeneratingMore: false }));
+    }
+  };
+
+  // 处理组件生成
+  const handleGenerateComponent = async (
+    comp: ComponentConfig,
+    moduleId: string,
+    tabsComponentId?: string,
+    tabId?: string
+  ) => {
+    if (!workId) {
+      alert('请先选择作品');
+      return;
+    }
+
+    // 检查是否有生成prompt
+    if (!comp.generatePromptId && !comp.generatePrompt) {
+      alert('该组件未配置生成prompt，无法生成内容');
+      return;
+    }
+
+    // 检查dataKey
+    if (!comp.dataKey) {
+      alert('该组件未配置dataKey，无法保存生成的数据');
+      return;
+    }
+
+    const componentKey = `${moduleId}-${comp.id}${tabsComponentId ? `-${tabsComponentId}-${tabId}` : ''}`;
+    
+    try {
+      // 设置生成状态
+      setGeneratingComponents(prev => ({ ...prev, [componentKey]: true }));
+
+      // 调用生成API
+      const result = await generateComponentData(
+        Number(workId),
+        comp.id,
+        comp.dataKey,
+        comp.generatePromptId,
+        comp.generatePrompt,
+        undefined, // chapterId，暂时不传
+        undefined  // settings，使用默认设置
+      );
+
+      // 解析生成的数据
+      let generatedValue: any = result.generated_data;
+      
+      // 根据组件类型处理生成的数据
+      if (comp.type === 'text' || comp.type === 'textarea') {
+        // 文本类型直接使用生成的字符串
+        generatedValue = generatedValue.trim();
+      } else if (comp.type === 'list') {
+        // 列表类型：尝试解析为数组，如果失败则按行分割
+        try {
+          const parsed = JSON.parse(generatedValue);
+          if (Array.isArray(parsed)) {
+            generatedValue = parsed;
+          } else {
+            // 如果不是数组，尝试按行分割
+            generatedValue = generatedValue.split('\n').filter((line: string) => line.trim());
+          }
+        } catch {
+          // 解析失败，按行分割
+          generatedValue = generatedValue.split('\n').filter((line: string) => line.trim());
+        }
+      } else if (comp.type === 'character-card') {
+        // 角色卡片类型：尝试解析为对象数组
+        try {
+          const parsed = JSON.parse(generatedValue);
+          if (Array.isArray(parsed)) {
+            generatedValue = parsed;
+          } else {
+            // 如果不是数组，尝试包装成数组
+            generatedValue = [parsed];
+          }
+        } catch {
+          // 解析失败，提示用户
+          alert('生成的数据格式不正确，无法解析为角色列表。生成的内容：\n' + generatedValue.substring(0, 200));
+          return;
+        }
+      } else if (comp.type === 'rank-system') {
+        // 等级体系类型：尝试解析为对象数组
+        try {
+          const parsed = JSON.parse(generatedValue);
+          if (Array.isArray(parsed)) {
+            generatedValue = parsed;
+          } else {
+            generatedValue = [parsed];
+          }
+        } catch {
+          alert('生成的数据格式不正确，无法解析为等级体系。生成的内容：\n' + generatedValue.substring(0, 200));
+          return;
+        }
+      }
+
+      // 获取现有数据
+      const existingValue = comp.value || (comp.type === 'list' || comp.type === 'character-card' || comp.type === 'rank-system' ? [] : '');
+
+      // 显示预览弹窗，让用户确认后再更新
+      setGeneratePreviewModal({
+        isOpen: true,
+        comp: comp,
+        moduleId: moduleId,
+        tabId: tabId,
+        generatedData: generatedValue,
+        existingData: existingValue,
+        editingIndex: null,
+        isGeneratingMore: false
+      });
+      
+      console.log(`✅ 组件 ${comp.label} 生成完成，等待用户确认`);
+    } catch (error) {
+      console.error('生成组件数据失败:', error);
+      alert(`生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      // 清除生成状态
+      setGeneratingComponents(prev => {
+        const next = { ...prev };
+        delete next[componentKey];
+        return next;
+      });
+    }
+  };
+
   // 加载用户模板列表
   useEffect(() => {
     const loadUserTemplates = async () => {
@@ -3210,6 +3470,8 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             tabsComponentId={comp.id}
             renderComponent={renderComponent}
             onUpdateTabs={handleUpdateTabs}
+            onGenerateComponent={handleGenerateComponent}
+            generatingComponents={generatingComponents}
             onAddComponentToTab={handleAddComponentToTab}
             onEditComponentInTab={handleEditComponentInTab}
             isEditMode={isEditMode}
@@ -4569,14 +4831,12 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
                         {showGenerateBtn && (
                           <button 
                             className="comp-generate-btn" 
-                            onClick={() => {
-                              // TODO: 调用 AI 生成
-                              
-                            }}
+                            onClick={() => handleGenerateComponent(comp, activeModule.id)}
+                            disabled={generatingComponents[`${activeModule.id}-${comp.id}`]}
                             title={comp.generatePrompt || '生成内容'}
                           >
                             <Sparkles size={14} />
-                            <span>生成</span>
+                            <span>{generatingComponents[`${activeModule.id}-${comp.id}`] ? '生成中...' : '生成'}</span>
                           </button>
                         )}
                         {isEditMode && (
@@ -5645,6 +5905,378 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           </div>
         </div>
       )}
+
+      {/* 生成数据预览弹窗 */}
+      {generatePreviewModal.isOpen && generatePreviewModal.comp && (() => {
+        const comp = generatePreviewModal.comp;
+        return (
+        <div className="modal-overlay" onClick={() => setGeneratePreviewModal({ ...generatePreviewModal, isOpen: false })}>
+          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '80vh' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>预览生成的数据 - {comp.label}</h3>
+              <button className="modal-close" onClick={() => setGeneratePreviewModal({ ...generatePreviewModal, isOpen: false })}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ overflow: 'auto', maxHeight: '60vh' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                  生成的数据：
+                </label>
+                {comp.type === 'character-card' && Array.isArray(generatePreviewModal.generatedData) ? (
+                  // 角色卡片类型：以卡片形式展示，支持编辑
+                  <div className="comp-character-cards" style={{ marginTop: '12px' }}>
+                    {generatePreviewModal.generatedData.map((char: any, idx: number) => (
+                      <div key={idx} style={{ marginBottom: '12px' }}>
+                        {generatePreviewModal.editingIndex === idx ? (
+                          // 编辑模式
+                          <div style={{ padding: '12px', border: '2px solid #3b82f6', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                            <div style={{ marginBottom: '12px' }}>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>角色名称</label>
+                              <input
+                                type="text"
+                                value={char.name || ''}
+                                onChange={(e) => {
+                                  const newData = [...generatePreviewModal.generatedData];
+                                  newData[idx] = { ...char, name: e.target.value };
+                                  setGeneratePreviewModal({ ...generatePreviewModal, generatedData: newData });
+                                }}
+                                style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
+                                placeholder="角色名称"
+                              />
+                            </div>
+                            <div style={{ marginBottom: '12px', display: 'flex', gap: '12px' }}>
+                              <div style={{ flex: 1 }}>
+                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>性别</label>
+                                <select
+                                  value={char.gender || '男'}
+                                  onChange={(e) => {
+                                    const newData = [...generatePreviewModal.generatedData];
+                                    newData[idx] = { ...char, gender: e.target.value };
+                                    setGeneratePreviewModal({ ...generatePreviewModal, generatedData: newData });
+                                  }}
+                                  style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
+                                >
+                                  <option value="男">男</option>
+                                  <option value="女">女</option>
+                                  <option value="其他">其他</option>
+                                </select>
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>类型</label>
+                                <select
+                                  value={char.type || '主要角色'}
+                                  onChange={(e) => {
+                                    const newData = [...generatePreviewModal.generatedData];
+                                    newData[idx] = { ...char, type: e.target.value };
+                                    setGeneratePreviewModal({ ...generatePreviewModal, generatedData: newData });
+                                  }}
+                                  style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}
+                                >
+                                  <option value="主要角色">主要角色</option>
+                                  <option value="次要角色">次要角色</option>
+                                  <option value="配角">配角</option>
+                                  <option value="反派">反派</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div style={{ marginBottom: '12px' }}>
+                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>描述</label>
+                              <textarea
+                                value={char.description || ''}
+                                onChange={(e) => {
+                                  const newData = [...generatePreviewModal.generatedData];
+                                  newData[idx] = { ...char, description: e.target.value };
+                                  setGeneratePreviewModal({ ...generatePreviewModal, generatedData: newData });
+                                }}
+                                style={{ width: '100%', minHeight: '80px', padding: '6px', borderRadius: '4px', border: '1px solid #ddd', resize: 'vertical' }}
+                                placeholder="角色描述"
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => {
+                                  // 删除角色
+                                  const newData = generatePreviewModal.generatedData.filter((_: any, i: number) => i !== idx);
+                                  setGeneratePreviewModal({ 
+                                    ...generatePreviewModal, 
+                                    generatedData: newData,
+                                    editingIndex: null
+                                  });
+                                }}
+                                style={{ padding: '6px 12px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                              >
+                                删除
+                              </button>
+                              <button
+                                onClick={() => setGeneratePreviewModal({ ...generatePreviewModal, editingIndex: null })}
+                                style={{ padding: '6px 12px', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                              >
+                                完成
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          // 显示模式
+                          <div 
+                            className="character-card-item"
+                            style={{ marginBottom: '12px', cursor: 'pointer', position: 'relative' }}
+                            onClick={() => setGeneratePreviewModal({ ...generatePreviewModal, editingIndex: idx })}
+                          >
+                            <div className="character-card-header">
+                              <div className="character-name-row">
+                                <span className="character-name-display">{char.name || '未命名角色'}</span>
+                                <span className="character-gender-tag">{char.gender || ''}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span className="character-type-tag" style={{ 
+                                  fontSize: '12px', 
+                                  padding: '2px 8px', 
+                                  borderRadius: '4px',
+                                  backgroundColor: '#e0e7ff',
+                                  color: '#4338ca'
+                                }}>
+                                  {char.type || '角色'}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setGeneratePreviewModal({ ...generatePreviewModal, editingIndex: idx });
+                                  }}
+                                  style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                  title="编辑"
+                                >
+                                  编辑
+                                </button>
+                              </div>
+                            </div>
+                            <div className="character-desc-display">
+                              {char.description || '暂无简介'}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {/* 添加新角色按钮 */}
+                    <button
+                      onClick={() => {
+                        const newChar = { name: '', gender: '男', type: '主要角色', description: '' };
+                        const newData = [...generatePreviewModal.generatedData, newChar];
+                        setGeneratePreviewModal({ 
+                          ...generatePreviewModal, 
+                          generatedData: newData,
+                          editingIndex: newData.length - 1
+                        });
+                      }}
+                      style={{ 
+                        width: '100%', 
+                        padding: '12px', 
+                        marginTop: '8px',
+                        backgroundColor: '#f3f4f6', 
+                        border: '2px dashed #d1d5db', 
+                        borderRadius: '8px', 
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <Plus size={16} />
+                      <span>添加角色</span>
+                    </button>
+                    {generatePreviewModal.generatedData.length === 0 && (
+                      <div className="character-empty" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                        <Users size={32} />
+                        <span>暂无角色数据</span>
+                      </div>
+                    )}
+                    {/* JSON编辑区域（可折叠） */}
+                    <details style={{ marginTop: '16px' }}>
+                      <summary style={{ cursor: 'pointer', color: '#666', fontSize: '14px', marginBottom: '8px' }}>
+                        查看/编辑 JSON 数据
+                      </summary>
+                      <textarea
+                        value={JSON.stringify(generatePreviewModal.generatedData, null, 2)}
+                        onChange={(e) => {
+                          try {
+                            const parsed = JSON.parse(e.target.value);
+                            if (Array.isArray(parsed)) {
+                              setGeneratePreviewModal({
+                                ...generatePreviewModal,
+                                generatedData: parsed
+                              });
+                            }
+                          } catch {
+                            // 如果解析失败，保持原样（用户可能正在编辑）
+                          }
+                        }}
+                        style={{ width: '100%', minHeight: '200px', padding: '8px', fontFamily: 'monospace', fontSize: '14px', marginTop: '8px' }}
+                      />
+                    </details>
+                  </div>
+                ) : comp.type === 'text' || comp.type === 'textarea' ? (
+                  <textarea
+                    value={typeof generatePreviewModal.generatedData === 'string' ? generatePreviewModal.generatedData : JSON.stringify(generatePreviewModal.generatedData, null, 2)}
+                    onChange={(e) => {
+                      setGeneratePreviewModal({
+                        ...generatePreviewModal,
+                        generatedData: e.target.value
+                      });
+                    }}
+                    style={{ width: '100%', minHeight: '200px', padding: '8px', fontFamily: 'monospace', fontSize: '14px' }}
+                  />
+                ) : (
+                  <textarea
+                    value={JSON.stringify(generatePreviewModal.generatedData, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        const parsed = JSON.parse(e.target.value);
+                        setGeneratePreviewModal({
+                          ...generatePreviewModal,
+                          generatedData: parsed
+                        });
+                      } catch {
+                        // 如果解析失败，保持原样（用户可能正在编辑）
+                      }
+                    }}
+                    style={{ width: '100%', minHeight: '300px', padding: '8px', fontFamily: 'monospace', fontSize: '14px' }}
+                  />
+                )}
+              </div>
+
+              {generatePreviewModal.existingData && 
+               (Array.isArray(generatePreviewModal.existingData) ? generatePreviewModal.existingData.length > 0 : generatePreviewModal.existingData !== '') && (
+                <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '6px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                    现有数据（{Array.isArray(generatePreviewModal.existingData) ? `${generatePreviewModal.existingData.length} 项` : '已存在'}）：
+                  </label>
+                  {comp.type === 'character-card' && Array.isArray(generatePreviewModal.existingData) ? (
+                    // 角色卡片类型：以卡片形式展示现有数据
+                    <div className="comp-character-cards" style={{ marginTop: '12px' }}>
+                      {generatePreviewModal.existingData.slice(0, 5).map((char: any, idx: number) => (
+                        <div 
+                          key={idx} 
+                          className="character-card-item"
+                          style={{ marginBottom: '12px', cursor: 'default', opacity: 0.8 }}
+                        >
+                          <div className="character-card-header">
+                            <div className="character-name-row">
+                              <span className="character-name-display">{char.name || '未命名角色'}</span>
+                              <span className="character-gender-tag">{char.gender || ''}</span>
+                            </div>
+                            <span className="character-type-tag" style={{ 
+                              fontSize: '12px', 
+                              padding: '2px 8px', 
+                              borderRadius: '4px',
+                              backgroundColor: '#e0e7ff',
+                              color: '#4338ca'
+                            }}>
+                              {char.type || '角色'}
+                            </span>
+                          </div>
+                          <div className="character-desc-display">
+                            {char.description || '暂无简介'}
+                          </div>
+                        </div>
+                      ))}
+                      {generatePreviewModal.existingData.length > 5 && (
+                        <div style={{ textAlign: 'center', color: '#666', fontSize: '12px', marginTop: '8px' }}>
+                          ... 还有 {generatePreviewModal.existingData.length - 5} 个角色
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#666', maxHeight: '150px', overflow: 'auto' }}>
+                      {Array.isArray(generatePreviewModal.existingData) ? (
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {JSON.stringify(generatePreviewModal.existingData.slice(0, 3), null, 2)}
+                          {generatePreviewModal.existingData.length > 3 && `\n... 还有 ${generatePreviewModal.existingData.length - 3} 项`}
+                        </pre>
+                      ) : (
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {String(generatePreviewModal.existingData).substring(0, 200)}
+                          {String(generatePreviewModal.existingData).length > 200 && '...'}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setGeneratePreviewModal({ ...generatePreviewModal, isOpen: false })}>
+                取消
+              </button>
+              <div className="footer-spacer" />
+              {/* 继续生成按钮 */}
+              <button
+                className="btn-secondary"
+                onClick={handleContinueGenerate}
+                disabled={generatePreviewModal.isGeneratingMore}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Sparkles size={14} />
+                <span>{generatePreviewModal.isGeneratingMore ? '生成中...' : '继续生成'}</span>
+              </button>
+              {generatePreviewModal.existingData && 
+               (Array.isArray(generatePreviewModal.existingData) ? generatePreviewModal.existingData.length > 0 : generatePreviewModal.existingData !== '') && (
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    if (!comp) return;
+                    // 追加模式：将生成的数据追加到现有数据
+                    let finalData: any;
+                    if (Array.isArray(generatePreviewModal.existingData) && Array.isArray(generatePreviewModal.generatedData)) {
+                      finalData = [...generatePreviewModal.existingData, ...generatePreviewModal.generatedData];
+                    } else if (Array.isArray(generatePreviewModal.existingData)) {
+                      finalData = [...generatePreviewModal.existingData, generatePreviewModal.generatedData];
+                    } else {
+                      // 对于非数组类型，追加意味着拼接
+                      finalData = String(generatePreviewModal.existingData) + '\n' + String(generatePreviewModal.generatedData);
+                    }
+                    
+                    updateComponentValue(
+                      generatePreviewModal.moduleId,
+                      comp.id,
+                      finalData,
+                      generatePreviewModal.tabId
+                    );
+                    setHasUnsavedChanges(true);
+                    setGeneratePreviewModal({ ...generatePreviewModal, isOpen: false });
+                  }}
+                >
+                  追加到现有数据
+                </button>
+              )}
+                  <button
+                className="btn-primary"
+                onClick={() => {
+                  // 替换模式：直接用生成的数据替换现有数据
+                  if (comp) {
+                    updateComponentValue(
+                      generatePreviewModal.moduleId,
+                      comp.id,
+                      generatePreviewModal.generatedData,
+                      generatePreviewModal.tabId
+                    );
+                    setHasUnsavedChanges(true);
+                    setGeneratePreviewModal({ ...generatePreviewModal, isOpen: false });
+                  }
+                }}
+              >
+                {generatePreviewModal.existingData && 
+                 (Array.isArray(generatePreviewModal.existingData) ? generatePreviewModal.existingData.length > 0 : generatePreviewModal.existingData !== '') 
+                  ? '替换现有数据' 
+                  : '确认使用'}
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
     </div>
   );
 }

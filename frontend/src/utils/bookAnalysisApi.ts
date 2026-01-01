@@ -1084,6 +1084,84 @@ export async function testAPIConnection(): Promise<{
  * @param settings 生成设置（可选）
  * @returns Promise<string> 生成的章节内容
  */
+/**
+ * 生成组件数据
+ * 
+ * @param workId 作品ID
+ * @param componentId 组件ID
+ * @param dataKey 组件数据键
+ * @param generatePromptId 生成prompt模板ID（可选）
+ * @param generatePrompt 生成prompt内容（可选，如果generatePromptId未提供则使用此字段）
+ * @param chapterId 章节ID（可选）
+ * @param settings 生成设置（可选）
+ * @returns Promise<{ component_id: string; data_key: string; generated_data: string }>
+ */
+export async function generateComponentData(
+  workId: number,
+  componentId: string,
+  dataKey: string,
+  generatePromptId?: number,
+  generatePrompt?: string,
+  chapterId?: number,
+  settings?: AnalysisSettings
+): Promise<{ component_id: string; data_key: string; generated_data: string }> {
+  try {
+    const token = localStorage.getItem('access_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const body: any = {
+      work_id: workId,
+      component_id: componentId,
+      data_key: dataKey,
+    };
+
+    if (generatePromptId) {
+      body.generate_prompt_id = generatePromptId;
+    } else if (generatePrompt) {
+      body.generate_prompt = generatePrompt;
+    } else {
+      throw new Error('必须提供 generate_prompt_id 或 generate_prompt');
+    }
+
+    if (chapterId) {
+      body.chapter_id = chapterId;
+    }
+
+    if (settings) {
+      body.settings = {
+        model: settings.model,
+        temperature: settings.temperature,
+        max_tokens: settings.maxTokens,
+      };
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/ai/generate-component-data`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API 调用失败: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('生成组件数据失败:', error);
+    throw error;
+  }
+}
+
 export async function generateChapterContent(
   outline: string,
   detailedOutline: string,
