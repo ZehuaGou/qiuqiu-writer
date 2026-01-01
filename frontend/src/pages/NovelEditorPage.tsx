@@ -635,56 +635,100 @@ export default function NovelEditorPage(){
         throw new Error(`分析失败: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
-      // 处理流式响应（后台处理，不显示进度）
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('无法获取响应流');
-      }
+      // 检查响应类型：可能是JSON或SSE流式响应
+      const contentType = response.headers.get('content-type') || '';
       
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let analyzedCount = 0; // 统计分析的章节数
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      if (contentType.includes('application/json')) {
+        // JSON响应（非流式）
+        const data = await response.json();
         
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        setIsAnalyzing(false);
         
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+        if (data.success) {
+          const successCount = data.success_count || 0;
+          const errorCount = data.error_count || 0;
+          
+          let message = `分析完成！`;
+          if (successCount > 0) {
+            message += `成功分析 ${successCount} 章`;
+          }
+          if (errorCount > 0) {
+            message += `，${errorCount} 章失败`;
+          }
+          if (data.errors && data.errors.length > 0) {
+            const errorMessages = data.errors.map((e: any) => e.message || e.error || '未知错误').join('；');
+            console.warn('分析错误详情:', errorMessages);
+          }
+          
+          alert(message);
+          
+          // 静默刷新数据（不刷新整个页面）
+          if (workId) {
             try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === 'start') {
-                // 记录开始信息（如果需要可以在这里处理）
-              } else if (data.type === 'chapter_inserted') {
-                // 统计成功分析的章节
-                analyzedCount++;
-                
-              } else if (data.type === 'all_chapters_complete') {
-                // 分析完成，显示结果
-                setIsAnalyzing(false);
-                
-                // 显示简单的提示信息
-                alert(`分析完成！共分析了 ${analyzedCount} 章。`);
-                // 静默刷新数据（不刷新整个页面）
-                if (workId) {
-                  // 重新加载作品和章节数据
-                  const workData = await worksApi.getWork(Number(workId));
-                  setWork(workData);
-                  // 触发章节列表重新加载
-                  window.dispatchEvent(new Event('chapters-updated'));
+              // 重新加载作品和章节数据
+              const workData = await worksApi.getWork(Number(workId));
+              setWork(workData);
+              // 触发章节列表重新加载
+              window.dispatchEvent(new Event('chapters-updated'));
+            } catch (refreshError) {
+              console.error('刷新数据失败:', refreshError);
+            }
+          }
+        } else {
+          alert(`分析失败: ${data.message || '未知错误'}`);
+        }
+      } else {
+        // SSE流式响应（兼容旧版本）
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('无法获取响应流');
+        }
+        
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let analyzedCount = 0; // 统计分析的章节数
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === 'start') {
+                  // 记录开始信息（如果需要可以在这里处理）
+                } else if (data.type === 'chapter_inserted') {
+                  // 统计成功分析的章节
+                  analyzedCount++;
+                  
+                } else if (data.type === 'all_chapters_complete') {
+                  // 分析完成，显示结果
+                  setIsAnalyzing(false);
+                  
+                  // 显示简单的提示信息
+                  alert(`分析完成！共分析了 ${analyzedCount} 章。`);
+                  // 静默刷新数据（不刷新整个页面）
+                  if (workId) {
+                    // 重新加载作品和章节数据
+                    const workData = await worksApi.getWork(Number(workId));
+                    setWork(workData);
+                    // 触发章节列表重新加载
+                    window.dispatchEvent(new Event('chapters-updated'));
+                  }
+                } else if (data.type === 'error' || data.type === 'chapter_insert_error') {
+                  console.error('分析错误:', data.message);
+                  setIsAnalyzing(false);
+                  alert(`分析失败: ${data.message}`);
                 }
-              } else if (data.type === 'error' || data.type === 'chapter_insert_error') {
-                console.error('分析错误:', data.message);
-                setIsAnalyzing(false);
-                alert(`分析失败: ${data.message}`);
+              } catch (e) {
+                // 忽略解析错误
+                console.warn('解析SSE消息失败:', e, line);
               }
-            } catch (e) {
-              // 忽略解析错误
-              console.warn('解析SSE消息失败:', e, line);
             }
           }
         }
