@@ -479,7 +479,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
         ensure_memos_user_exists(chat_req.user_id)
 
         # 如果是命令，需要先提取章节ID（在替换提及之前）
-        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info")
+        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
         
         # 处理提及替换
@@ -657,6 +657,107 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                 error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
                 yield error_data
 
+        async def run_chapter_info_verification_stream():
+            """调用章节信息校验服务并流式返回结果文本。"""
+            work_id = _parse_work_id_from_user_id(chat_req.user_id)
+            print(work_id)
+            if not work_id:
+                yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行章节信息校验'})}\n\n"
+                return
+
+            try:
+                yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+
+                # 权限与服务检查
+                work_service = WorkService(db)
+                work = await work_service.get_work_by_id(work_id)
+                if not work:
+                    raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+
+                chapter_service = ChapterService(db)
+                if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+                    raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
+
+                # 解析章节ID（从原始命令中提取，在替换提及之前）
+                # 使用原始的 chat_req.query 而不是 processed_query，因为 processed_query 已经替换了 @chapter:2122
+                chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+                if not chapter_ids:
+                    # 如果没有指定章节，尝试获取第一个章节
+                    chapters, _ = await chapter_service.get_chapters(
+                        filters={"work_id": work_id},
+                        page=1,
+                        size=1,
+                        sort_by="chapter_number",
+                        sort_order="asc"
+                    )
+                    if chapters:
+                        chapter_ids = [chapters[0].id]
+                    else:
+                        yield f"data: {json.dumps({'type': 'error', 'content': '作品中没有章节，无法执行信息校验'})}\n\n"
+                        return
+
+                ai_service = get_ai_service()
+                if not ai_service.is_healthy():
+                    raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+
+                analysis_settings = AnalysisSettings()
+                book_analysis_service = BookAnalysisService(db)
+
+                # 解析当前用户ID
+                current_user_id = int(work.owner_id)
+
+                # 处理每个章节
+                total = len(chapter_ids)
+                success_count = 0
+                error_count = 0
+                all_summaries = []
+
+                for idx, chapter_id in enumerate(chapter_ids, 1):
+                    try:
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'正在校验章节 {idx}/{total} (ID: {chapter_id})...'}, ensure_ascii=False)}\n\n"
+                        
+                        # 调用信息校验
+                        result = await book_analysis_service.verify_chapter_info(
+                            work_id=work_id,
+                            chapter_id=chapter_id,
+                            ai_service=ai_service,
+                            current_user_id=current_user_id,
+                            analysis_settings={
+                                "model": analysis_settings.model,
+                                "temperature": analysis_settings.temperature,
+                                "max_tokens": analysis_settings.max_tokens,
+                            },
+                            build_text_summary=True,
+                        )
+
+                        # 提取 summary_text
+                        summary_text = result.get("summary_text", "")
+                        if summary_text:
+                            all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
+                            yield f"data: {json.dumps({'type': 'text', 'data': summary_text}, ensure_ascii=False)}\n\n"
+
+                        success_count += 1
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 校验完成'}, ensure_ascii=False)}\n\n"
+
+                    except Exception as e:
+                        error_count += 1
+                        error_msg = str(e)
+                        logger.error(f"校验章节 {chapter_id} 失败: {e}", exc_info=True)
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 校验失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+
+                # 生成最终摘要
+                final_summary = f"\n章节信息校验完成：成功 {success_count}，失败 {error_count}，总计 {total}"
+                print(final_summary)
+                if all_summaries:
+                    final_summary += "\n\n" + "\n\n".join(all_summaries)
+                yield f"data: {json.dumps({'type': 'text', 'data': final_summary}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'end'})}\n\n"
+
+            except Exception as e:
+                logger.error(f"Error in chapter info verification stream: {e}", exc_info=True)
+                error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
+                yield error_data
+
         async def generate_simple_stream():
             """流式直接调用大模型（无记忆检索）。"""
             try:
@@ -692,10 +793,16 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
             """Generate chat response as SSE stream."""
             try:
                 query_lower = processed_query.strip().lower()
-                if disable_memory and query_lower.startswith("/analysis-chapter-info"):
+                if disable_memory and query_lower.startswith("/verification-chapter-info"):
+                    print("run_chapter_info_verification_stream")
+                    async for chunk in run_chapter_info_verification_stream():
+                        yield chunk
+                elif disable_memory and query_lower.startswith("/analysis-chapter-info"):
+                    print("run_chapter_info_analysis_stream")
                     async for chunk in run_chapter_info_analysis_stream():
                         yield chunk
                 elif disable_memory and query_lower.startswith("/analysis-chapter"):
+                    print("run_generate_outlines_stream")
                     async for chunk in run_generate_outlines_stream():
                         yield chunk
                 elif disable_memory:
@@ -749,7 +856,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
         ensure_memos_user_exists(chat_req.user_id)
 
         # 如果是命令，需要先提取章节ID（在替换提及之前）
-        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info")
+        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
         
         # 处理提及替换
@@ -760,7 +867,85 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
         disable_memory = not chat_req.use_memory or is_command
 
         query_lower = chat_req.query.strip().lower()
-        if disable_memory and query_lower.startswith("/analysis-chapter-info"):
+        if disable_memory and query_lower.startswith("/verification-chapter-info"):
+            # 处理章节信息校验命令
+            work_id = _parse_work_id_from_user_id(chat_req.user_id)
+            if not work_id:
+                raise HTTPException(status_code=400, detail="未能从 user_id 解析 work_id，无法执行章节信息校验")
+
+            # 使用原始的 chat_req.query 而不是 processed_query，因为 processed_query 已经替换了 @chapter:2122
+            chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+            if not chapter_ids:
+                # 如果没有指定章节，尝试获取第一个章节
+                chapter_service = ChapterService(db)
+                chapters, _ = await chapter_service.get_chapters(
+                    filters={"work_id": work_id},
+                    page=1,
+                    size=1,
+                    sort_by="chapter_number",
+                    sort_order="asc"
+                )
+                if chapters:
+                    chapter_ids = [chapters[0].id]
+                else:
+                    raise HTTPException(status_code=400, detail="作品中没有章节，无法执行信息校验")
+
+            # 权限与服务检查
+            work_service = WorkService(db)
+            work = await work_service.get_work_by_id(work_id)
+            if not work:
+                raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+
+            if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+                raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
+
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+
+            analysis_settings = AnalysisSettings()
+            book_analysis_service = BookAnalysisService(db)
+            current_user_id = int(work.owner_id)
+
+            # 处理每个章节
+            all_summaries = []
+            success_count = 0
+            error_count = 0
+            for chapter_id in chapter_ids:
+                try:
+                    result = await book_analysis_service.verify_chapter_info(
+                        work_id=work_id,
+                        chapter_id=chapter_id,
+                        ai_service=ai_service,
+                        current_user_id=current_user_id,
+                        analysis_settings={
+                            "model": analysis_settings.model,
+                            "temperature": analysis_settings.temperature,
+                            "max_tokens": analysis_settings.max_tokens,
+                        },
+                        build_text_summary=True,
+                    )
+                    summary_text = result.get("summary_text", "")
+                    if summary_text:
+                        all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"校验章节 {chapter_id} 失败: {e}", exc_info=True)
+                    all_summaries.append(f"章节 {chapter_id} 校验失败: {str(e)}")
+
+            # 构建返回消息
+            response_text = f"章节信息校验完成：成功 {success_count}，失败 {error_count}，总计 {len(chapter_ids)}"
+            if all_summaries:
+                response_text += "\n\n" + "\n\n".join(all_summaries)
+
+            return {
+                "code": 200,
+                "message": "校验完成",
+                "data": response_text,
+            }
+
+        elif disable_memory and query_lower.startswith("/analysis-chapter-info"):
             # 处理章节组件信息分析命令
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:

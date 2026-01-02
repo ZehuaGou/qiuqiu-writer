@@ -160,6 +160,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
     const commandOptions: MentionOption[] = [
       { type: 'command', id: 'analysis-chapter', name: '/analysis-chapter', subtitle: '分析指定章节', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'analysis-chapter-info', name: '/analysis-chapter-info', subtitle: '分析章节组件信息', isCommand: true, commandKind: 'slash' },
+      { type: 'command', id: 'verification-chapter-info', name: '/verification-chapter-info', subtitle: '校验章节信息', isCommand: true, commandKind: 'slash' },
     ];
     const textBeforeCursor = value.substring(0, cursorPos);
     const lastSlashIndex = textBeforeCursor.lastIndexOf('/');

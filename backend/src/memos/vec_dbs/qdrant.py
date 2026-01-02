@@ -264,8 +264,20 @@ class QdrantVecDB(BaseVecDB):
                     self.delete_collection(self.config.collection_name)
                     self.create_collection()
             except Exception as e:
-                logger.warning(f"Failed to check collection dimension: {e}. Attempting to create collection...")
-                self.create_collection()
+                # 如果获取集合信息失败，先再次确认集合是否存在
+                # 如果集合确实存在，说明只是获取信息时出现了临时错误，应该跳过创建
+                if self.collection_exists(self.config.collection_name):
+                    logger.warning(
+                        f"Failed to check collection dimension for '{self.config.collection_name}': {e}. "
+                        f"Collection exists, skipping creation. Will continue with search."
+                    )
+                    # 集合存在但无法获取信息，可能是临时网络问题，继续执行搜索
+                else:
+                    # 集合不存在，尝试创建
+                    logger.warning(
+                        f"Failed to check collection dimension: {e}. Collection may not exist. Attempting to create collection..."
+                    )
+                    self.create_collection()
         qdrant_filter = self._dict_to_filter(filter) if filter else None
         response = self.client.search(
             collection_name=self.config.collection_name,

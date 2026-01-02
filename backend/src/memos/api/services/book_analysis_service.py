@@ -1059,6 +1059,285 @@ class BookAnalysisService:
             "summary_text": summary_text,
         }
 
+    async def verify_chapter_info(
+        self,
+        work_id: int,
+        chapter_id: int,
+        ai_service,
+        current_user_id: int,
+        analysis_settings: Optional[Dict[str, Any]] = None,
+        build_text_summary: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        基于 PromptTemplate（category='verification'）对单章进行信息校验，返回问题和建议。
+        
+        Args:
+            work_id: 作品ID
+            chapter_id: 章节ID
+            ai_service: AI服务实例
+            current_user_id: 当前用户ID
+            analysis_settings: AI分析设置（可选）
+            build_text_summary: 是否生成文本摘要
+        
+        Returns:
+            包含校验结果、问题和建议的字典，如果 build_text_summary=True 则包含 summary_text
+        """
+        analysis_settings = analysis_settings or {}
+        all_verification_results: List[Dict[str, Any]] = []
+
+        # 获取章节与内容
+        chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter or chapter.work_id != work_id:
+            raise ValueError(f"章节 {chapter_id} 不存在或不属于作品 {work_id}")
+
+        chapter_content = await self.get_chapter_content(chapter_id)
+        if not chapter_content:
+            logger.warning(f"章节 {chapter_id} 内容为空，跳过信息校验")
+            return {"summary_text": "章节内容为空，无法进行信息校验。"}
+
+        # 获取模板ID（从 work_metadata.template_config.templateId 中获取）
+        template_id = None
+        try:
+            from memos.api.services.work_service import WorkService
+            work_service = WorkService(self.db)
+            work = await work_service.get_work_by_id(work_id)
+            if work:
+                work_metadata = work.work_metadata or {}
+                template_config = work_metadata.get("template_config")
+                if template_config and isinstance(template_config, dict):
+                    template_id_str = template_config.get("templateId")
+                    if template_id_str:
+                        # templateId 可能是 "db-1" 格式，需要提取数字
+                        if isinstance(template_id_str, str) and template_id_str.startswith("db-"):
+                            try:
+                                template_id = int(template_id_str.replace("db-", ""))
+                                logger.info(f"✅ 从 work_metadata.template_config.templateId 中获取到 template_id: {template_id_str} -> {template_id}")
+                            except ValueError:
+                                logger.warning(f"无法解析 templateId: {template_id_str}")
+                        elif isinstance(template_id_str, (int, str)):
+                            try:
+                                template_id = int(template_id_str)
+                                logger.info(f"✅ 从 work_metadata.template_config.templateId 中获取到 template_id: {template_id}")
+                            except (ValueError, TypeError):
+                                logger.warning(f"无法解析 templateId: {template_id_str}")
+        except Exception as e:
+            logger.error(f"获取 template_id 失败: {e}")
+
+        if not template_id:
+            logger.warning(f"作品 {work_id} 没有关联的 template_id，跳过信息校验")
+            return {"summary_text": "未关联模板，无法进行信息校验。"}
+
+        # 查询 PromptTemplate（使用 verification 类别）
+        try:
+            prompt_stmt = select(PromptTemplate).where(
+                and_(
+                    PromptTemplate.work_template_id == template_id,
+                    PromptTemplate.prompt_category == "validate",
+                    PromptTemplate.is_active.is_(True),
+                )
+            )
+            prompt_result = await self.db.execute(prompt_stmt)
+            prompt_templates = prompt_result.scalars().all()
+        except Exception as e:
+            logger.error(f"查询 validate PromptTemplate 失败: {e}")
+            prompt_templates = []
+
+        if not prompt_templates:
+            logger.warning(f"作品 {work_id} 的模板（template_id: {template_id}）未找到 validate prompt，跳过信息校验")
+            return {"summary_text": "未找到校验模板，无法进行信息校验。"}
+
+        # 获取作品 metadata / component_data（用于上下文）
+        work_obj_stmt = select(Work).where(Work.id == work_id)
+        work_obj_res = await self.db.execute(work_obj_stmt)
+        work_obj = work_obj_res.scalar_one_or_none()
+        if not work_obj:
+            raise ValueError(f"作品 {work_id} 不存在")
+        work_metadata = work_obj.work_metadata or {}
+        component_data = work_metadata.get("component_data", {})
+
+        # 构建所有组件数据的上下文（用于所有验证 prompt）
+        all_component_data_context = ""
+        if component_data:
+            component_data_summary = {}
+            for key, value_list in component_data.items():
+                if isinstance(value_list, list) and len(value_list) > 0:
+                    # 只取前10个作为参考，避免 prompt 过长
+                    component_data_summary[key] = value_list[:10]
+            
+            if component_data_summary:
+                all_component_data_context = (
+                    "# 作品中的所有组件数据参考\n"
+                    "以下是该作品已有的所有组件数据（用于校验参考）：\n\n"
+                    f"```json\n{json.dumps(component_data_summary, ensure_ascii=False, indent=2)}\n```\n\n"
+                    "**重要提示：**\n"
+                    "1. 请参考上述所有组件数据来校验章节内容\n"
+                    "2. 检查章节内容是否与已有组件数据一致\n"
+                    "3. 识别可能的不一致、矛盾或遗漏\n\n"
+                )
+
+        # 遍历 prompt_templates，逐个进行验证
+        for prompt_template in prompt_templates:
+            data_key = prompt_template.data_key
+            verification_prompt = prompt_template.prompt_content
+            if not verification_prompt:
+                continue
+
+            # 获取当前 data_key 的详细数据（如果有）
+            current_data_key_context = ""
+            if data_key and data_key in component_data:
+                existing_data = component_data.get(data_key, [])
+                if existing_data and isinstance(existing_data, list):
+                    # 当前组件的所有数据（不限制数量，因为这是针对该组件的验证）
+                    current_data_key_context = (
+                        f"# 当前验证组件：{data_key}\n"
+                        f"以下是该作品已有的 {data_key} 完整数据（用于详细校验）：\n\n"
+                        f"```json\n{json.dumps(existing_data, ensure_ascii=False, indent=2)}\n```\n\n"
+                    )
+
+            # 构造 prompt
+            temp_tpl = PromptTemplate()
+            temp_tpl.prompt_content = verification_prompt
+            user_prompt = temp_tpl.format_prompt(
+                chapter=chapter,
+                content=chapter_content,
+                chapter_content=chapter_content,
+            )
+            
+            # 拼装完整的 prompt：所有组件数据 + 当前组件详细数据 + 验证 prompt
+            full_prompt_parts = []
+            if all_component_data_context:
+                full_prompt_parts.append(all_component_data_context)
+            if current_data_key_context:
+                full_prompt_parts.append(current_data_key_context)
+            full_prompt_parts.append(user_prompt)
+            user_prompt = "\n".join(full_prompt_parts)
+
+            system_prompt = "你是一位专业的小说内容校验专家，请仔细检查章节内容，识别问题并提供改进建议。"
+
+            # 调用 AI
+            try:
+                ai_response = await ai_service.analyze_chapter_stream(
+                    content=chapter_content,
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    model=analysis_settings.get("model"),
+                    temperature=analysis_settings.get("temperature", 0.7),
+                    max_tokens=analysis_settings.get("max_tokens", 4000),
+                )
+
+                # 直接使用 AI 的原始文本响应
+                verification_result = {
+                    "data_key": data_key or "general",
+                    "prompt_name": prompt_template.name or "未命名",
+                    "result": ai_response,
+                }
+                all_verification_results.append(verification_result)
+            except Exception as e:
+                logger.error(f"校验章节 {chapter_id} 时出错（prompt: {prompt_template.name}）: {e}", exc_info=True)
+                verification_result = {
+                    "data_key": data_key or "general",
+                    "prompt_name": prompt_template.name or "未命名",
+                    "error": str(e),
+                }
+                all_verification_results.append(verification_result)
+
+        # 如果有多个验证结果，让 AI 进行总结
+        ai_summary = None
+        if len(all_verification_results) > 0:
+            try:
+                # 构建所有验证结果的汇总文本
+                verification_summary_text = "以下是各个组件的验证结果：\n\n"
+                for idx, vr in enumerate(all_verification_results, 1):
+                    prompt_name = vr.get("prompt_name", "未命名")
+                    data_key = vr.get("data_key", "general")
+                    
+                    if "error" in vr:
+                        verification_summary_text += f"## {idx}. 【{prompt_name}】({data_key})\n"
+                        verification_summary_text += f"校验失败: {vr['error']}\n\n"
+                    else:
+                        result_data = vr.get("result", "")
+                        verification_summary_text += f"## {idx}. 【{prompt_name}】({data_key})\n"
+                        verification_summary_text += f"{result_data}\n\n"
+                
+                # 构建总结 prompt
+                summary_prompt = f"""你是一位专业的小说内容校验总结专家。请对以下各个组件的验证结果进行综合分析，生成一份清晰的总结报告。
+
+                        # 章节信息
+                        - 章节ID: {chapter_id}
+                        - 章节标题: {chapter.title or '未命名'}
+                        - 章节号: {chapter.chapter_number or '未知'}
+
+                        # 各组件验证结果
+
+                        {verification_summary_text}
+
+                        # 任务要求
+                        请对以上所有组件的验证结果进行综合分析，生成一份总结报告，包括：
+                        1. **总体评估**：章节内容的整体质量评估
+                        2. **主要问题**：汇总所有组件发现的关键问题，按优先级排序
+                        3. **改进建议**：提供综合性的改进建议，优先处理最重要的问题
+                        4. **一致性检查**：检查各组件验证结果之间是否存在矛盾或不一致
+                        5. **优先级排序**：将问题和建议按重要性和紧急程度排序
+
+                        请以清晰、结构化的格式输出总结报告。"""
+
+                # 调用 AI 进行总结
+                ai_summary_response = await ai_service.analyze_chapter_stream(
+                    content=chapter_content,
+                    prompt=summary_prompt,
+                    system_prompt="你是一位专业的小说内容校验总结专家，擅长综合分析多个验证结果并生成清晰的总结报告。",
+                    model=analysis_settings.get("model"),
+                    temperature=analysis_settings.get("temperature", 0.7),
+                    max_tokens=analysis_settings.get("max_tokens", 4000),
+                )
+                
+                # 直接使用 AI 的原始文本响应
+                ai_summary = ai_summary_response
+                    
+                logger.info(f"✅ 章节 {chapter_id} 验证结果 AI 总结完成")
+            except Exception as e:
+                logger.error(f"生成验证结果 AI 总结失败: {e}", exc_info=True)
+                ai_summary = f"生成总结失败: {str(e)}"
+
+        # 构建返回结果
+        result: Dict[str, Any] = {
+            "chapter_id": chapter_id,
+            "verification_results": all_verification_results,
+            "ai_summary": ai_summary,
+        }
+
+        # 生成文本摘要
+        if build_text_summary:
+            summary_parts = []
+            for vr in all_verification_results:
+                prompt_name = vr.get("prompt_name", "未命名")
+                if "error" in vr:
+                    summary_parts.append(f"【{prompt_name}】校验失败: {vr['error']}")
+                else:
+                    result_data = vr.get("result", "")
+                    summary_parts.append(f"【{prompt_name}】")
+                    if result_data:
+                        # 如果结果太长，截取前1000个字符
+                        if len(result_data) > 1000:
+                            summary_parts.append(result_data[:1000] + "...")
+                        else:
+                            summary_parts.append(result_data)
+                    else:
+                        summary_parts.append("校验完成")
+            
+            # 添加 AI 总结到摘要
+            if ai_summary:
+                summary_parts.append("\n" + "=" * 50)
+                summary_parts.append("【AI 综合分析总结】")
+                summary_parts.append(str(ai_summary))
+            
+            if summary_parts:
+                result["summary_text"] = "\n".join(summary_parts)
+            else:
+                result["summary_text"] = "未完成任何校验。"
+
+        return result
+
     async def create_work_from_analysis(
         self,
         analysis_data: Dict[str, Any],
