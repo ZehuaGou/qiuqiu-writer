@@ -479,7 +479,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
         ensure_memos_user_exists(chat_req.user_id)
 
         # 如果是命令，需要先提取章节ID（在替换提及之前）
-        command_prefixes = ("/analysis-chapter", "/analysis-work", "/analysis-chapter-info")
+        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
         
         # 处理提及替换
@@ -695,7 +695,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                 if disable_memory and query_lower.startswith("/analysis-chapter-info"):
                     async for chunk in run_chapter_info_analysis_stream():
                         yield chunk
-                elif disable_memory and query_lower.startswith(("/analysis-chapter", "/analysis-work")):
+                elif disable_memory and query_lower.startswith("/analysis-chapter"):
                     async for chunk in run_generate_outlines_stream():
                         yield chunk
                 elif disable_memory:
@@ -749,7 +749,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
         ensure_memos_user_exists(chat_req.user_id)
 
         # 如果是命令，需要先提取章节ID（在替换提及之前）
-        command_prefixes = ("/analysis-chapter", "/analysis-work", "/analysis-chapter-info")
+        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
         
         # 处理提及替换
@@ -838,7 +838,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
                 "data": response_text,
             }
 
-        elif disable_memory and query_lower.startswith(("/analysis-chapter", "/analysis-work")):
+        elif disable_memory and query_lower.startswith("/analysis-chapter"):
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:
                 raise HTTPException(status_code=400, detail="未能从 user_id 解析 work_id，无法执行章节分析")

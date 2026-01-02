@@ -121,11 +121,9 @@ export default function NovelEditorPage(){
   // 存储章节数据
   const [chaptersData, setChaptersData] = useState<Record<string, ChapterFullData>>({});
   
-  // 草稿数据
-  const [drafts, setDrafts] = useState<Array<{ id: string; title: string; volumeId?: string; volumeTitle?: string; characters?: string[]; locations?: string[]; outline?: string; detailOutline?: string }>>([]);
 
   // 卷和章节数据 - 从API获取
-  const [volumes, setVolumes] = useState<Array<{ id: string; title: string; chapters: Array<{ id: string; volumeId: string; title: string; characters?: string[]; locations?: string[]; outline?: string; detailOutline?: string }> }>>([]);
+  const [volumes, setVolumes] = useState<Array<{ id: string; title: string; chapters: Array<{ id: string; volumeId: string; title: string; chapter_number?: number; characters?: string[]; locations?: string[]; outline?: string; detailOutline?: string }> }>>([]);
 
   // 角色和地点数据 - 从WorkInfoManager的缓存中获取
   const {
@@ -769,6 +767,14 @@ export default function NovelEditorPage(){
     }
   };
 
+  // 获取卷的中文数字
+  const getVolumeNumber = (num: number): string => {
+    const numbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    if (num <= 10) return numbers[num - 1];
+    if (num <= 19) return `十${numbers[num - 11]}`;
+    return `${numbers[Math.floor(num / 10) - 1]}十${numbers[(num % 10) - 1] || ''}`;
+  };
+
   // 加载章节列表
   useEffect(() => {
     if (!workId) return;
@@ -822,21 +828,30 @@ export default function NovelEditorPage(){
         });
         }
 
-        // 转换为编辑页面需要的格式
-        const volumesData = Array.from(volumesMap.entries()).map(([volNum, chapters]) => ({
-          id: `vol${volNum}`,
-          title: volNum === 0 ? '未分卷' : `第${volNum}卷`,
-          chapters: chapters.map((chapter) => ({
-            id: String(chapter.id),
-            volumeId: `vol${volNum}`,
-            title: chapter.title,
-            chapter_number: chapter.chapter_number,  // 保留章节号
-            characters: [],
-            locations: [],
-            outline: chapter.metadata?.outline || '',
-            detailOutline: chapter.metadata?.detailed_outline || '',
-          })),
-        }));
+        // 转换为编辑页面需要的格式，并按章节号排序
+        const volumesData = Array.from(volumesMap.entries()).map(([volNum, chapters]) => {
+          // 按章节号排序
+          const sortedChapters = [...chapters].sort((a, b) => {
+            const numA = a.chapter_number ?? 0;
+            const numB = b.chapter_number ?? 0;
+            return numA - numB;
+          });
+          
+          return {
+            id: `vol${volNum}`,
+            title: volNum === 0 ? '未分卷' : `第${getVolumeNumber(volNum)}卷`,
+            chapters: sortedChapters.map((chapter) => ({
+              id: String(chapter.id),
+              volumeId: `vol${volNum}`,
+              title: chapter.title,
+              chapter_number: chapter.chapter_number,  // 保留章节号
+              characters: [],
+              locations: [],
+              outline: chapter.metadata?.outline || '',
+              detailOutline: chapter.metadata?.detailed_outline || '',
+            })),
+          };
+        });
 
         // 如果短篇作品没有章节，确保至少有一个"未分卷"卷
         if (work?.work_type === 'short' && volumesData.length === 0) {
@@ -856,7 +871,7 @@ export default function NovelEditorPage(){
           chaptersDataMap[String(chapter.id)] = {
             id: String(chapter.id),
             volumeId: `vol${volNum}`,
-            volumeTitle: volNum === 0 ? '未分卷' : `第${volNum}卷`,
+            volumeTitle: volNum === 0 ? '未分卷' : `第${getVolumeNumber(volNum)}卷`,
             title: chapter.title,
             chapter_number: chapter.chapter_number,  // 保留章节号
             characters: [],
@@ -1348,6 +1363,8 @@ export default function NovelEditorPage(){
     title: string;
     volumeId: string;
     volumeTitle: string;
+    volume_number?: number;
+    chapter_number?: number;
     characters: string[];
     locations: string[];
     outline: string;
@@ -1356,48 +1373,6 @@ export default function NovelEditorPage(){
     if (!workId) return;
 
     try {
-      // 如果是草稿，只更新本地状态
-      // TODO 这里也应该是线上同步的
-      if (data.volumeId === 'draft') {
-        const chapterId = data.id || `draft-${Date.now()}`;
-        setChaptersData(prev => ({
-          ...prev,
-          [chapterId]: {
-            ...data,
-            id: chapterId,
-          },
-        }));
-        
-        setDrafts(prev => {
-          const existingIndex = prev.findIndex(d => d.id === chapterId);
-          if (existingIndex >= 0) {
-            const updated = [...prev];
-            updated[existingIndex] = {
-              id: chapterId,
-              title: data.title,
-              volumeId: data.volumeId,
-              volumeTitle: data.volumeTitle,
-              characters: data.characters,
-              locations: data.locations,
-              outline: data.outline,
-              detailOutline: data.detailOutline,
-            };
-            return updated;
-          } else {
-            return [...prev, {
-              id: chapterId,
-              title: data.title,
-              volumeId: data.volumeId,
-              volumeTitle: data.volumeTitle,
-              characters: data.characters,
-              locations: data.locations,
-              outline: data.outline,
-              detailOutline: data.detailOutline,
-            }];
-          }
-        });
-        return;
-      }
 
       // 如果是编辑现有章节
       if (data.id && !isNaN(parseInt(data.id))) {
@@ -1407,6 +1382,16 @@ export default function NovelEditorPage(){
         const updateData: any = {
           title: data.title,
         };
+
+        // 如果提供了章节号，更新章节号
+        if (data.chapter_number !== undefined) {
+          updateData.chapter_number = data.chapter_number;
+        }
+
+        // 如果提供了卷号，更新卷号
+        if (data.volume_number !== undefined) {
+          updateData.volume_number = data.volume_number;
+        }
 
         // 如果有大纲或细纲，添加到更新数据中
         if (data.outline || data.detailOutline) {
@@ -1425,26 +1410,92 @@ export default function NovelEditorPage(){
           [data.id!]: {
             ...data,
             id: data.id!,
+            volumeId: data.volumeId,
+            volumeTitle: data.volumeTitle,
           },
         }));
 
-        // 更新 volumes 中的章节信息
-        setVolumes(prev => prev.map(vol => {
-          if (vol.id === data.volumeId) {
-            return {
-              ...vol,
-              chapters: vol.chapters.map(chap =>
-                chap.id === data.id ? { 
-                  ...chap, 
+        // 更新 volumes 中的章节信息，处理卷号变更
+        setVolumes(prev => {
+          const oldVolume = prev.find(vol => vol.chapters.some(chap => chap.id === data.id));
+          const newVolumeId = data.volumeId;
+          const isVolumeChanged = oldVolume && oldVolume.id !== newVolumeId;
+
+          if (isVolumeChanged) {
+            // 卷号变更：从旧卷移除，添加到新卷
+            return prev.map(vol => {
+              if (vol.id === oldVolume!.id) {
+                // 从旧卷移除章节
+                return {
+                  ...vol,
+                  chapters: vol.chapters.filter(chap => chap.id !== data.id),
+                };
+              } else if (vol.id === newVolumeId) {
+                // 添加到新卷
+                const updatedChapter = {
+                  id: data.id!,
+                  volumeId: newVolumeId,
                   title: data.title,
+                  chapter_number: data.chapter_number !== undefined ? data.chapter_number : undefined,
+                  characters: data.characters,
+                  locations: data.locations,
                   outline: data.outline || '',
                   detailOutline: data.detailOutline || '',
-                } : chap
-              ),
-            };
+                };
+                const updatedChapters = [...vol.chapters, updatedChapter];
+                // 按章节号排序
+                const sortedChapters = [...updatedChapters].sort((a, b) => {
+                  const numA = a.chapter_number ?? 0;
+                  const numB = b.chapter_number ?? 0;
+                  return numA - numB;
+                });
+                return {
+                  ...vol,
+                  chapters: sortedChapters,
+                };
+              }
+              return vol;
+            });
+          } else {
+            // 卷号未变更：只更新章节信息
+            return prev.map(vol => {
+              if (vol.id === data.volumeId) {
+                const updatedChapters = vol.chapters.map(chap =>
+                  chap.id === data.id ? { 
+                    ...chap, 
+                    title: data.title,
+                    chapter_number: data.chapter_number !== undefined ? data.chapter_number : (chap.chapter_number ?? undefined),
+                    outline: data.outline || '',
+                    detailOutline: data.detailOutline || '',
+                  } : chap
+                );
+                // 按章节号排序
+                const sortedChapters = [...updatedChapters].sort((a, b) => {
+                  const numA = a.chapter_number ?? 0;
+                  const numB = b.chapter_number ?? 0;
+                  return numA - numB;
+                });
+                return {
+                  ...vol,
+                  chapters: sortedChapters,
+                };
+              }
+              return vol;
+            });
           }
-          return vol;
-        }));
+        });
+
+        // 更新 allChapters 中的章节信息
+        setAllChapters(prev => prev.map(chap => 
+          chap.id === chapterId 
+            ? { 
+                ...chap, 
+                title: data.title, 
+                chapter_number: data.chapter_number !== undefined ? data.chapter_number : chap.chapter_number,
+                volume_number: data.volume_number !== undefined ? data.volume_number : chap.volume_number,
+              }
+            : chap
+        ));
       } else {
         // 创建新章节
         // 短篇作品强制使用 volume_number = 0（未分卷）
@@ -1530,6 +1581,7 @@ export default function NovelEditorPage(){
       alert(err instanceof Error ? err.message : '保存章节失败');
     }
   };
+
 
   // 章节/作品分析结果类型（供对话命令使用）
   type ChapterAnalysisCommandResult = {
@@ -1711,20 +1763,6 @@ export default function NovelEditorPage(){
     if (!workId) return;
 
     try {
-      // 如果是草稿，只从本地状态删除
-      if (chapterId.startsWith('draft-')) {
-        setDrafts(prev => prev.filter(d => d.id !== chapterId));
-        setChaptersData(prev => {
-          const newData = { ...prev };
-          delete newData[chapterId];
-          return newData;
-        });
-        // 如果删除的是当前选中的章节，清除选中状态
-        if (selectedChapter === chapterId) {
-          setSelectedChapter(null);
-        }
-        return;
-      }
 
       // 如果是真实章节，调用API删除
       const chapterIdNum = parseInt(chapterId);
@@ -1858,25 +1896,11 @@ export default function NovelEditorPage(){
       const parts = selectedChapter.split('-');
       const volumeId = parts[0];
       
-      // 如果是草稿
-      if (volumeId === 'draft') {
-        handleOpenChapterModal('edit', 'draft', '草稿箱', {
-          id: selectedChapter,
-          volumeId: 'draft',
-          volumeTitle: '草稿箱',
-          title: parts[1] ? `草稿 ${parts[1].replace('draft', '')}` : '草稿',
-          characters: [],
-          locations: [],
-          outline: '',
-          detailOutline: '',
-        });
-        return;
-      }
       
       // 如果是章节
       const volNum = volumeId.replace('vol', '');
       const chapNum = parts[1]?.replace('chap', '') || '1';
-      const volumeTitle = `第${['一', '二', '三', '四', '五'][parseInt(volNum) - 1] || volNum}卷`;
+      const volumeTitle = `第${getVolumeNumber(parseInt(volNum))}卷`;
       handleOpenChapterModal('edit', volumeId, volumeTitle, {
         id: selectedChapter,
         volumeId,
@@ -2075,8 +2099,6 @@ export default function NovelEditorPage(){
               }}
               onOpenChapterModal={handleOpenChapterModal}
               onChapterDelete={handleDeleteChapter}
-              drafts={drafts}
-              onDraftsChange={setDrafts}
               volumes={volumes}
               onVolumesChange={setVolumes}
               workType={work?.work_type}
@@ -2109,8 +2131,6 @@ export default function NovelEditorPage(){
                   }}
                   onOpenChapterModal={handleOpenChapterModal}
                   onChapterDelete={handleDeleteChapter}
-                  drafts={drafts}
-                  onDraftsChange={setDrafts}
                   volumes={volumes}
                   onVolumesChange={setVolumes}
                   workType={work?.work_type}
@@ -2391,6 +2411,8 @@ export default function NovelEditorPage(){
         initialData={currentChapterData}
         availableCharacters={hasCharacterModule ? availableCharacters : []}
         availableLocations={hasLocationModule ? availableLocations : []}
+        availableVolumes={volumes.map(vol => ({ id: vol.id, title: vol.title }))}
+        workType={work?.work_type}
         onClose={() => setIsChapterModalOpen(false)}
         onSave={handleSaveChapter}
         onGenerateContent={async (content: string, isFinal?: boolean) => {

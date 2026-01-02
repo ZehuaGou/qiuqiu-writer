@@ -159,7 +159,6 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
     // Slash 命令补全
     const commandOptions: MentionOption[] = [
       { type: 'command', id: 'analysis-chapter', name: '/analysis-chapter', subtitle: '分析指定章节', isCommand: true, commandKind: 'slash' },
-      { type: 'command', id: 'analysis-work', name: '/analysis-work', subtitle: '分析全书章节', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'analysis-chapter-info', name: '/analysis-chapter-info', subtitle: '分析章节组件信息', isCommand: true, commandKind: 'slash' },
     ];
     const textBeforeCursor = value.substring(0, cursorPos);
@@ -976,7 +975,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
                   <textarea
                     ref={textareaRef}
                     className="chat-input"
-                    placeholder="输入你的问题... 支持 /analysis-chapter、/analysis-work、/analysis-chapter-info，@ 引用章节或角色"
+                    placeholder="输入你的问题..."
                     value={message}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}

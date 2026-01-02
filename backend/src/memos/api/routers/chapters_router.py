@@ -55,10 +55,12 @@ class ChapterCreate(BaseModel):
 
 class ChapterUpdate(BaseModel):
     title: Optional[str] = None
+    chapter_number: Optional[int] = None
+    volume_number: Optional[int] = None
     content: Optional[str] = None
     status: Optional[str] = None
     word_count: Optional[int] = None
-    word_count: Optional[int] = None
+    chapter_metadata: Optional[Dict[str, Any]] = None
 
 class ChapterResponse(BaseModel):
     id: int

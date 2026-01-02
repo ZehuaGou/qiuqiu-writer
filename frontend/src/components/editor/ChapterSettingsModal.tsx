@@ -18,10 +18,17 @@ interface ChapterData {
   title: string;
   volumeId: string;
   volumeTitle: string;
+  volume_number?: number; // 卷号
+  chapter_number?: number; // 章节号
   characters: string[]; // 人物 ID 列表
   locations: string[]; // 地点列表
   outline: string;
   detailOutline: string;
+}
+
+interface Volume {
+  id: string;
+  title: string;
 }
 
 interface ChapterSettingsModalProps {
@@ -32,6 +39,8 @@ interface ChapterSettingsModalProps {
   initialData?: Partial<ChapterData>;
   availableCharacters?: Character[];
   availableLocations?: Location[];
+  availableVolumes?: Volume[]; // 可用的卷列表
+  workType?: 'long' | 'short' | 'script' | 'video'; // 作品类型
   onClose: () => void;
   onSave: (data: ChapterData) => void;
   onGenerateOutline?: () => string;
@@ -48,6 +57,8 @@ export default function ChapterSettingsModal({
   initialData,
   availableCharacters = [],
   availableLocations = [],
+  availableVolumes = [],
+  workType = 'long',
   onClose,
   onSave,
   onGenerateOutline,
@@ -55,6 +66,8 @@ export default function ChapterSettingsModal({
   onGenerateContent,
 }: ChapterSettingsModalProps) {
   const [title, setTitle] = useState('');
+  const [chapterNumber, setChapterNumber] = useState<number | undefined>(undefined);
+  const [selectedVolumeId, setSelectedVolumeId] = useState<string>(volumeId);
   const [selectedCharacters, setSelectedCharacters] = useState<string[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [newLocation, setNewLocation] = useState('');
@@ -64,6 +77,9 @@ export default function ChapterSettingsModal({
   const [isGeneratingDetail, setIsGeneratingDetail] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'outline'>('basic');
+  
+  // 是否显示卷号选择器（长篇作品且编辑章节时）
+  const showVolumeSelector = workType === 'long' && mode === 'edit';
 
   // 使用传入的角色数据，如果没有则使用空数组
   const charactersToShow: Character[] = availableCharacters.length > 0 ? availableCharacters : [];
@@ -76,6 +92,8 @@ export default function ChapterSettingsModal({
     if (isOpen) {
       if (initialData) {
         setTitle(initialData.title || '');
+        setChapterNumber(initialData.chapter_number);
+        setSelectedVolumeId(initialData.volumeId || volumeId);
         setSelectedCharacters(initialData.characters || []);
         setLocations(initialData.locations || []);
         setOutline(initialData.outline || '');
@@ -83,6 +101,8 @@ export default function ChapterSettingsModal({
       } else {
         // 新建章节时重置
         setTitle('');
+        setChapterNumber(undefined);
+        setSelectedVolumeId(volumeId);
         setSelectedCharacters([]);
         setLocations([]);
         setOutline('');
@@ -90,7 +110,7 @@ export default function ChapterSettingsModal({
       }
       setActiveTab('basic');
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, volumeId]);
 
   const handleCharacterToggle = (characterId: string) => {
     setSelectedCharacters(prev => 
@@ -167,11 +187,20 @@ export default function ChapterSettingsModal({
       return;
     }
 
+    const selectedVolume = availableVolumes.find(v => v.id === selectedVolumeId);
+    const finalVolumeId = selectedVolumeId;
+    const finalVolumeTitle = selectedVolume?.title || volumeTitle;
+    const finalVolumeNumber = selectedVolumeId.startsWith('vol') 
+      ? parseInt(selectedVolumeId.replace('vol', '')) 
+      : undefined;
+
     onSave({
       id: initialData?.id,
       title: title.trim(),
-      volumeId,
-      volumeTitle,
+      volumeId: finalVolumeId,
+      volumeTitle: finalVolumeTitle,
+      volume_number: finalVolumeNumber,
+      chapter_number: chapterNumber,
       characters: selectedCharacters,
       locations,
       outline,
@@ -179,6 +208,7 @@ export default function ChapterSettingsModal({
     });
     onClose();
   };
+
 
   if (!isOpen) return null;
 
@@ -231,6 +261,48 @@ export default function ChapterSettingsModal({
                   autoFocus
                 />
               </div>
+
+              {/* 卷号选择器 - 只在长篇作品编辑章节时显示 */}
+              {showVolumeSelector && (
+                <div className="form-group">
+                  <label className="form-label">
+                    <BookOpen size={16} />
+                    所属卷
+                  </label>
+                  <select
+                    className="form-input"
+                    value={selectedVolumeId}
+                    onChange={(e) => setSelectedVolumeId(e.target.value)}
+                  >
+                    {availableVolumes.map(vol => (
+                      <option key={vol.id} value={vol.id}>
+                        {vol.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* 章节号 - 只在编辑章节时显示 */}
+              {mode === 'edit' && (
+                <div className="form-group">
+                  <label className="form-label">
+                    <FileText size={16} />
+                    章节号
+                  </label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={chapterNumber ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setChapterNumber(value === '' ? undefined : parseInt(value, 10));
+                    }}
+                    placeholder="请输入章节号"
+                    min="1"
+                  />
+                </div>
+              )}
 
               {/* 出场人物 - 只在有角色设定时显示 */}
               {charactersToShow.length > 0 && (
