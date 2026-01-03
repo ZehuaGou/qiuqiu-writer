@@ -1370,7 +1370,17 @@ export default function NovelEditorPage(){
     outline: string;
     detailOutline: string;
   }) => {
-    if (!workId) return;
+    if (!workId) {
+      console.error('❌ [handleSaveChapter] workId 为空，无法创建章节');
+      alert('作品ID缺失，请刷新页面重试');
+      return;
+    }
+    
+    if (!work) {
+      console.error('❌ [handleSaveChapter] work 对象为空，无法创建章节');
+      alert('作品信息未加载，请稍候再试');
+      return;
+    }
 
     try {
 
@@ -1498,34 +1508,23 @@ export default function NovelEditorPage(){
         ));
       } else {
         // 创建新章节
-        // 短篇作品强制使用 volume_number = 0（未分卷）
+        // 统一处理：使用 volume_number = 0（未分卷）或根据卷ID计算
         let volNum = data.volumeId === 'draft' ? 0 : parseInt(data.volumeId.replace('vol', '')) || 0;
-        if (work?.work_type === 'short') {
-          volNum = 0; // 短篇强制未分卷
-        }
         
         // 计算章节号
         let maxChapterNumber = 0;
-        if (work?.work_type === 'short') {
-          // 短篇作品：计算所有章节的最大章节号（不考虑卷号）
-          maxChapterNumber = allChapters.length > 0
-            ? Math.max(...allChapters.map(c => c.chapter_number || 0))
-            : 0;
-        } else {
-          // 长篇作品：计算该卷的最大章节号
+        // 计算该卷的最大章节号
         const volumeChapters = allChapters.filter(c => (c.volume_number || 0) === volNum);
-          maxChapterNumber = volumeChapters.length > 0
+        maxChapterNumber = volumeChapters.length > 0
           ? Math.max(...volumeChapters.map(c => c.chapter_number || 0))
           : 0;
-        }
         
         const newChapter = await chaptersApi.createChapter({
           work_id: Number(workId),
           title: data.title,
           chapter_number: maxChapterNumber + 1,
-          // 短篇作品：volume_number 设为 0 或 undefined（后端会处理）
-          // 长篇作品：如果 volNum > 0 则设置，否则为 undefined
-          volume_number: work?.work_type === 'short' ? 0 : (volNum > 0 ? volNum : undefined),
+          // 如果 volNum > 0 则设置，否则为 undefined（未分卷）
+          volume_number: volNum > 0 ? volNum : undefined,
         });
 
         const chapterId = String(newChapter.id);
@@ -1575,10 +1574,19 @@ export default function NovelEditorPage(){
           }
           return vol;
         }));
+        
+        // 创建成功后关闭弹窗
+        setIsChapterModalOpen(false);
       }
     } catch (err) {
-      console.error('保存章节失败:', err);
-      alert(err instanceof Error ? err.message : '保存章节失败');
+      console.error('❌ [handleSaveChapter] 保存章节失败:', err);
+      const errorMessage = err instanceof Error ? err.message : '保存章节失败';
+      alert(`保存章节失败: ${errorMessage}`);
+      // 即使失败也关闭弹窗，让用户可以重试
+      setIsChapterModalOpen(false);
+    } finally {
+      // 确保弹窗关闭
+      setIsChapterModalOpen(false);
     }
   };
 
@@ -2101,7 +2109,7 @@ export default function NovelEditorPage(){
               onChapterDelete={handleDeleteChapter}
               volumes={volumes}
               onVolumesChange={setVolumes}
-              workType={work?.work_type}
+              workType="long"
             />
           </div>
         )}
@@ -2133,7 +2141,7 @@ export default function NovelEditorPage(){
                   onChapterDelete={handleDeleteChapter}
                   volumes={volumes}
                   onVolumesChange={setVolumes}
-                  workType={work?.work_type}
+                  workType="long"
                 />
                 <div className="mobile-menu-actions">
                   <div className="mobile-menu-section">
@@ -2412,7 +2420,7 @@ export default function NovelEditorPage(){
         availableCharacters={hasCharacterModule ? availableCharacters : []}
         availableLocations={hasLocationModule ? availableLocations : []}
         availableVolumes={volumes.map(vol => ({ id: vol.id, title: vol.title }))}
-        workType={work?.work_type}
+        workType="long"
         onClose={() => setIsChapterModalOpen(false)}
         onSave={handleSaveChapter}
         onGenerateContent={async (content: string, isFinal?: boolean) => {

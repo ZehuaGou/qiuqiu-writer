@@ -9,7 +9,7 @@ import { chaptersApi, type ChapterCreate } from './chaptersApi';
 import { apiClient } from './api';
 import type { CachedWorkDoc, CachedChapterDoc } from '../types/document';
 
-const STORAGE_PREFIX = 'wawawriter_cache_';
+const STORAGE_PREFIX = 'planetwriter_cache_';
 
 export interface RecoveryProgress {
   workId?: number;

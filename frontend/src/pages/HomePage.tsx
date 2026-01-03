@@ -1,39 +1,188 @@
+import { useNavigate } from 'react-router-dom';
+import { 
+  BookOpen, 
+  Sparkles, 
+  Users, 
+  Zap, 
+  Shield, 
+  Cloud,
+  PenTool,
+  FileText,
+  ArrowRight,
+  Check
+} from 'lucide-react';
+import { authApi } from '../utils/authApi';
 import './HomePage.css';
-import TrainingBanner from '../components/home/TrainingBanner';
-import CreativeStatus from '../components/home/CreativeStatus';
-import WritingTools from '../components/home/WritingTools';
-import AIToolPlaza from '../components/home/AIToolPlaza';
-import SignInCard from '../components/home/SignInCard';
-import Announcements from '../components/home/Announcements';
-import CaseSharing from '../components/home/CaseSharing';
-import { useIsMobile } from '../hooks/useMediaQuery';
 
 export default function HomePage() {
-  const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const isAuthenticated = authApi.isAuthenticated();
+
+  const features = [
+    {
+      icon: <PenTool size={24} />,
+      title: '智能写作助手',
+      description: 'AI驱动的创作助手，帮你突破写作瓶颈，激发创作灵感',
+    },
+    {
+      icon: <FileText size={24} />,
+      title: '多格式支持',
+      description: '强大的创作工具，支持各种写作需求，让创作更自由',
+    },
+    {
+      icon: <Users size={24} />,
+      title: '协作创作',
+      description: '多人实时协作，共同完成作品，让创作更有趣',
+    },
+    {
+      icon: <Cloud size={24} />,
+      title: '云端同步',
+      description: '自动保存，多设备同步，随时随地继续创作',
+    },
+    {
+      icon: <Zap size={24} />,
+      title: '实时编辑',
+      description: '流畅的编辑体验，支持富文本和Markdown格式',
+    },
+    {
+      icon: <Shield size={24} />,
+      title: '安全可靠',
+      description: '数据加密存储，多重备份，保障你的创作安全',
+    },
+  ];
+
+  const handleGetStarted = () => {
+    if (isAuthenticated) {
+      navigate('/novel/editor');
+    } else {
+      // 可以打开登录弹窗或跳转到登录页
+      navigate('/');
+    }
+  };
 
   return (
-    <div className="home-page">
-      <div className="home-main">
-        <div className="home-content-left">
-          <TrainingBanner />
-          <CreativeStatus />
-          <WritingTools />
-          {/* 移动端可以隐藏 AI工具广场 */}
-          {!isMobile && <AIToolPlaza />}
+    <div className="landing-page">
+      {/* Hero Section */}
+      <section className="hero-section">
+        <div className="hero-content">
+          <div className="hero-badge">
+            <Sparkles size={16} />
+            <span>AI驱动的智能写作平台</span>
+          </div>
+          <h1 className="hero-title">
+            星球写作
+            <span className="hero-subtitle">让创作更简单，让故事更精彩</span>
+          </h1>
+          <p className="hero-description">
+            专业的AI写作助手，帮助你从灵感到成稿，轻松完成每一部作品。
+            无论你想写什么，星球写作都是你最好的创作伙伴。
+          </p>
+          <div className="hero-actions">
+            <button 
+              className="btn-primary"
+              onClick={handleGetStarted}
+            >
+              开始创作
+              <ArrowRight size={18} />
+            </button>
+            {!isAuthenticated && (
+              <button 
+                className="btn-secondary"
+                onClick={() => navigate('/')}
+              >
+                了解更多
+              </button>
+            )}
+          </div>
         </div>
-        <div className="home-content-right">
-          {/* 移动端隐藏签到和活动公告 */}
-          {!isMobile && (
-            <>
-              <SignInCard />
-              <Announcements />
-            </>
-          )}
-          {/* 移动端可以隐藏案例分享 */}
-          {!isMobile && <CaseSharing />}
+        <div className="hero-illustration">
+          <div className="planet-icon-large">🌍</div>
         </div>
-      </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="features-section">
+        <div className="section-container">
+          <div className="section-header">
+            <h2 className="section-title">为什么选择星球写作？</h2>
+            <p className="section-description">
+              我们提供全方位的创作支持，让你的创作之旅更加顺畅
+            </p>
+          </div>
+          <div className="features-grid">
+            {features.map((feature, index) => (
+              <div key={index} className="feature-card">
+                <div className="feature-icon">
+                  {feature.icon}
+                </div>
+                <h3 className="feature-title">{feature.title}</h3>
+                <p className="feature-description">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Use Cases Section */}
+      <section className="use-cases-section">
+        <div className="section-container">
+          <div className="section-header">
+            <h2 className="section-title">适用场景</h2>
+            <p className="section-description">
+              无论你是专业作家还是写作爱好者，星球写作都能满足你的需求
+            </p>
+          </div>
+          <div className="use-cases-grid">
+            <div className="use-case-card">
+              <BookOpen size={32} className="use-case-icon" />
+              <h3 className="use-case-title">创作管理</h3>
+              <ul className="use-case-list">
+                <li><Check size={16} /> 章节结构管理</li>
+                <li><Check size={16} /> 角色关系梳理</li>
+                <li><Check size={16} /> 情节大纲规划</li>
+                <li><Check size={16} /> 自动保存功能</li>
+              </ul>
+            </div>
+            <div className="use-case-card">
+              <FileText size={32} className="use-case-icon" />
+              <h3 className="use-case-title">内容编辑</h3>
+              <ul className="use-case-list">
+                <li><Check size={16} /> 富文本编辑</li>
+                <li><Check size={16} /> Markdown支持</li>
+                <li><Check size={16} /> 实时预览</li>
+                <li><Check size={16} /> 格式自动调整</li>
+              </ul>
+            </div>
+            <div className="use-case-card">
+              <Users size={32} className="use-case-icon" />
+              <h3 className="use-case-title">团队协作</h3>
+              <ul className="use-case-list">
+                <li><Check size={16} /> 多人实时编辑</li>
+                <li><Check size={16} /> 版本历史管理</li>
+                <li><Check size={16} /> 评论批注功能</li>
+                <li><Check size={16} /> 权限精细控制</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="cta-section">
+        <div className="cta-content">
+          <h2 className="cta-title">准备好开始你的创作之旅了吗？</h2>
+          <p className="cta-description">
+            加入星球写作，让AI成为你的创作伙伴，一起创造精彩的故事
+          </p>
+          <button 
+            className="btn-primary btn-large"
+            onClick={handleGetStarted}
+          >
+            立即开始创作
+            <ArrowRight size={20} />
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
-

@@ -92,7 +92,7 @@
   color: #ef4444;
 }
 
-.froggy-avatar {
+.planet-avatar {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -103,11 +103,11 @@
   flex-shrink: 0;
 }
 
-.froggy-icon {
+.planet-icon {
   font-size: 28px;
 }
 
-.froggy-greeting {
+.planet-greeting {
   flex: 1;
 }
 
@@ -233,7 +233,7 @@
   flex-shrink: 0;
 }
 
-.froggy-icon-small {
+.planet-icon-small {
   font-size: 18px;
 }
 

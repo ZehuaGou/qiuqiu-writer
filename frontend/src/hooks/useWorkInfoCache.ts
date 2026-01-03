@@ -48,7 +48,7 @@ export function useWorkInfoCache(
     const loadLocationsFromCache = () => {
       try {
         // 使用 workId 特定的缓存键，确保每个作品的数据是独立的
-        const CACHE_KEY = `wawawriter_workinfo_cache_${workId}`;
+        const CACHE_KEY = `planetwriter_workinfo_cache_${workId}`;
         const cached = localStorage.getItem(CACHE_KEY);
         if (cached) {
           const data = JSON.parse(cached);
@@ -225,7 +225,7 @@ export function useWorkInfoCache(
 
     // 监听localStorage变化（当WorkInfoManager更新时）
     const handleStorageChange = (e: StorageEvent) => {
-      const workSpecificKey = `wawawriter_workinfo_cache_${workId}`;
+      const workSpecificKey = `planetwriter_workinfo_cache_${workId}`;
       if (e.key === workSpecificKey) {
         loadLocationsFromCache();
       }

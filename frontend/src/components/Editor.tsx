@@ -12,7 +12,7 @@ interface EditorProps {
   onDocChange?: (docId: string | null) => void;
 }
 
-const DEFAULT_USER_ID = 'wawawriter_user_1';
+const DEFAULT_USER_ID = 'planetwriter_user_1';
 const SAVE_DEBOUNCE_MS = 2000; // 2 seconds
 
 export default function Editor({ docId, onDocChange: _onDocChange }: EditorProps) {

@@ -78,8 +78,8 @@ export default function ChapterSettingsModal({
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'outline'>('basic');
   
-  // 是否显示卷号选择器（长篇作品且编辑章节时）
-  const showVolumeSelector = workType === 'long' && mode === 'edit';
+  // 是否显示卷号选择器（编辑章节时）
+  const showVolumeSelector = mode === 'edit';
 
   // 使用传入的角色数据，如果没有则使用空数组
   const charactersToShow: Character[] = availableCharacters.length > 0 ? availableCharacters : [];

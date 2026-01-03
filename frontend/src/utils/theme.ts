@@ -156,7 +156,7 @@ export const themes: ThemeConfig[] = [
 ];
 
 // 主题存储键
-const THEME_STORAGE_KEY = 'wawawriter_theme';
+const THEME_STORAGE_KEY = 'planetwriter_theme';
 
 // 获取当前主题
 export function getCurrentTheme(): string {

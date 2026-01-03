@@ -22,7 +22,6 @@ export default function TopBar({ workTitle, workType, perspective, frequency }: 
         <div className="work-info">
           <h1 className="work-title">{workTitle}</h1>
           <div className="work-meta">
-            <span className="meta-tag">{workType}</span>
             <span className="meta-tag">{perspective}</span>
             <span className="meta-tag">{frequency}</span>
           </div>

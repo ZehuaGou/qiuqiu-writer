@@ -28,7 +28,7 @@ export default function ScriptPage() {
             </div>
           </div>
 
-          {/* 蛙蛙小说改编剧本 */}
+          {/* 星球小说改编剧本 */}
           <div className="script-new-card secondary">
             <div className="card-icon-wrapper">
               <div className="card-icon-bg secondary-bg" />
@@ -37,8 +37,8 @@ export default function ScriptPage() {
               </div>
             </div>
             <div className="card-text">
-              <h2>蛙蛙小说改编剧本</h2>
-              <p>蛙蛙小说一键转动态漫、沙雕漫、简笔画</p>
+              <h2>星球小说改编剧本</h2>
+              <p>星球小说一键转动态漫、沙雕漫、简笔画</p>
             </div>
           </div>
 

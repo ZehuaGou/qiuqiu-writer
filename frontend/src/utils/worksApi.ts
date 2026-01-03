@@ -116,13 +116,34 @@ class WorksApiClient extends BaseApiClient {
       work_type: mapWorkTypeToBackend(workData.work_type),
     };
     
-    const response = await this.post<any>('/api/v1/works/', backendData);
+    console.log('📤 [worksApi.createWork] 发送创建作品请求:', {
+      endpoint: '/api/v1/works/',
+      data: backendData,
+    });
     
-    // 将后端类型转换为前端类型
-    return {
-      ...response,
-      work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
-    };
+    try {
+      const response = await this.post<any>('/api/v1/works/', backendData);
+      
+      console.log('📥 [worksApi.createWork] 收到响应:', response);
+      
+      if (!response || !response.id) {
+        console.error('❌ [worksApi.createWork] 响应中没有作品ID:', response);
+        throw new Error('创建作品失败：服务器未返回作品ID');
+      }
+      
+      // 将后端类型转换为前端类型
+      const work: Work = {
+        ...response,
+        work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
+      };
+      
+      console.log('✅ [worksApi.createWork] 作品创建成功，转换后的作品:', work);
+      
+      return work;
+    } catch (error) {
+      console.error('❌ [worksApi.createWork] 请求失败:', error);
+      throw error;
+    }
   }
 
   /**

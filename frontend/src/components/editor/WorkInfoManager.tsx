@@ -171,10 +171,10 @@ interface TemplateConfig {
 // 获取基于 workId 的缓存键
 const getCacheKey = (workId: string | null): string => {
   if (workId) {
-    return `wawawriter_workinfo_cache_${workId}`;
+    return `planetwriter_workinfo_cache_${workId}`;
   }
   // 如果没有 workId，使用旧的全局缓存键（向后兼容）
-  return 'wawawriter_workinfo_cache';
+  return 'planetwriter_workinfo_cache';
 };
 
 interface CacheData {
@@ -187,7 +187,7 @@ interface CacheData {
 const loadFromCache = (workId: string | null, templateId?: string): CacheData | null => {
   // 如果有 templateId，优先从模板特定的缓存加载
   if (templateId) {
-    const templateKey = workId ? `wawawriter_workinfo_cache_${workId}_${templateId}` : `wawawriter_workinfo_cache_${templateId}`;
+    const templateKey = workId ? `planetwriter_workinfo_cache_${workId}_${templateId}` : `planetwriter_workinfo_cache_${templateId}`;
     try {
       const cached = localStorage.getItem(templateKey);
       if (cached) {
@@ -216,7 +216,7 @@ const loadFromCache = (workId: string | null, templateId?: string): CacheData | 
 const saveToCache = (data: CacheData, workId: string | null, templateId?: string) => {
   // 如果有 templateId，保存到模板特定的缓存
   if (templateId) {
-    const templateKey = workId ? `wawawriter_workinfo_cache_${workId}_${templateId}` : `wawawriter_workinfo_cache_${templateId}`;
+    const templateKey = workId ? `planetwriter_workinfo_cache_${workId}_${templateId}` : `planetwriter_workinfo_cache_${templateId}`;
     try {
       localStorage.setItem(templateKey, JSON.stringify(data));
     } catch (e) {

@@ -36,6 +36,12 @@ export class BaseApiClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
+    // 添加请求日志
+    console.log(`📤 [BaseApiClient] ${options.method || 'GET'} ${url}`, {
+      headers: this.getAuthHeaders(),
+      body: options.body,
+    });
+    
     try {
       const response = await fetch(url, {
         ...options,
@@ -46,14 +52,30 @@ export class BaseApiClient {
         },
       });
 
+      console.log(`📥 [BaseApiClient] 响应状态: ${response.status} ${response.statusText}`, {
+        url,
+        ok: response.ok,
+      });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error(`❌ [BaseApiClient] 请求失败:`, {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
         throw new Error(
           errorData.detail || errorData.message || `API request failed: ${response.statusText}`
         );
       }
 
-      return response.json();
+      const data = await response.json();
+      console.log(`✅ [BaseApiClient] 请求成功:`, {
+        url,
+        data,
+      });
+      return data;
     } catch (error) {
       // 处理网络错误（Failed to fetch）
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
@@ -62,10 +84,11 @@ export class BaseApiClient {
 2. 网络连接问题
 3. CORS 配置问题
 4. 防火墙阻止了连接`;
-        console.error(errorMsg);
+        console.error(`❌ [BaseApiClient] 网络错误:`, errorMsg);
         throw new Error(errorMsg);
       }
       // 重新抛出其他错误
+      console.error(`❌ [BaseApiClient] 请求异常:`, error);
       throw error;
     }
   }

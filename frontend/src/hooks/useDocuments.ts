@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../utils/api';
 import type { Document } from '../utils/api';
 
-const DEFAULT_USER_ID = 'wawawriter_user_1';
+const DEFAULT_USER_ID = 'planetwriter_user_1';
 
 export function useDocuments(userId: string = DEFAULT_USER_ID) {
   const [documents, setDocuments] = useState<Document[]>([]);

@@ -6,8 +6,8 @@ export default function TrainingBanner() {
     <div className="training-banner">
       <div className="banner-content">
         <div className="banner-text">
-          <h2 className="banner-title">「阁主X蛙蛙」 写作训练营</h2>
-          <p className="banner-subtitle">【阁主】品质保证,长篇、短篇、短剧全面开营!</p>
+          <h2 className="banner-title">「阁主X星球」 写作训练营</h2>
+          <p className="banner-subtitle">【阁主】品质保证,全面开营!</p>
         </div>
         <button className="banner-btn">
           立即查看

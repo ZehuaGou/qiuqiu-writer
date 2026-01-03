@@ -13,8 +13,8 @@ export default function HomeSideNav() {
   return (
     <aside className="home-side-nav">
       <div className="nav-logo">
-        <span className="frog-icon">🐸</span>
-        <span className="logo-text">蛙蛙写作</span>
+        <span className="planet-icon">🌍</span>
+        <span className="logo-text">星球写作</span>
       </div>
       <nav className="nav-menu">
         {navItems.map((item) => {

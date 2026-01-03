@@ -2,8 +2,8 @@ import { ChevronRight } from 'lucide-react';
 import './CaseSharing.css';
 
 const cases = [
-  { title: '从抵触AI,到用蛙蛙写稿赚医药费', date: '2025-07-17 00:00' },
-  { title: '35岁被裁,我靠蛙蛙写小说还房贷', date: '2025-06-15 00:00' },
+  { title: '从抵触AI,到用星球写稿赚医药费', date: '2025-07-17 00:00' },
+  { title: '35岁被裁,我靠星球写小说还房贷', date: '2025-06-15 00:00' },
 ];
 
 export default function CaseSharing() {

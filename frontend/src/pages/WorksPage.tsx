@@ -7,12 +7,10 @@ import ImportWorkModal from '../components/ImportWorkModal';
 import WorkRecoveryModal from '../components/WorkRecoveryModal';
 import './WorksPage.css';
 
-type WorkType = 'all' | 'short' | 'long' | 'script' | 'video';
 type ViewMode = 'grid' | 'list';
 
 export default function WorksPage() {
   const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState<WorkType>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -31,7 +29,7 @@ export default function WorksPage() {
   // 加载作品列表
   useEffect(() => {
     loadWorks();
-  }, [currentPage, itemsPerPage, selectedType]);
+  }, [currentPage, itemsPerPage]);
 
   const loadWorks = async () => {
     setLoading(true);
@@ -40,7 +38,6 @@ export default function WorksPage() {
       const response = await worksApi.listWorks({
         page: currentPage,
         size: itemsPerPage,
-        work_type: selectedType === 'all' ? undefined : selectedType,
       });
       setWorks(response.works);
       setTotal(response.total);
@@ -50,30 +47,6 @@ export default function WorksPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const filteredWorks = selectedType === 'all' 
-    ? works 
-    : works.filter(work => work.work_type === selectedType);
-
-  const getTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      long: '长篇',
-      short: '短篇',
-      script: '剧本',
-      video: '视频',
-    };
-    return labels[type] || type;
-  };
-
-  const getTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      long: '#10b981',
-      short: '#10b981',
-      script: '#10b981',
-      video: '#8b5cf6',
-    };
-    return colors[type] || '#10b981';
   };
 
   // 点击外部关闭菜单
@@ -270,18 +243,39 @@ export default function WorksPage() {
   };
 
   // 处理创建作品
-  const handleCreateWork = async (type: 'long' | 'short') => {
-    setShowCreateMenu(false);
+  const handleCreateWork = async () => {
     try {
-      const newWork = await worksApi.createWork({
+      console.log('📝 [handleCreateWork] 开始创建作品...');
+      setLoading(true);
+      
+      const workData = {
         title: '未命名作品',
-        work_type: type,
+        work_type: 'long' as const, // 统一使用long作为默认类型
         is_public: false,
-      });
+      };
+      
+      console.log('📝 [handleCreateWork] 准备发送请求，数据:', workData);
+      
+      const newWork = await worksApi.createWork(workData);
+      
+      console.log('✅ [handleCreateWork] 作品创建成功:', newWork);
+      
+      if (!newWork || !newWork.id) {
+        throw new Error('创建作品成功，但未返回作品ID');
+      }
+      
+      // 重新加载作品列表
+      await loadWorks();
+      
+      // 跳转到编辑器
       navigate(`/novel/editor?workId=${newWork.id}`);
     } catch (err) {
-      console.error('创建作品失败:', err);
-      alert(err instanceof Error ? err.message : '创建作品失败');
+      console.error('❌ [handleCreateWork] 创建作品失败:', err);
+      const errorMessage = err instanceof Error ? err.message : '创建作品失败';
+      alert(`创建作品失败: ${errorMessage}`);
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -298,32 +292,13 @@ export default function WorksPage() {
       <div className="works-header">
         <h1 className="works-title">我的作品</h1>
           <div className="works-actions">
-          <div className="action-btn-wrapper" ref={createMenuRef}>
-            <button 
-              className="action-btn primary"
-              onClick={() => setShowCreateMenu(!showCreateMenu)}
-            >
-              <Plus size={16} />
-              <span>创建作品</span>
-              <ChevronDown size={14} />
-            </button>
-            {showCreateMenu && (
-              <div className="create-work-menu">
-                <button 
-                  className="create-menu-item"
-                  onClick={() => handleCreateWork('long')}
-                >
-                  创建长篇
-                </button>
-                <button 
-                  className="create-menu-item"
-                  onClick={() => handleCreateWork('short')}
-                >
-                  创建短篇
-                </button>
-              </div>
-            )}
-          </div>
+          <button 
+            className="action-btn primary"
+            onClick={handleCreateWork}
+          >
+            <Plus size={16} />
+            <span>创建作品</span>
+          </button>
           <button className="action-btn" onClick={() => setShowImportModal(true)}>
             <Upload size={16} />
             <span>导入作品</span>
@@ -349,32 +324,21 @@ export default function WorksPage() {
         </div>
       </div>
 
-      <div className="works-filters">
-        {(['all', 'short', 'long', 'script', 'video'] as WorkType[]).map((type) => (
-          <button
-            key={type}
-            className={`filter-tab ${selectedType === type ? 'active' : ''}`}
-            onClick={() => setSelectedType(type)}
-          >
-            {type === 'all' ? '全部' : getTypeLabel(type)}
-          </button>
-        ))}
-      </div>
 
       {loading && <div className="works-loading">加载中...</div>}
       {error && <div className="works-error">错误: {error}</div>}
       {!loading && !error && (
         <div className={`works-content ${viewMode}`}>
-          {filteredWorks.length === 0 ? (
+          {works.length === 0 ? (
             <div className="works-empty">
               <p>暂无作品</p>
-              <button className="action-btn primary" onClick={() => handleCreateWork('long')}>
+              <button className="action-btn primary" onClick={handleCreateWork}>
                 <Plus size={16} />
                 <span>创建第一个作品</span>
               </button>
             </div>
           ) : (
-            filteredWorks.map((work) => (
+            works.map((work) => (
               <div 
                 key={work.id} 
                 className="work-card"
@@ -387,9 +351,6 @@ export default function WorksPage() {
                   </div>
                 ) : (
                   <div className="work-preview">
-                    <span className="work-type-tag" style={{ backgroundColor: getTypeColor(work.work_type) }}>
-                      {getTypeLabel(work.work_type)}
-                    </span>
                     <h3 className="work-card-title">{work.title}</h3>
                     {work.description && (
                       <p className="work-description">{work.description}</p>

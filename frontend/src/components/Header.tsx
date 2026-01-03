@@ -8,7 +8,7 @@ interface HeaderProps {
   currentDocId: string | null;
 }
 
-const DEFAULT_USER_ID = 'wawawriter_user_1';
+const DEFAULT_USER_ID = 'planetwriter_user_1';
 
 export default function Header({ currentDocId }: HeaderProps) {
   const [saving, setSaving] = useState(false);

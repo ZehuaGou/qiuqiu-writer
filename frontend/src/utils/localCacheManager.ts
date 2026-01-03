@@ -32,8 +32,8 @@ const DEFAULT_CONFIG: CacheConfig = {
   syncInterval: 5000, // 5秒
 };
 
-const STORAGE_PREFIX = 'wawawriter_cache_';
-const METADATA_KEY = 'wawawriter_cache_metadata';
+const STORAGE_PREFIX = 'planetwriter_cache_';
+const METADATA_KEY = 'planetwriter_cache_metadata';
 
 class LocalCacheManager {
   private memoryCache: Map<string, CacheItem> = new Map();

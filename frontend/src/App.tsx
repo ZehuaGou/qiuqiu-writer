@@ -5,6 +5,7 @@ import UGCPlaza from './pages/UGCPlaza';
 import EditorPage from './pages/EditorPage';
 import HomePage from './pages/HomePage';
 import WorksPage from './pages/WorksPage';
+import UserWorksPage from './pages/UserWorksPage';
 import NovelPage from './pages/NovelPage';
 import NovelEditorPage from './pages/NovelEditorPage';
 import ScriptPage from './pages/ScriptPage';
@@ -17,6 +18,7 @@ function AppContent() {
       <Route element={<MainLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/works" element={<WorksPage />} />
+        <Route path="/users/:userId" element={<UserWorksPage />} />
         <Route path="/novel" element={<NovelPage />} />
         <Route path="/script" element={<ScriptPage />} />
         <Route path="/editor" element={<EditorPage />} />

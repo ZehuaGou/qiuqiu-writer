@@ -845,10 +845,10 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
 
       <div className="chat-content">
           <div className="chat-header">
-            <div className="froggy-avatar">
-              <span className="froggy-icon">🌍</span>
+            <div className="planet-avatar">
+              <span className="planet-icon">🌍</span>
             </div>
-            <div className="froggy-greeting">
+            <div className="planet-greeting">
               <p className="greeting-text">
                 嗨!我是球球。今天想写什么故事?
               </p>
@@ -870,7 +870,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             {messages.length === 0 && (
               <div className="chat-empty">
                 <div className="chat-empty-icon">💬</div>
-                <p>还没有对话，先问问蛙蛙今天写什么吧～</p>
+                <p>还没有对话，先问问星球今天写什么吧～</p>
               </div>
             )}
             {messages.map((msg, idx) => {
@@ -882,7 +882,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
                 >
                   {msg.role === 'assistant' && (
                     <div className="chat-message-avatar">
-                      <span className="froggy-icon-small">🌍</span>
+                      <span className="planet-icon-small">🌍</span>
                     </div>
                   )}
                   <div className="chat-message-content">
@@ -924,7 +924,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             {isSending && (
               <div className="chat-message chat-message-assistant">
                 <div className="chat-message-avatar">
-                  <span className="froggy-icon-small">🌍</span>
+                  <span className="planet-icon-small">🌍</span>
                 </div>
                 <div className="chat-message-content">
                   <div className="chat-message-bubble assistant-bubble chat-message-loading">
