@@ -95,9 +95,6 @@ export default function HomePage() {
             )}
           </div>
         </div>
-        <div className="hero-illustration">
-          <div className="planet-icon-large">🌍</div>
-        </div>
       </section>
 
       {/* Features Section */}
@@ -164,23 +161,6 @@ export default function HomePage() {
               </ul>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="cta-section">
-        <div className="cta-content">
-          <h2 className="cta-title">准备好开始你的创作之旅了吗？</h2>
-          <p className="cta-description">
-            加入星球写作，让AI成为你的创作伙伴，一起创造精彩的故事
-          </p>
-          <button 
-            className="btn-primary btn-large"
-            onClick={handleGetStarted}
-          >
-            立即开始创作
-            <ArrowRight size={20} />
-          </button>
         </div>
       </section>
     </div>

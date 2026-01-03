@@ -4,6 +4,7 @@ import { Search, User, Plus, Menu, X } from 'lucide-react';
 import LoginModal from '../auth/LoginModal';
 import { authApi, type UserInfo } from '../../utils/authApi';
 import { worksApi } from '../../utils/worksApi';
+import { getUserAvatarUrl } from '../../utils/avatarUtils';
 import './MainLayout.css';
 
 export default function MainLayout() {
@@ -174,13 +175,29 @@ export default function MainLayout() {
                     }}
                     title="用户菜单"
                   >
-                    <User size={20} />
+                    {userInfo ? (
+                      <img 
+                        src={getUserAvatarUrl(userInfo.avatar_url, userInfo.username, userInfo.display_name)} 
+                        alt={userInfo.display_name || userInfo.username || '用户'}
+                        className="user-avatar-btn-img"
+                      />
+                    ) : (
+                      <User size={20} />
+                    )}
                   </button>
                   {userMenuOpen && (
                     <div className="user-menu-dropdown">
                       <div className="user-menu-header">
                         <div className="user-avatar-large">
-                          <User size={24} />
+                          {userInfo ? (
+                            <img 
+                              src={getUserAvatarUrl(userInfo.avatar_url, userInfo.username, userInfo.display_name)} 
+                              alt={userInfo.display_name || userInfo.username || '用户'}
+                              className="user-avatar-img"
+                            />
+                          ) : (
+                            <User size={24} />
+                          )}
                         </div>
                         <div className="user-details">
                           <div className="user-name">{userInfo?.display_name || userInfo?.username || '用户'}</div>

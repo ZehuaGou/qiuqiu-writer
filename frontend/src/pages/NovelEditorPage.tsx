@@ -21,6 +21,7 @@ import { useChapterAutoSave } from '../hooks/useChapterAutoSave';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { worksApi, type Work } from '../utils/worksApi';
 import { chaptersApi, type Chapter, type ChapterUpdate } from '../utils/chaptersApi';
+import { authApi } from '../utils/authApi';
 import { syncManager } from '../utils/syncManager';
 import { useIntelligentSync } from '../utils/intelligentSync';
 import { analyzeChapter } from '../utils/bookAnalysisApi';
@@ -401,7 +402,13 @@ export default function NovelEditorPage(){
     try {
       await worksApi.deleteWork(Number(workId));
       alert('作品删除成功');
-      navigate('/works');
+      // 导航到当前用户的作品页面
+      const currentUser = authApi.getUserInfo();
+      if (currentUser?.id) {
+        navigate(`/users/${currentUser.id}`);
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       console.error('删除作品失败:', err);
       alert(err instanceof Error ? err.message : '删除作品失败');
@@ -1935,7 +1942,14 @@ export default function NovelEditorPage(){
       <div className="novel-editor-page">
         <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
           {error || '作品不存在'}
-          <button onClick={() => navigate('/works')} style={{ marginTop: '16px', padding: '8px 16px' }}>
+          <button onClick={() => {
+            const currentUser = authApi.getUserInfo();
+            if (currentUser?.id) {
+              navigate(`/users/${currentUser.id}`);
+            } else {
+              navigate('/');
+            }
+          }} style={{ marginTop: '16px', padding: '8px 16px' }}>
             返回作品列表
           </button>
         </div>

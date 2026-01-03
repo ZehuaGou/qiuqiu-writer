@@ -22,7 +22,7 @@ from memos.api.services.user_service import UserService
 from memos.api.schemas.auth import (
     LoginRequest, RegisterRequest, RefreshTokenRequest,
     LogoutRequest, TokenResponse, RefreshTokenResponse,
-    AuthResponse, SessionInfo
+    AuthResponse, SessionInfo, UpdateProfileRequest
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
@@ -367,6 +367,49 @@ async def get_current_user_info(
     获取当前用户信息
     """
     return current_user
+
+
+@router.put("/me")
+async def update_current_user_profile(
+    request: UpdateProfileRequest,
+    current_user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_async_db)
+) -> Dict[str, Any]:
+    """
+    更新当前用户资料
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    user_service = UserService()
+    
+    # 准备更新数据
+    update_data = {}
+    if request.display_name is not None:
+        update_data["display_name"] = request.display_name
+    if request.bio is not None:
+        update_data["bio"] = request.bio
+    
+    logger.info(f"更新用户资料: user_id={current_user_id}, update_data={update_data}")
+    
+    # 更新用户资料
+    updated_user = await user_service.update_user(
+        user_id=current_user_id,
+        update_data=update_data,
+        update_profile=True
+    )
+    
+    if not updated_user:
+        logger.error(f"更新用户资料失败: user_id={current_user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="更新用户资料失败"
+        )
+    
+    logger.info(f"更新用户资料成功: user_id={current_user_id}, updated_user={updated_user}")
+    
+    # 返回更新后的用户信息（与GET /me格式一致）
+    return updated_user
 
 
 @router.post("/check-username")

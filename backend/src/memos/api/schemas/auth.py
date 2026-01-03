@@ -212,3 +212,23 @@ class DeviceInfo(BaseModel):
     browser: Optional[str] = None
     os: Optional[str] = None
     platform: Optional[str] = None
+
+
+class UpdateProfileRequest(BaseModel):
+    """更新用户资料请求模式"""
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+
+    @validator("display_name")
+    def validate_display_name(cls, v):
+        if v is not None:
+            if len(v) < 1 or len(v) > 100:
+                raise ValueError("显示名称长度必须在1-100个字符之间")
+        return v
+
+    @validator("bio")
+    def validate_bio(cls, v):
+        if v is not None:
+            if len(v) > 500:
+                raise ValueError("个人简介不能超过500个字符")
+        return v

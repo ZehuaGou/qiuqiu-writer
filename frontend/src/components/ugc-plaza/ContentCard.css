@@ -187,25 +187,16 @@
   gap: 8px;
 }
 
-.author-avatar,
-.author-avatar-placeholder {
+.author-avatar {
   width: 24px;
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
-}
-
-.author-avatar-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-gradient);
-  color: white;
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-base);
 }
 
-.content-card:hover .author-avatar-placeholder {
+.content-card:hover .author-avatar {
   transform: scale(1.1);
   box-shadow: var(--shadow);
 }

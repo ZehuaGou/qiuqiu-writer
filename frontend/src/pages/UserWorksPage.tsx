@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Grid, List, BookOpen, User, Calendar, FileText } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Grid, List, BookOpen, User, Calendar, FileText, Plus, Upload } from 'lucide-react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi, type UserInfo } from '../utils/authApi';
+import { getUserAvatarUrl } from '../utils/avatarUtils';
+import ImportWorkModal from '../components/ImportWorkModal';
 import './UserWorksPage.css';
 
 export default function UserWorksPage() {
@@ -15,6 +17,13 @@ export default function UserWorksPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    display_name: '',
+    bio: '',
+  });
+  const [saving, setSaving] = useState(false);
   const itemsPerPage = 20;
   const isCurrentUser = authApi.isAuthenticated() && 
     authApi.getUserInfo()?.id === Number(userId);
@@ -66,12 +75,24 @@ export default function UserWorksPage() {
     if (!userId) return;
     
     try {
-      // 如果是当前用户，使用已存储的用户信息
+      // 如果是当前用户，从API获取最新用户信息
       if (isCurrentUser) {
-        const currentUser = authApi.getUserInfo();
-        if (currentUser) {
-          setUserInfo(currentUser);
-          return;
+        try {
+          const currentUser = await authApi.getCurrentUser();
+          console.log('从API获取的用户信息:', currentUser);
+          if (currentUser) {
+            setUserInfo(currentUser);
+            return;
+          }
+        } catch (err) {
+          console.error('获取用户信息失败，使用本地存储:', err);
+          // 如果API失败，使用本地存储的用户信息
+          const storedUser = authApi.getUserInfo();
+          console.log('从本地存储获取的用户信息:', storedUser);
+          if (storedUser) {
+            setUserInfo(storedUser);
+            return;
+          }
         }
       }
       
@@ -103,6 +124,78 @@ export default function UserWorksPage() {
     navigate(`/novel/editor?workId=${work.id}`);
   };
 
+  // 处理创建作品
+  const handleCreateWork = async () => {
+    try {
+      console.log('📝 [UserWorksPage.handleCreateWork] 开始创建作品...');
+      
+      const workData = {
+        title: '未命名作品',
+        work_type: 'long' as const,
+        is_public: false,
+      };
+      
+      const newWork = await worksApi.createWork(workData);
+      
+      if (!newWork || !newWork.id) {
+        throw new Error('创建作品成功，但未返回作品ID');
+      }
+      
+      // 重新加载作品列表
+      await loadUserWorks();
+      
+      // 跳转到编辑器
+      navigate(`/novel/editor?workId=${newWork.id}`);
+    } catch (err) {
+      console.error('❌ [UserWorksPage.handleCreateWork] 创建作品失败:', err);
+      const errorMessage = err instanceof Error ? err.message : '创建作品失败';
+      alert(`创建作品失败: ${errorMessage}`);
+    }
+  };
+
+  // 处理导入成功
+  const handleImportSuccess = () => {
+    loadUserWorks();
+    setShowImportModal(false);
+  };
+
+  // 处理编辑资料
+  const handleEditProfile = () => {
+    if (userInfo) {
+      setEditFormData({
+        display_name: userInfo.display_name || '',
+        bio: (userInfo as any).bio || '',
+      });
+    }
+    setShowEditProfile(true);
+  };
+
+  // 处理取消编辑
+  const handleCancelEdit = () => {
+    setShowEditProfile(false);
+  };
+
+  // 处理保存资料
+  const handleSaveProfile = async () => {
+    if (!userInfo) return;
+    
+    setSaving(true);
+    try {
+      const updatedUser = await authApi.updateProfile(editFormData);
+      console.log('更新后的用户信息:', updatedUser);
+      // 更新本地状态
+      setUserInfo(updatedUser);
+      // 重新加载用户信息以确保数据同步
+      await loadUserInfo();
+      setShowEditProfile(false);
+    } catch (err) {
+      console.error('保存资料失败:', err);
+      alert(err instanceof Error ? err.message : '保存资料失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading && works.length === 0) {
     return (
       <div className="user-works-page">
@@ -121,39 +214,153 @@ export default function UserWorksPage() {
 
   return (
     <div className="user-works-page">
-      <div className="user-header">
-        <div className="user-avatar">
-          <User size={48} />
-        </div>
-        <div className="user-info">
-          <h1 className="user-name">
-            {userInfo?.display_name || userInfo?.username || `用户 ${userId}`}
-          </h1>
-          {userInfo?.email && (
-            <p className="user-email">{userInfo.email}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="works-section">
-        <div className="works-header">
-          <div className="view-toggle">
-            <button
-              className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-              onClick={() => setViewMode('grid')}
-              title="网格视图"
-            >
-              <Grid size={18} />
-            </button>
-            <button
-              className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-              onClick={() => setViewMode('list')}
-              title="列表视图"
-            >
-              <List size={18} />
-            </button>
+      <div className="user-works-container">
+        {/* 左侧个人信息栏 */}
+        <aside className="user-sidebar">
+          <div className="user-profile-card">
+            <div className="user-avatar-large">
+              {userInfo ? (
+                <img 
+                  src={getUserAvatarUrl(userInfo.avatar_url, userInfo.username, userInfo.display_name)} 
+                  alt={userInfo.display_name || userInfo.username || '用户'}
+                  className="user-avatar-img"
+                />
+              ) : (
+                <User size={80} />
+              )}
+            </div>
+            <h1 className="user-name" style={{ fontSize: '28px', fontWeight: 700, color: '#000000' }}>
+              {userInfo?.display_name || userInfo?.username || `用户 ${userId}`}
+            </h1>
+            {userInfo?.username && (
+              <p className="user-username">@{userInfo.username}</p>
+            )}
+            {userInfo?.email && (
+              <p className="user-email">{userInfo.email}</p>
+            )}
+            {isCurrentUser && (
+              <>
+                <button 
+                  className="edit-profile-btn"
+                  onClick={handleEditProfile}
+                >
+                  {showEditProfile ? '取消编辑' : '编辑资料'}
+                </button>
+                {/* 移动端：在个人信息下方显示操作按钮 */}
+                <div className="mobile-actions">
+                  <button 
+                    className="action-btn primary mobile-action-btn"
+                    onClick={handleCreateWork}
+                  >
+                    <Plus size={16} />
+                    <span>创建作品</span>
+                  </button>
+                  <button 
+                    className="action-btn mobile-action-btn"
+                    onClick={() => setShowImportModal(true)}
+                  >
+                    <Upload size={16} />
+                    <span>导入作品</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </div>
+          
+          {/* 编辑资料表单 */}
+          {showEditProfile && isCurrentUser && (
+            <div className="edit-profile-form">
+              <div className="edit-profile-section">
+                <label htmlFor="display_name" className="edit-profile-label">
+                  姓名
+                </label>
+                <input
+                  id="display_name"
+                  type="text"
+                  className="edit-profile-input"
+                  placeholder="姓名"
+                  value={editFormData.display_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, display_name: e.target.value })}
+                />
+              </div>
+
+              <div className="edit-profile-section">
+                <label htmlFor="bio" className="edit-profile-label">
+                  简介
+                </label>
+                <textarea
+                  id="bio"
+                  className="edit-profile-textarea"
+                  placeholder="添加简介"
+                  rows={4}
+                  value={editFormData.bio}
+                  onChange={(e) => setEditFormData({ ...editFormData, bio: e.target.value })}
+                />
+                <p className="edit-profile-hint">
+                  你可以 @提及 其他用户和组织来链接到他们。
+                </p>
+              </div>
+
+              <div className="edit-profile-actions">
+                <button
+                  className="action-btn primary"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                >
+                  {saving ? '保存中...' : '保存'}
+                </button>
+                <button
+                  className="action-btn"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* 右侧作品列表 */}
+        <main className="works-main">
+          <div className="works-header">
+            {isCurrentUser && (
+              <div className="works-header-actions">
+                <button 
+                  className="action-btn primary"
+                  onClick={handleCreateWork}
+                >
+                  <Plus size={16} />
+                  <span>创建作品</span>
+                </button>
+                <button 
+                  className="action-btn"
+                  onClick={() => setShowImportModal(true)}
+                >
+                  <Upload size={16} />
+                  <span>导入作品</span>
+                </button>
+              </div>
+            )}
+            <div className="works-header-right">
+              <div className="view-toggle">
+                <button
+                  className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setViewMode('grid')}
+                  title="网格视图"
+                >
+                  <Grid size={18} />
+                </button>
+                <button
+                  className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setViewMode('list')}
+                  title="列表视图"
+                >
+                  <List size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
 
         {works.length === 0 ? (
           <div className="empty-state">
@@ -244,7 +451,17 @@ export default function UserWorksPage() {
             )}
           </>
         )}
+        </main>
       </div>
+
+      {/* 导入作品弹窗 */}
+      {isCurrentUser && (
+        <ImportWorkModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={handleImportSuccess}
+        />
+      )}
     </div>
   );
 }

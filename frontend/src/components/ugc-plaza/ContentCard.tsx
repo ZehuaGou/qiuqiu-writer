@@ -1,4 +1,5 @@
 import { Heart, MessageCircle, Eye, User, Calendar } from 'lucide-react';
+import { getUserAvatarUrl } from '../../utils/avatarUtils';
 import './ContentCard.css';
 
 interface UGCContent {
@@ -73,13 +74,11 @@ export default function ContentCard({ content, index = 0 }: ContentCardProps) {
       </div>
       <div className="card-footer">
         <div className="card-author">
-          {content.avatar ? (
-            <img src={content.avatar} alt={content.author} className="author-avatar" />
-          ) : (
-            <div className="author-avatar-placeholder">
-              <User size={16} />
-            </div>
-          )}
+          <img 
+            src={getUserAvatarUrl(content.avatar, content.author)} 
+            alt={content.author} 
+            className="author-avatar" 
+          />
           <span className="author-name">{content.author}</span>
         </div>
         <div className="card-stats">

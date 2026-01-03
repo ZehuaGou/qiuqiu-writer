@@ -305,24 +305,35 @@ class UserService:
                 profile_data = {}
                 user_data = {}
 
+                # User表中的字段（包括display_name和bio）
+                user_table_fields = {"display_name", "bio", "avatar_url", "status", "preferences"}
+                # UserProfile表中的字段（不包括display_name，因为它在User表中）
                 profile_fields = {
-                    "display_name", "real_name", "gender", "birthday",
+                    "real_name", "gender", "birthday",
                     "location", "website", "social_links", "writing_stats", "preferences"
                 }
 
                 for key, value in update_data.items():
-                    if key in profile_fields and update_profile:
+                    if key in user_table_fields:
+                        # 更新User表
+                        user_data[key] = value
+                        # display_name也需要同步到UserProfile表（如果存在）
+                        if key == "display_name" and update_profile:
+                            profile_data[key] = value
+                    elif key in profile_fields and update_profile:
+                        # 只更新UserProfile表
                         profile_data[key] = value
-                    elif key not in profile_fields:
+                    else:
+                        # 其他字段默认更新User表
                         user_data[key] = value
 
-                # 更新用户基本信息
+                # 更新用户基本信息（User表）
                 if user_data:
                     for key, value in user_data.items():
                         if hasattr(user, key):
                             setattr(user, key, value)
 
-                # 更新用户资料
+                # 更新用户资料（UserProfile表）
                 if profile_data and update_profile:
                     if user.profile:
                         for key, value in profile_data.items():
@@ -331,6 +342,9 @@ class UserService:
                     else:
                         profile = UserProfile(user_id=user_id, **profile_data)
                         session.add(profile)
+                
+                # 确保session刷新，以便获取最新数据
+                await session.flush()
 
                 await session.commit()
 

@@ -32,6 +32,7 @@ export interface UserInfo {
   username: string;
   email: string;
   display_name?: string;
+  avatar_url?: string;
   status: string;
   created_at?: string;
   updated_at?: string;
@@ -230,6 +231,39 @@ class AuthApiClient {
 
   isAuthenticated(): boolean {
     return !!this.getToken();
+  }
+
+  /**
+   * 更新用户资料
+   */
+  async updateProfile(data: Partial<UserInfo>): Promise<UserInfo> {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('未登录');
+    }
+
+    const response = await fetch(`${this.baseUrl}/api/v1/auth/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        this.clearToken();
+        throw new Error('登录已过期，请重新登录');
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.message || '更新用户资料失败');
+    }
+
+    const result = await response.json();
+    const updatedUser = result.user || result;
+    this.setUserInfo(updatedUser);
+    return updatedUser;
   }
 }
 
