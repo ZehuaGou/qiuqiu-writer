@@ -409,8 +409,8 @@ const loadDefaultTemplate = async (): Promise<TemplateConfig | null> => {
       include_fields: false
     });
     
-    // 查找第一个系统模板作为默认模板
-    const defaultTemplate = templates.find(t => t.is_system) || templates[0];
+    // 优先查找模板ID为8的小说标准模板，如果没有则查找第一个系统模板
+    const defaultTemplate = templates.find(t => t.id === 8) || templates.find(t => t.is_system) || templates[0];
     if (defaultTemplate) {
       console.log('📥 加载默认模板数据:', {
         id: defaultTemplate.id,

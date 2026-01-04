@@ -235,9 +235,6 @@ export default function UserWorksPage() {
             {userInfo?.username && (
               <p className="user-username">@{userInfo.username}</p>
             )}
-            {userInfo?.email && (
-              <p className="user-email">{userInfo.email}</p>
-            )}
             {isCurrentUser && (
               <>
                 <button 

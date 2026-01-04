@@ -98,22 +98,26 @@
 }
 
 .work-title:hover {
-  background: var(--bg-secondary, #f8fafc);
+  /* 悬停时不改变背景 */
 }
 
-.work-title-input {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0;
-  padding: 4px 8px;
-  border: 2px solid #10b981;
-  border-radius: 4px;
-  background: white;
+.work-title-editable {
+  cursor: text;
   outline: none;
-  width: 100%;
-  max-width: 500px;
-  font-family: inherit;
+  display: inline-block;
+  min-width: 100px;
+  min-height: 1.4em;
+}
+
+.work-title-editable:hover {
+  /* 悬停时不改变背景 */
+}
+
+.work-title-editable:focus {
+  /* 聚焦时不改变背景 */
+  border: none;
+  box-shadow: none;
+  padding: 4px 8px;
 }
 
 .work-tags {
@@ -1151,15 +1155,14 @@
 }
 
 .chapter-name-editable:hover {
-  background: var(--bg-secondary, #f8fafc);
-  color: var(--primary-color, #2563eb);
+  /* 悬停时不改变任何样式 */
 }
 
 .chapter-name-editable:focus {
-  background: var(--bg-primary);
-  border: 2px solid var(--primary-color, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-  padding: 2px 10px;
+  /* 聚焦时不改变任何样式 */
+  border: none;
+  box-shadow: none;
+  padding: 4px 8px;
 }
 
 .chapter-name-editable:empty::before {

@@ -65,3 +65,4 @@ export function getAvatarInitial(
   return name.charAt(0).toUpperCase();
 }
 
+

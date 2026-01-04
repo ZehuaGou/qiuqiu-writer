@@ -51,9 +51,7 @@ export default function NovelEditorPage(){
   const [error, setError] = useState<string | null>(null);
   // 章节切换加载状态
   const [chapterLoading, setChapterLoading] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState('');
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleEditableRef = useRef<HTMLDivElement>(null);
   const [showWordCountTooltip, setShowWordCountTooltip] = useState(false);
   // 章节名编辑状态
   const chapterNameInputRef = useRef<HTMLDivElement>(null);
@@ -198,7 +196,6 @@ export default function NovelEditorPage(){
         setLoading(true);
         const workData = await worksApi.getWork(Number(workId), true, true);
         setWork(workData);
-        setTitleValue(workData.title);
         setError(null);
       } catch (err) {
         console.error('加载作品失败:', err);
@@ -211,12 +208,6 @@ export default function NovelEditorPage(){
     loadWork();
   }, [workId]);
 
-  // 当 work 更新时，同步更新 titleValue
-  useEffect(() => {
-    if (work) {
-      setTitleValue(work.title);
-    }
-  }, [work]);
 
   // 移动端：点击外部关闭 tooltip
   useEffect(() => {
@@ -250,13 +241,18 @@ export default function NovelEditorPage(){
     };
   }, [isMobile, showWordCountTooltip]);
 
-  // 当进入编辑模式时，聚焦输入框
+  // 同步作品标题内容（当作品数据更新时）
   useEffect(() => {
-    if (isEditingTitle && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
+    if (work && titleEditableRef.current) {
+      // 只有当元素不在焦点时（不在编辑状态）才更新内容
+      if (document.activeElement !== titleEditableRef.current) {
+        const currentTitle = work.title || '';
+        if (titleEditableRef.current.textContent !== currentTitle) {
+          titleEditableRef.current.textContent = currentTitle;
+        }
+      }
     }
-  }, [isEditingTitle]);
+  }, [work]);
 
   // 同步章节名内容（当章节切换或章节名更新时）
   useEffect(() => {
@@ -273,47 +269,53 @@ export default function NovelEditorPage(){
 
 
   // 保存标题
-  const handleSaveTitle = async () => {
-    if (!work || !workId || !titleValue.trim()) {
-      setTitleValue(work?.title || '');
-      setIsEditingTitle(false);
+  const handleSaveTitle = async (e: React.FocusEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => {
+    if (!work || !workId) {
       return;
     }
 
-    if (titleValue.trim() === work.title) {
-      setIsEditingTitle(false);
+    const currentTitle = work.title || '';
+    // 从contentEditable元素获取文本内容
+    const newTitle = (e.currentTarget.textContent || '').trim();
+
+    // 如果没有变化，直接返回
+    if (newTitle === currentTitle) {
+      return;
+    }
+
+    // 如果新标题为空，恢复原值
+    if (!newTitle) {
+      e.currentTarget.textContent = currentTitle;
       return;
     }
 
     try {
       const updatedWork = await worksApi.updateWork(Number(workId), {
-        title: titleValue.trim(),
+        title: newTitle,
       });
       setWork(updatedWork);
-      setIsEditingTitle(false);
-      console.log('✅ 标题已更新（本地状态）:', titleValue.trim());
+      console.log('✅ 标题已更新（本地状态）:', newTitle);
     } catch (err) {
       console.error('更新标题失败:', err);
       alert(err instanceof Error ? err.message : '更新标题失败');
-      setTitleValue(work.title);
-      setIsEditingTitle(false);
+      // 恢复原值
+      e.currentTarget.textContent = currentTitle;
     }
   };
 
-  // 取消编辑标题
-  const handleCancelEditTitle = () => {
-    setTitleValue(work?.title || '');
-    setIsEditingTitle(false);
-  };
-
-  // 处理标题输入框的键盘事件
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // 处理标题的键盘事件
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSaveTitle();
+      e.currentTarget.blur(); // 触发onBlur，从而保存
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      handleCancelEditTitle();
+      // 恢复原值
+      if (work) {
+        const currentTitle = work.title || '';
+        e.currentTarget.textContent = currentTitle;
+        e.currentTarget.blur();
+      }
     }
   };
 
@@ -1968,26 +1970,18 @@ export default function NovelEditorPage(){
           </button>
           <div className="work-info">
             <div className="work-info-row">
-              {isEditingTitle ? (
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  className="work-title-input"
-                  value={titleValue}
-                  onChange={(e) => setTitleValue(e.target.value)}
-                  onBlur={handleSaveTitle}
-                  onKeyDown={handleTitleKeyDown}
-                  placeholder="请输入作品标题"
-                />
-              ) : (
-                <h1 
-                  className="work-title"
-                  onClick={() => setIsEditingTitle(true)}
-                  title="点击编辑标题"
-                >
-                  {work?.title || ''}
-                </h1>
-              )}
+              <h1 
+                ref={titleEditableRef}
+                className="work-title work-title-editable"
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={handleSaveTitle}
+                onKeyDown={handleTitleKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                title="点击编辑标题"
+              >
+                {work?.title || ''}
+              </h1>
               <span 
                 className="word-count-tooltip-wrapper"
                 data-tooltip-visible={showWordCountTooltip}

@@ -201,7 +201,6 @@ export default function MainLayout() {
                         </div>
                         <div className="user-details">
                           <div className="user-name">{userInfo?.display_name || userInfo?.username || '用户'}</div>
-                          <div className="user-email">{userInfo?.email || ''}</div>
                         </div>
                       </div>
                       <div className="menu-divider"></div>
@@ -271,7 +270,6 @@ export default function MainLayout() {
             <div className="menu-divider"></div>
                 <div className="mobile-menu-user">
                   <div className="user-name">{userInfo?.display_name || userInfo?.username || '用户'}</div>
-                  <div className="user-email">{userInfo?.email || ''}</div>
                 </div>
                 <a
                   href="#"
