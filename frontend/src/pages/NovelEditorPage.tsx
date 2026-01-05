@@ -2217,7 +2217,7 @@ export default function NovelEditorPage(){
         <div className="novel-editor-main">
 
           {/* 根据导航项显示不同内容 */}
-          {activeNav === 'work-info' && selectedChapter === null && <WorkInfoManager workId={workId} />}
+          {activeNav === 'work-info' && selectedChapter === null && <WorkInfoManager workId={workId} workData={work} />}
           {activeNav === 'tags' && <TagsManager />}
           {activeNav === 'outline' && <ChapterOutline />}
           {activeNav === 'map' && <MapView />}

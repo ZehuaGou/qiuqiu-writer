@@ -401,16 +401,22 @@ const componentRegistry: ComponentDefinition[] = [
 // 如果需要回退模板，可以从数据库加载系统模板（is_system=true）
 
 // 从数据库加载默认模板的辅助函数
-const loadDefaultTemplate = async (): Promise<TemplateConfig | null> => {
+const loadDefaultTemplate = async (userTemplates?: any[]): Promise<TemplateConfig | null> => {
   try {
-    const templates = await templatesApi.listTemplates({
-      work_type: 'novel',
-      is_system: true, // 加载系统模板
-      include_fields: false
-    });
+    // 先尝试从 userTemplates 中查找（如果已提供）
+    let templates = userTemplates || [];
+    let defaultTemplate = templates.find(t => t.id === 8) || templates.find(t => t.is_system) || templates[0];
     
-    // 优先查找模板ID为8的小说标准模板，如果没有则查找第一个系统模板
-    const defaultTemplate = templates.find(t => t.id === 8) || templates.find(t => t.is_system) || templates[0];
+    // 如果 userTemplates 中没有找到，再调用 API 获取
+    if (!defaultTemplate) {
+      templates = await templatesApi.listTemplates({
+        work_type: 'novel',
+        include_fields: false
+      });
+      
+      // 优先查找模板ID为8的小说标准模板，如果没有则查找第一个系统模板
+      defaultTemplate = templates.find(t => t.id === 8) || templates.find(t => t.is_system) || templates[0];
+    }
     if (defaultTemplate) {
       console.log('📥 加载默认模板数据:', {
         id: defaultTemplate.id,
@@ -731,6 +737,7 @@ function DataDependenciesSelector({ value, onChange, template, currentComponentI
 
 interface WorkInfoManagerProps {
   workId?: string | null;
+  workData?: any; // 可选的 workData，如果提供则避免重复请求
 }
 
 // 时间线角色选择器组件
@@ -889,7 +896,7 @@ function TimelineCharacterSelector({
   );
 }
 
-export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
+export default function WorkInfoManager({ workId, workData }: WorkInfoManagerProps = {}) {
   // 初始化时尝试从缓存加载（基于 workId）
   const [template, setTemplate] = useState<TemplateConfig>(() => {
     // 初始状态：使用空模板，等待从数据库加载
@@ -1026,11 +1033,17 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           if (cached.templateId.startsWith('db-')) {
             try {
               const dbTemplateId = parseInt(cached.templateId.replace('db-', ''));
-              const templates = await templatesApi.listTemplates({
-                work_type: 'novel',
-                include_fields: false
-              });
-              const dbTemplate = templates.find(t => t.id === dbTemplateId);
+              // 先尝试从 userTemplates 中查找（如果已加载）
+              let dbTemplate = userTemplates.find(t => t.id === dbTemplateId);
+              
+              // 如果 userTemplates 中找不到，再调用 API 获取
+              if (!dbTemplate) {
+                const templates = await templatesApi.listTemplates({
+                  work_type: 'novel',
+                  include_fields: false
+                });
+                dbTemplate = templates.find(t => t.id === dbTemplateId);
+              }
               if (dbTemplate) {
                 console.log('📥 从缓存加载时获取的模板数据:', {
                   id: dbTemplate.id,
@@ -1071,7 +1084,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         }
         
         // 如果没有缓存或加载失败，从数据库加载默认模板
-        const defaultTemplate = await loadDefaultTemplate();
+        const defaultTemplate = await loadDefaultTemplate(userTemplates);
         if (defaultTemplate) {
           setTemplate(defaultTemplate);
         } else {
@@ -1088,7 +1101,11 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
 
       try {
         // 从作品的 metadata 字段加载模板配置
-        const workData = await worksApi.getWork(Number(workId));
+        // 必须提供 workData prop，不再调用 API
+        if (!workData) {
+          console.warn('WorkInfoManager: workData 未提供，跳过模板配置加载');
+          return;
+        }
         const templateConfig = workData.metadata?.template_config;
         const componentData = workData.metadata?.component_data || {};
         
@@ -1202,7 +1219,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           
           // 如果还是找不到，从数据库加载默认模板
           if (!baseTemplate) {
-            const defaultTemplate = await loadDefaultTemplate();
+            const defaultTemplate = await loadDefaultTemplate(userTemplates);
             if (defaultTemplate) {
               // 加载 prompt 内容
               const modulesWithPrompts = await loadPromptsForComponents(defaultTemplate.modules);
@@ -1348,11 +1365,17 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
             if (cached.templateId.startsWith('db-')) {
               try {
                 const dbTemplateId = parseInt(cached.templateId.replace('db-', ''));
-                const templates = await templatesApi.listTemplates({
-                  work_type: 'novel',
-                  include_fields: false
-                });
-                const dbTemplate = templates.find(t => t.id === dbTemplateId);
+                // 先尝试从 userTemplates 中查找（如果已加载）
+                let dbTemplate = userTemplates.find(t => t.id === dbTemplateId);
+                
+                // 如果 userTemplates 中找不到，再调用 API 获取
+                if (!dbTemplate) {
+                  const templates = await templatesApi.listTemplates({
+                    work_type: 'novel',
+                    include_fields: false
+                  });
+                  dbTemplate = templates.find(t => t.id === dbTemplateId);
+                }
                 if (dbTemplate) {
                   console.log('📥 从缓存加载时获取的模板数据:', {
                     id: dbTemplate.id,
@@ -1421,11 +1444,17 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
           if (cached.templateId.startsWith('db-')) {
             try {
               const dbTemplateId = parseInt(cached.templateId.replace('db-', ''));
-              const templates = await templatesApi.listTemplates({
-                work_type: 'novel',
-                include_fields: false
-              });
-              const dbTemplate = templates.find(t => t.id === dbTemplateId);
+              // 先尝试从 userTemplates 中查找（如果已加载）
+              let dbTemplate = userTemplates.find(t => t.id === dbTemplateId);
+              
+              // 如果 userTemplates 中找不到，再调用 API 获取
+              if (!dbTemplate) {
+                const templates = await templatesApi.listTemplates({
+                  work_type: 'novel',
+                  include_fields: false
+                });
+                dbTemplate = templates.find(t => t.id === dbTemplateId);
+              }
               if (dbTemplate) {
                 console.log('📥 从缓存加载时获取的模板数据:', {
                   id: dbTemplate.id,
@@ -1466,7 +1495,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
         }
         
         // 如果没有缓存或加载失败，从数据库加载默认模板
-        const defaultTemplate = await loadDefaultTemplate();
+        const defaultTemplate = await loadDefaultTemplate(userTemplates);
         if (defaultTemplate) {
           setTemplate(defaultTemplate);
         } else {
@@ -1481,7 +1510,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     };
 
     loadTemplate();
-  }, [workId]);
+  }, [workId, workData]);
 
   // 从模板格式中提取所有组件数据（简化格式，按 dataKey 组织）
   const extractComponentDataFromTemplate = useCallback((modules: ModuleConfig[]): { [dataKey: string]: any } => {
@@ -2417,7 +2446,11 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       const reloadTemplate = async () => {
         try {
           // 从作品的 metadata 字段加载模板配置
-          const workData = await worksApi.getWork(Number(workId));
+          // 必须提供 workData prop，不再调用 API
+          if (!workData) {
+            console.warn('WorkInfoManager: workData 未提供，跳过模板配置重新加载');
+            return;
+          }
           const templateConfig = workData.metadata?.template_config;
           
           if (templateConfig && 
@@ -2445,7 +2478,7 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       };
       reloadTemplate();
     }
-  }, [workId, userTemplates.length]);
+  }, [workId, workData, userTemplates.length]);
 
   // 应用模板
   const applyTemplate = async (t: TemplateConfig) => {
@@ -2473,10 +2506,10 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
     }
     
     // 如果有 workId，尝试加载该作品保存的模板配置
-    if (workId) {
+    if (workId && workData) {
       try {
         // 从作品的 metadata 字段加载模板配置
-        const workData = await worksApi.getWork(Number(workId));
+        // 必须提供 workData prop，不再调用 API
         const templateConfig = workData.metadata?.template_config;
         
           // 只有当模板ID匹配时，才加载保存的内容
@@ -2564,10 +2597,10 @@ export default function WorkInfoManager({ workId }: WorkInfoManagerProps = {}) {
       
       
       // 如果有 workId，尝试从本地缓存加载该模板的保存内容
-      if (workId) {
+      if (workId && workData) {
         try {
           // 先检查当前作品使用的模板ID是否与新模板匹配
-          const workData = await worksApi.getWork(Number(workId));
+          // 必须提供 workData prop，不再调用 API
           const templateConfig = workData.metadata?.template_config;
           
           // 只有当模板ID匹配时，才加载保存的内容
