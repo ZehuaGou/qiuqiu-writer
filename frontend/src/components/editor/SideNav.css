@@ -478,7 +478,7 @@
 
 .nav-chapter-analyze-btn:hover {
   background: rgba(139, 92, 246, 0.1);
-  color: #8b5cf6;
+  color: #999999;
   transform: scale(1.1);
 }
 
@@ -489,8 +489,8 @@
 }
 
 .nav-chapter-delete-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: rgba(102, 102, 102, 0.1);
+  color: #666666;
   transform: scale(1.1);
 }
 

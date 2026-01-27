@@ -113,9 +113,9 @@
 }
 
 .toolbar-btn.active {
-  background: var(--primary-color, #2563eb);
+  background: var(--primary-color, #444444);
   color: white;
-  border-color: var(--primary-color, #2563eb);
+  border-color: var(--primary-color, #444444);
 }
 
 .toolbar-btn.active svg {
@@ -141,7 +141,7 @@
 .ai-writing-prompt {
   margin: 20px 24px;
   padding: 16px;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0e0e0 100%);
   border-radius: 12px;
   border: 1px solid #a7f3d0;
   flex-shrink: 0;
@@ -174,9 +174,9 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  border: 1px solid #10b981;
+  border: 1px solid #444444;
   background: white;
-  color: #10b981;
+  color: #444444;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -185,7 +185,7 @@
 }
 
 .ai-btn.primary {
-  background: #10b981;
+  background: #444444;
   color: white;
 }
 
@@ -195,7 +195,7 @@
 }
 
 .ai-btn.primary:hover {
-  background: #059669;
+  background: #333333;
 }
 
 /* 设置栏 */

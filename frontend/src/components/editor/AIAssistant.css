@@ -89,7 +89,7 @@
 
 .chat-clear-btn:hover {
   background: var(--bg-secondary);
-  color: #ef4444;
+  color: #666666;
 }
 
 .planet-avatar {
@@ -238,7 +238,7 @@
 }
 
 .user-avatar {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #666666 0%, #444444 100%);
 }
 
 .user-icon {
@@ -603,14 +603,14 @@
 }
 
 .mention-chapter {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(153, 153, 153, 0.15);
+  color: #999999;
+  border: 1px solid rgba(153, 153, 153, 0.3);
 }
 
 .mention-character {
   background: rgba(139, 92, 246, 0.15);
-  color: #8b5cf6;
+  color: #999999;
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
@@ -678,10 +678,10 @@
 
 .chat-error {
   padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(102, 102, 102, 0.1);
+  border: 1px solid rgba(102, 102, 102, 0.3);
   border-radius: var(--radius-sm);
-  color: #ef4444;
+  color: #666666;
   font-size: 13px;
   margin-top: 8px;
   animation: shake 0.3s ease-in-out;

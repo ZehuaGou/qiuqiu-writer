@@ -31,21 +31,21 @@
 
 .action-btn:hover {
   background: var(--bg-tertiary);
-  border-color: #3b82f6;
-  color: #3b82f6;
+  border-color: #999999;
+  color: #999999;
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
 
 .action-btn.primary {
   color: #ffffff !important;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: linear-gradient(135deg, #999999 0%, #444444 100%) !important;
   border-color: transparent !important;
   box-shadow: var(--shadow-md);
 }
 
 .action-btn.primary:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  background: linear-gradient(135deg, #444444 0%, #1d4ed8 100%) !important;
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
 }
@@ -78,12 +78,12 @@
   border-radius: var(--radius-md);
   padding: 32px;
   text-align: center;
-  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+  box-shadow: 0 1px 3px 0 rgba(153, 153, 153, 0.1);
   transition: all var(--transition-base);
 }
 
 .user-profile-card:hover {
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15), 0 2px 4px -2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15), 0 2px 4px -2px rgba(153, 153, 153, 0.1);
   border-color: #c7d2fe;
   transform: translateY(-2px);
 }
@@ -92,7 +92,7 @@
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #999999 0%, #444444 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -122,7 +122,7 @@
 .user-username {
   font-size: 22px;
   font-weight: 400;
-  color: #6b7280;
+  color: #666666;
   margin: 0 0 12px 0;
   line-height: 1.4;
 }
@@ -138,9 +138,9 @@
   padding: 10px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #3b82f6;
+  color: #999999;
   background: #ffffff;
-  border: 1px solid #3b82f6;
+  border: 1px solid #999999;
   border-radius: var(--radius);
   cursor: pointer;
   transition: all var(--transition-base);
@@ -148,9 +148,9 @@
 }
 
 .edit-profile-btn:hover {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #2563eb;
-  color: #2563eb;
+  background: rgba(153, 153, 153, 0.1);
+  border-color: #444444;
+  color: #444444;
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
@@ -173,12 +173,12 @@
 /* 确保移动端主要按钮显示为蓝色 */
 .mobile-action-btn.action-btn.primary {
   color: #ffffff !important;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: linear-gradient(135deg, #999999 0%, #444444 100%) !important;
   border-color: transparent !important;
 }
 
 .mobile-action-btn.action-btn.primary:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  background: linear-gradient(135deg, #444444 0%, #1d4ed8 100%) !important;
 }
 
 /* 编辑资料表单 */
@@ -188,7 +188,7 @@
   background: #ffffff;
   border: 1px solid #e0e7ff;
   border-radius: var(--radius-md);
-  box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+  box-shadow: 0 1px 3px 0 rgba(153, 153, 153, 0.1);
 }
 
 .edit-profile-section {
@@ -224,8 +224,8 @@
 .edit-profile-input:focus,
 .edit-profile-textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #999999;
+  box-shadow: 0 0 0 3px rgba(153, 153, 153, 0.1);
 }
 
 .edit-profile-textarea {
@@ -308,7 +308,7 @@
   border: 1px solid #e0e7ff;
   border-radius: var(--radius);
   padding: 4px;
-  background: #f8fafc;
+  background: #f8f8f8;
 }
 
 .view-btn {
@@ -322,13 +322,13 @@
 }
 
 .view-btn:hover {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+  background: rgba(153, 153, 153, 0.1);
+  color: #999999;
 }
 
 .view-btn.active {
   background: #ffffff;
-  color: #3b82f6;
+  color: #999999;
   box-shadow: var(--shadow-sm);
 }
 
@@ -374,8 +374,8 @@
 }
 
 .work-item:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1), 0 4px 6px -4px rgba(59, 130, 246, 0.1);
+  border-color: #999999;
+  box-shadow: 0 10px 15px -3px rgba(153, 153, 153, 0.1), 0 4px 6px -4px rgba(153, 153, 153, 0.1);
   transform: translateY(-2px);
 }
 
@@ -395,7 +395,7 @@
 .work-item-title {
   font-size: 16px;
   font-weight: 600;
-  color: #3b82f6;
+  color: #999999;
   margin: 0;
   flex: 1;
   overflow: hidden;
@@ -495,7 +495,7 @@
 .pagination-btn {
   padding: 6px 12px;
   font-size: 14px;
-  color: #3b82f6;
+  color: #999999;
   background: #ffffff;
   border: 1px solid #e0e7ff;
   border-radius: 6px;
@@ -504,9 +504,9 @@
 }
 
 .pagination-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
-  color: #2563eb;
+  background: rgba(153, 153, 153, 0.1);
+  border-color: #999999;
+  color: #444444;
 }
 
 .pagination-btn:disabled {

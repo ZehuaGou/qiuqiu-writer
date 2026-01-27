@@ -18,7 +18,7 @@
 .relations-header h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -75,19 +75,19 @@
   justify-content: center;
   gap: 12px;
   background: white;
-  color: #9ca3af;
+  color: #999999;
 }
 
 .relations-empty h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #6b7280;
+  color: #666666;
   margin: 0;
 }
 
 .relations-empty p {
   font-size: 14px;
-  color: #9ca3af;
+  color: #999999;
   margin: 0;
 }
 
@@ -95,8 +95,8 @@
   padding: 16px;
   text-align: center;
   font-size: 13px;
-  color: #9ca3af;
-  background: #f9fafb;
+  color: #999999;
+  background: #f8f8f8;
   border-radius: 8px;
 }
 
@@ -132,19 +132,19 @@
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border: 2px solid #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0e0e0 100%);
+  border: 2px solid #444444;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #10b981;
+  color: #444444;
   flex-shrink: 0;
 }
 
 .character-node-label {
   font-size: 12px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   text-align: center;
   white-space: nowrap;
   padding: 2px 6px;
@@ -169,21 +169,21 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
 }
 
 .legend-node {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border: 2px solid #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0e0e0 100%);
+  border: 2px solid #444444;
 }
 
 .legend-edge {
   width: 30px;
   height: 2px;
-  background: #10b981;
+  background: #444444;
 }
 
 .relations-sidebar {
@@ -207,7 +207,7 @@
 .sidebar-section h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0 0 16px 0;
 }
 
@@ -230,12 +230,12 @@
 }
 
 .character-item:hover {
-  border-color: #10b981;
-  background: #f9fafb;
+  border-color: #444444;
+  background: #f8f8f8;
 }
 
 .character-item.active {
-  border-color: #10b981;
+  border-color: #444444;
   background: #ecfdf5;
 }
 
@@ -245,14 +245,14 @@
 
 .character-name {
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   font-size: 14px;
   margin-bottom: 4px;
 }
 
 .character-gender {
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
 }
 
 .character-actions {
@@ -276,22 +276,22 @@
 }
 
 .relation-item:hover {
-  border-color: #10b981;
-  background: #f9fafb;
+  border-color: #444444;
+  background: #f8f8f8;
 }
 
 .relation-item.active {
-  border-color: #10b981;
+  border-color: #444444;
   background: #ecfdf5;
 }
 
 .relation-item:hover {
-  border-color: #10b981;
-  background: #f9fafb;
+  border-color: #444444;
+  background: #f8f8f8;
 }
 
 .relation-item.editing {
-  border-color: #10b981;
+  border-color: #444444;
   background: #ecfdf5;
 }
 
@@ -306,12 +306,12 @@
 .relation-from,
 .relation-to {
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   font-size: 13px;
 }
 
 .relation-type {
-  color: #10b981;
+  color: #444444;
   font-weight: 500;
   padding: 2px 8px;
   background: #ecfdf5;
@@ -321,7 +321,7 @@
 
 .relation-description {
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
   margin-bottom: 8px;
 }
 
@@ -342,7 +342,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: #666666;
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -353,7 +353,7 @@
 
 .action-icon-btn:hover {
   background: #f3f4f6;
-  color: #1f2937;
+  color: #222222;
 }
 
 .relation-edit-form {
@@ -379,8 +379,8 @@
 .edit-select:focus,
 .edit-textarea:focus {
   outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: #444444;
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .edit-textarea {
@@ -406,22 +406,22 @@
 }
 
 .edit-actions .save-btn {
-  background: #10b981;
+  background: #444444;
   color: white;
 }
 
 .edit-actions .save-btn:hover {
-  background: #059669;
+  background: #333333;
 }
 
 .edit-actions .cancel-btn {
   background: #f3f4f6;
-  color: #6b7280;
+  color: #666666;
 }
 
 .edit-actions .cancel-btn:hover {
   background: #e5e7eb;
-  color: #1f2937;
+  color: #222222;
 }
 
 /* 编辑模态框 */
@@ -470,7 +470,7 @@
 .edit-modal h4 {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0 0 20px 0;
 }
 
@@ -489,13 +489,13 @@
 .modal-form label span {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: #444444;
 }
 
 .edit-textarea {
   width: 100%;
   padding: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #cccccc;
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
@@ -506,8 +506,8 @@
 
 .edit-textarea:focus {
   outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: #444444;
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .modal-actions {
@@ -566,7 +566,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px;
-  background: #f9fafb;
+  background: #f8f8f8;
   border-radius: 8px;
 }
 
@@ -581,7 +581,7 @@
 .relation-char-name {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   padding: 8px 16px;
   background: white;
   border-radius: 6px;
@@ -591,11 +591,11 @@
 .relation-type-display {
   font-size: 16px;
   font-weight: 600;
-  color: #10b981;
+  color: #444444;
   padding: 8px 16px;
   background: #ecfdf5;
   border-radius: 6px;
-  border: 1px solid #10b981;
+  border: 1px solid #444444;
 }
 
 .relation-desc-display {
@@ -611,12 +611,12 @@
 .desc-label {
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: #666666;
 }
 
 .desc-text {
   font-size: 14px;
-  color: #1f2937;
+  color: #222222;
   line-height: 1.6;
 }
 
@@ -658,7 +658,7 @@
 .fullscreen-header h3 {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -668,7 +668,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: #666666;
   border-radius: 8px;
   cursor: pointer;
   display: flex;
@@ -679,7 +679,7 @@
 
 .close-fullscreen-btn:hover {
   background: #f3f4f6;
-  color: #1f2937;
+  color: #222222;
 }
 
 .fullscreen-canvas {

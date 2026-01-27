@@ -2,13 +2,13 @@
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   padding: 20px;
-  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.1);
+  box-shadow: 0 2px 12px rgba(68, 68, 68, 0.1);
+  border: 1px solid rgba(68, 68, 68, 0.1);
   transition: all var(--transition-base);
 }
 
 .case-sharing:hover {
-  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 4px 20px rgba(68, 68, 68, 0.15);
   transform: translateY(-2px);
 }
 

@@ -71,9 +71,9 @@ select {
   /* 基础样式 */
   padding: 8px 32px 8px 12px;
   background: var(--bg-primary, #ffffff);
-  border: 1px solid var(--border-light, #e0e0e0);
+  border: 1px solid var(--border-light, #e2e8f0);
   border-radius: 8px;
-  color: var(--text-primary, #222222);
+  color: var(--text-primary, #1f2937);
   font-size: 14px;
   font-family: inherit;
   line-height: 1.5;
@@ -92,15 +92,15 @@ select {
 
 /* 悬停状态 */
 select:hover {
-  border-color: var(--accent-primary, #000000);
-  background-color: var(--bg-secondary, #f8f8f8);
+  border-color: var(--accent-primary, #34d399);
+  background-color: var(--bg-secondary, #f0fdf4);
 }
 
 /* 聚焦状态 */
 select:focus {
   outline: none;
-  border-color: var(--accent-primary, #000000);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+  border-color: var(--accent-primary, #34d399);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.1);
   background-color: var(--bg-primary, #ffffff);
 }
 
@@ -115,7 +115,7 @@ select:disabled {
 select option {
   padding: 10px 12px;
   background: var(--bg-primary, #ffffff);
-  color: var(--text-primary, #222222);
+  color: var(--text-primary, #1f2937);
   font-size: 14px;
   line-height: 1.5;
   min-height: 36px;
@@ -123,20 +123,20 @@ select option {
 
 /* Option 悬停状态（部分浏览器支持） */
 select option:hover {
-  background: var(--accent-light, rgba(0, 0, 0, 0.1));
-  color: var(--accent-primary, #000000);
+  background: var(--accent-light, rgba(52, 211, 153, 0.1));
+  color: var(--accent-primary, #34d399);
 }
 
 /* Option 选中状态 */
 select option:checked {
-  background: var(--accent-primary, #000000);
+  background: var(--accent-primary, #34d399);
   color: white;
   font-weight: 500;
 }
 
 /* Option 焦点状态 */
 select option:focus {
-  background: var(--accent-light, rgba(0, 0, 0, 0.15));
+  background: var(--accent-light, rgba(52, 211, 153, 0.15));
 }
 
 /* 特定类的样式覆盖 */
@@ -190,55 +190,55 @@ select.full-width {
 }
 
 :root {
-  /* 极简配色 - 仅使用黑、白、灰 */
+  /* 现代化配色 - 更柔和的色调 */
   --bg-primary: #ffffff;
-  --bg-secondary: #f8f8f8;
-  --bg-tertiary: #f0f0f0;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
   --bg-sidebar: #ffffff;
-  --bg-gradient-start: #666666;
-  --bg-gradient-end: #444444;
-  --bg-gradient-light: linear-gradient(135deg, #666666 0%, #444444 100%);
-  --bg-gradient-soft: linear-gradient(135deg, rgba(102, 102, 102, 0.08) 0%, rgba(68, 68, 68, 0.08) 100%);
-
-  /* 文字颜色 - 黑色系 */
-  --text-primary: #000000;
-  --text-secondary: #333333;
-  --text-tertiary: #666666;
+  --bg-gradient-start: #6366f1;
+  --bg-gradient-end: #8b5cf6;
+  --bg-gradient-light: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --bg-gradient-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+  
+  /* 文字颜色 - 更柔和的灰色 */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
   --text-inverse: #ffffff;
-
-  /* 边框和分割线 - 灰色系 */
-  --border-color: #e0e0e0;
-  --border-light: #f5f5f5;
-  --border-hover: #cccccc;
-
-  /* 主色系 - 灰色系 */
-  --accent-primary: #000000;
-  --accent-secondary: #333333;
-  --accent-tertiary: #666666;
-  --accent-hover: #333333;
-  --accent-light: rgba(0, 0, 0, 0.1);
-  --accent-gradient: linear-gradient(135deg, #666666 0%, #444444 100%);
-
-  /* 辅助色系 - 使用不同深浅的灰色 */
-  --success: #444444;        /* 深灰黑 - 成功状态 */
-  --success-light: rgba(68, 68, 68, 0.1);
-  --warning: #666666;        /* 深灰 - 警告状态 */
-  --warning-light: rgba(102, 102, 102, 0.1);
-  --error: #666666;          /* 深灰 - 错误状态 */
-  --error-light: rgba(102, 102, 102, 0.1);
-  --info: #999999;           /* 中灰 - 信息状态 */
-  --info-light: rgba(153, 153, 153, 0.1);
-
-  /* 现代化阴影系统 - 黑色阴影 */
+  
+  /* 边框和分割线 - 更柔和的边框 */
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --border-hover: #cbd5e1;
+  
+  /* 主色系 - 现代紫色/靛蓝色 */
+  --accent-primary: #6366f1;
+  --accent-secondary: #8b5cf6;
+  --accent-tertiary: #4f46e5;
+  --accent-hover: #4f46e5;
+  --accent-light: rgba(99, 102, 241, 0.1);
+  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  
+  /* 辅助色系 */
+  --success: #10b981;
+  --success-light: rgba(16, 185, 129, 0.1);
+  --warning: #f59e0b;
+  --warning-light: rgba(245, 158, 11, 0.1);
+  --error: #ef4444;
+  --error-light: rgba(239, 68, 68, 0.1);
+  --info: #3b82f6;
+  --info-light: rgba(59, 130, 246, 0.1);
+  
+  /* 现代化阴影系统 - 更柔和的阴影 */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  --shadow-colored: 0 10px 25px -5px rgba(102, 102, 102, 0.25);
+  --shadow-colored: 0 10px 25px -5px rgba(99, 102, 241, 0.25);
   --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
-
+  
   /* 现代化圆角 - 更大的圆角 */
   --radius-sm: 8px;
   --radius: 12px;
@@ -247,13 +247,13 @@ select.full-width {
   --radius-xl: 24px;
   --radius-2xl: 32px;
   --radius-full: 9999px;
-
+  
   /* 过渡动画 - 更流畅的缓动 */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-bounce: 400ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
-
+  
   /* 响应式断点 */
   --breakpoint-mobile: 768px;
   --breakpoint-tablet: 1024px;
@@ -294,7 +294,7 @@ select.full-width {
   flex-shrink: 0;
 }
 
-/* 主要按钮 - 灰色渐变 */
+/* 主要按钮 - 绿色渐变 */
 .btn-primary {
   background: var(--accent-gradient);
   color: white;
@@ -312,7 +312,7 @@ select.full-width {
   box-shadow: var(--shadow-sm);
 }
 
-/* 次要按钮 - 白色背景，黑色边框 */
+/* 次要按钮 - 白色背景，绿色边框 */
 .btn-secondary {
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -325,7 +325,7 @@ select.full-width {
   background: var(--accent-light);
 }
 
-/* 轮廓按钮 - 透明背景，黑色边框 */
+/* 轮廓按钮 - 透明背景，绿色边框 */
 .btn-outline {
   background: transparent;
   color: var(--accent-primary);
@@ -350,7 +350,7 @@ select.full-width {
   background: var(--accent-light);
 }
 
-/* 危险按钮 - 深灰色 */
+/* 危险按钮 - 红色 */
 .btn-danger {
   background: var(--error);
   color: white;
@@ -358,7 +358,7 @@ select.full-width {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #444444;
+  background: #dc2626;
   box-shadow: var(--shadow-sm);
 }
 

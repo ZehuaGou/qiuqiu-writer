@@ -227,8 +227,8 @@
 }
 
 .delete-faction-btn:hover {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: #666666;
+  color: #666666;
   background: #fef2f2;
 }
 
@@ -258,7 +258,7 @@
 .faction-name-input:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .faction-info-textarea {
@@ -279,7 +279,7 @@
 .faction-info-textarea:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .faction-levels-section {
@@ -325,7 +325,7 @@
 .add-level-input input:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 2px rgba(68, 68, 68, 0.1);
 }
 
 .add-level-btn {
@@ -391,7 +391,7 @@
   height: 20px;
   padding: 0;
   border: none;
-  background: #ef4444;
+  background: #666666;
   color: white;
   border-radius: 50%;
   cursor: pointer;
@@ -530,7 +530,7 @@
 .edit-textarea:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .edit-textarea {

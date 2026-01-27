@@ -26,13 +26,13 @@
   background: white;
   border-radius: 8px;
   font-size: 14px;
-  color: #1f2937;
+  color: #222222;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .character-filter:hover {
-  border-color: #d1d5db;
+  border-color: #cccccc;
 }
 
 .timeline-title-section {
@@ -44,7 +44,7 @@
 .timeline-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -52,7 +52,7 @@
   padding: 6px 12px;
   border: 1px solid #e5e7eb;
   background: white;
-  color: #6b7280;
+  color: #666666;
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
@@ -61,8 +61,8 @@
 
 .back-to-characters-btn:hover {
   background: #f3f4f6;
-  border-color: #d1d5db;
-  color: #1f2937;
+  border-color: #cccccc;
+  color: #222222;
 }
 
 .add-event-btn {
@@ -71,7 +71,7 @@
   gap: 6px;
   padding: 8px 16px;
   border: none;
-  background: #10b981;
+  background: #444444;
   color: white;
   border-radius: 8px;
   font-size: 14px;
@@ -81,7 +81,7 @@
 }
 
 .add-event-btn:hover {
-  background: #059669;
+  background: #333333;
 }
 
 .timeline-content-wrapper {
@@ -114,7 +114,7 @@
 }
 
 .timeline-item:hover {
-  background: #f9fafb;
+  background: #f8f8f8;
   border-radius: 8px;
   margin-left: -8px;
   padding-left: 40px;
@@ -134,9 +134,9 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #10b981;
+  background: #444444;
   border: 2px solid white;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: 0 0 0 2px #444444;
 }
 
 .timeline-content-item {
@@ -153,28 +153,28 @@
 .timeline-character {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   padding: 4px 10px;
   background: #ecfdf5;
   border-radius: 4px;
-  color: #10b981;
+  color: #444444;
 }
 
 .timeline-time {
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
 }
 
 .timeline-event {
   font-size: 15px;
   font-weight: 500;
-  color: #1f2937;
+  color: #222222;
   margin-bottom: 4px;
 }
 
 .timeline-description {
   font-size: 13px;
-  color: #6b7280;
+  color: #666666;
   line-height: 1.6;
   margin-top: 8px;
 }
@@ -199,7 +199,7 @@
   padding: 0;
   border: none;
   background: white;
-  color: #6b7280;
+  color: #666666;
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -211,7 +211,7 @@
 
 .timeline-action-btn:hover {
   background: #f3f4f6;
-  color: #1f2937;
+  color: #222222;
 }
 
 .timeline-meta {
@@ -227,7 +227,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
   padding: 4px 8px;
   background: #f3f4f6;
   border-radius: 4px;
@@ -254,7 +254,7 @@
 .panel-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -264,7 +264,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: #666666;
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
@@ -274,7 +274,7 @@
 
 .close-panel-btn:hover {
   background: #f3f4f6;
-  color: #1f2937;
+  color: #222222;
 }
 
 .panel-content {
@@ -295,11 +295,11 @@
   height: 80px;
   margin: 0 auto 12px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0e0e0 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #10b981;
+  color: #444444;
   border: 3px solid white;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
@@ -314,7 +314,7 @@
 .character-name {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -337,13 +337,13 @@
 
 .info-label {
   font-size: 13px;
-  color: #6b7280;
+  color: #666666;
   font-weight: 500;
 }
 
 .info-value {
   font-size: 14px;
-  color: #1f2937;
+  color: #222222;
   text-align: right;
   display: flex;
   align-items: center;
@@ -356,7 +356,7 @@
 
 .description-text {
   line-height: 1.6;
-  color: #374151;
+  color: #444444;
 }
 
 .event-detail-section {
@@ -367,7 +367,7 @@
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0 0 12px 0;
 }
 
@@ -377,16 +377,16 @@
   gap: 8px;
   padding: 8px 0;
   font-size: 13px;
-  color: #6b7280;
+  color: #666666;
 }
 
 .event-description {
   margin-top: 12px;
   padding: 12px;
-  background: #f9fafb;
+  background: #f8f8f8;
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.6;
-  color: #374151;
+  color: #444444;
 }
 

@@ -12,7 +12,7 @@
 }
 
 .work-recovery-modal {
-  background: var(--bg-primary, #fff);
+  background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
@@ -34,7 +34,7 @@
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary, #111111);
 }
 
 .work-recovery-modal-close {
@@ -45,12 +45,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
   transition: color 0.2s;
 }
 
 .work-recovery-modal-close:hover {
-  color: var(--text-primary, #111827);
+  color: var(--text-primary, #111111);
 }
 
 .work-recovery-modal-body {
@@ -68,29 +68,29 @@
   justify-content: center;
   padding: 40px 20px;
   text-align: center;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
 }
 
 .work-recovery-loading svg,
 .work-recovery-error svg {
   margin-bottom: 16px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
 }
 
 .work-recovery-error svg {
-  color: var(--error-color, #ef4444);
+  color: var(--error-color, #666666);
 }
 
 .work-recovery-empty-hint {
   font-size: 14px;
   margin-top: 8px;
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-tertiary, #999999);
 }
 
 .work-recovery-retry-btn {
   margin-top: 16px;
   padding: 8px 16px;
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color, #999999);
   color: white;
   border: none;
   border-radius: 6px;
@@ -100,12 +100,12 @@
 }
 
 .work-recovery-retry-btn:hover {
-  background: var(--primary-hover, #2563eb);
+  background: var(--primary-hover, #444444);
 }
 
 .work-recovery-list-hint {
   margin-bottom: 16px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
   font-size: 14px;
 }
 
@@ -120,7 +120,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: var(--bg-secondary, #f9fafb);
+  background: var(--bg-secondary, #f8f8f8);
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 8px;
   transition: all 0.2s;
@@ -128,20 +128,20 @@
 
 .work-recovery-item:hover {
   background: var(--bg-hover, #f3f4f6);
-  border-color: var(--border-hover, #d1d5db);
+  border-color: var(--border-hover, #cccccc);
 }
 
 .work-recovery-item-info h4 {
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary, #111111);
 }
 
 .work-recovery-item-meta {
   margin: 0;
   font-size: 14px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
 }
 
 .work-recovery-item-btn {
@@ -149,7 +149,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color, #999999);
   color: white;
   border: none;
   border-radius: 6px;
@@ -159,7 +159,7 @@
 }
 
 .work-recovery-item-btn:hover:not(:disabled) {
-  background: var(--primary-hover, #2563eb);
+  background: var(--primary-hover, #444444);
 }
 
 .work-recovery-item-btn:disabled {
@@ -183,23 +183,23 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary, #111111);
 }
 
 .work-recovery-progress-status svg {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
 }
 
 .work-recovery-progress-status svg.success {
-  color: var(--success-color, #10b981);
+  color: var(--success-color, #444444);
 }
 
 .work-recovery-progress-status svg.error {
-  color: var(--error-color, #ef4444);
+  color: var(--error-color, #666666);
 }
 
 .work-recovery-progress-message {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
   font-size: 14px;
 }
 
@@ -207,7 +207,7 @@
   position: relative;
   width: 100%;
   height: 24px;
-  background: var(--bg-secondary, #f9fafb);
+  background: var(--bg-secondary, #f8f8f8);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -217,7 +217,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color, #999999);
   transition: width 0.3s ease;
 }
 
@@ -228,16 +228,16 @@
   transform: translate(-50%, -50%);
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary, #111111);
   z-index: 1;
 }
 
 .work-recovery-current-chapter {
   padding: 12px;
-  background: var(--bg-secondary, #f9fafb);
+  background: var(--bg-secondary, #f8f8f8);
   border-radius: 6px;
   font-size: 14px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
 }
 
 .work-recovery-success,
@@ -256,17 +256,17 @@
 }
 
 .work-recovery-success svg.success {
-  color: var(--success-color, #10b981);
+  color: var(--success-color, #444444);
 }
 
 .work-recovery-error svg.error {
-  color: var(--error-color, #ef4444);
+  color: var(--error-color, #666666);
 }
 
 .work-recovery-success-detail {
   margin-top: 8px;
   font-size: 14px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary, #666666);
 }
 
 .spinning {

@@ -17,7 +17,7 @@
 .map-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -67,7 +67,7 @@
 .edit-modal h4 {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0 0 20px 0;
 }
 
@@ -86,7 +86,7 @@
 .modal-form label span {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: #444444;
 }
 
 .edit-input,
@@ -94,7 +94,7 @@
 .edit-textarea {
   width: 100%;
   padding: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #cccccc;
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
@@ -105,8 +105,8 @@
 .edit-select:focus,
 .edit-textarea:focus {
   outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: #444444;
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .edit-textarea {
@@ -166,7 +166,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px;
-  background: #f9fafb;
+  background: #f8f8f8;
   border-radius: 8px;
 }
 
@@ -181,7 +181,7 @@
 .relation-char-name {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   padding: 8px 16px;
   background: white;
   border-radius: 6px;
@@ -191,11 +191,11 @@
 .relation-type-display {
   font-size: 16px;
   font-weight: 600;
-  color: #10b981;
+  color: #444444;
   padding: 8px 16px;
   background: #ecfdf5;
   border-radius: 6px;
-  border: 1px solid #10b981;
+  border: 1px solid #444444;
 }
 
 .relation-desc-display {
@@ -211,19 +211,19 @@
 .desc-label {
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: #666666;
 }
 
 .desc-text {
   font-size: 14px;
-  color: #1f2937;
+  color: #222222;
   line-height: 1.6;
 }
 
 .map-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0;
 }
 
@@ -239,7 +239,7 @@
   padding: 0;
   border: 1px solid #e5e7eb;
   background: white;
-  color: #6b7280;
+  color: #666666;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
@@ -250,8 +250,8 @@
 
 .map-action-btn:hover {
   background: #f3f4f6;
-  border-color: #d1d5db;
-  color: #1f2937;
+  border-color: #cccccc;
+  color: #222222;
 }
 
 .add-location-btn {
@@ -260,7 +260,7 @@
   gap: 6px;
   padding: 8px 16px;
   border: none;
-  background: #10b981;
+  background: #444444;
   color: white;
   border-radius: 8px;
   font-size: 14px;
@@ -270,7 +270,7 @@
 }
 
 .add-location-btn:hover {
-  background: #059669;
+  background: #333333;
 }
 
 .map-content {
@@ -282,7 +282,7 @@
 .map-canvas {
   flex: 1;
   position: relative;
-  background: #f9fafb;
+  background: #f8f8f8;
 }
 
 .react-flow-wrapper {
@@ -313,7 +313,7 @@
 }
 
 .location-node-content:hover {
-  border-color: #10b981;
+  border-color: #444444;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
@@ -322,11 +322,11 @@
   height: 40px;
   margin: 0 auto 8px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0e0e0 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #10b981;
+  color: #444444;
   border: 2px solid white;
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
 }
@@ -334,13 +334,13 @@
 .location-name {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin-bottom: 4px;
 }
 
 .location-description {
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
   margin-bottom: 8px;
   line-height: 1.4;
 }
@@ -363,7 +363,7 @@
   padding: 0;
   border: none;
   background: white;
-  color: #6b7280;
+  color: #666666;
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -375,7 +375,7 @@
 
 .location-action-btn:hover {
   background: #f3f4f6;
-  color: #1f2937;
+  color: #222222;
 }
 
 /* React Flow 边样式 */
@@ -384,12 +384,12 @@
 }
 
 .react-flow__edge-path {
-  stroke: #10b981;
+  stroke: #444444;
   stroke-width: 2;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #059669;
+  stroke: #333333;
   stroke-width: 3;
 }
 
@@ -420,21 +420,21 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
 }
 
 .legend-node {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border: 2px solid #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0e0e0 100%);
+  border: 2px solid #444444;
 }
 
 .legend-edge {
   width: 30px;
   height: 2px;
-  background: #10b981;
+  background: #444444;
 }
 
 .map-sidebar {
@@ -456,7 +456,7 @@
   padding: 12px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: #666666;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -465,14 +465,14 @@
 }
 
 .sidebar-tab.active {
-  color: #10b981;
-  border-bottom-color: #10b981;
-  background: #f9fafb;
+  color: #444444;
+  border-bottom-color: #444444;
+  background: #f8f8f8;
 }
 
 .sidebar-tab:hover:not(.active) {
   background: #f3f4f6;
-  color: #1f2937;
+  color: #222222;
 }
 
 .sidebar-content {
@@ -488,7 +488,7 @@
 .sidebar-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   margin: 0 0 16px 0;
 }
 
@@ -511,13 +511,13 @@
 
 .location-item:hover,
 .connection-item:hover {
-  border-color: #10b981;
-  background: #f9fafb;
+  border-color: #444444;
+  background: #f8f8f8;
 }
 
 .location-item.editing,
 .connection-item.editing {
-  border-color: #10b981;
+  border-color: #444444;
   background: #ecfdf5;
 }
 
@@ -529,14 +529,14 @@
 .location-name {
   font-size: 14px;
   font-weight: 500;
-  color: #1f2937;
+  color: #222222;
   margin-bottom: 4px;
 }
 
 .location-description,
 .connection-description {
   font-size: 12px;
-  color: #6b7280;
+  color: #666666;
   line-height: 1.5;
 }
 
@@ -550,12 +550,12 @@
 .connection-from,
 .connection-to {
   font-weight: 600;
-  color: #1f2937;
+  color: #222222;
   font-size: 13px;
 }
 
 .connection-type {
-  color: #10b981;
+  color: #444444;
   font-weight: 500;
   padding: 2px 8px;
   background: #ecfdf5;
@@ -583,7 +583,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #9ca3af;
+  color: #999999;
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -595,7 +595,7 @@
 .location-action-btn:hover,
 .action-icon-btn:hover {
   background: #e5e7eb;
-  color: #1f2937;
+  color: #222222;
 }
 
 .location-edit-form,
@@ -620,8 +620,8 @@
 .edit-input:focus,
 .edit-textarea:focus {
   outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: #444444;
+  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
 }
 
 .edit-textarea {
@@ -647,21 +647,21 @@
 }
 
 .save-btn {
-  background: #10b981;
+  background: #444444;
   color: white;
 }
 
 .save-btn:hover {
-  background: #059669;
+  background: #333333;
 }
 
 .cancel-btn {
   background: #f3f4f6;
-  color: #6b7280;
+  color: #666666;
 }
 
 .cancel-btn:hover {
   background: #e5e7eb;
-  color: #1f2937;
+  color: #222222;
 }
 

@@ -57,11 +57,11 @@
 }
 
 .script-new-card.secondary {
-  border-color: #f472b6;
+  border-color: #cccccc;
 }
 
 .script-new-card.tertiary {
-  border-color: #60a5fa;
+  border-color: #999999;
 }
 
 .card-icon-wrapper {
@@ -84,11 +84,11 @@
 }
 
 .secondary-bg {
-  background: #f472b6;
+  background: #cccccc;
 }
 
 .tertiary-bg {
-  background: #60a5fa;
+  background: #999999;
 }
 
 .card-icon {
@@ -108,12 +108,12 @@
 
 .secondary-icon {
   background: #fce7f3;
-  color: #f472b6;
+  color: #cccccc;
 }
 
 .tertiary-icon {
   background: #dbeafe;
-  color: #60a5fa;
+  color: #999999;
 }
 
 .card-text h2 {

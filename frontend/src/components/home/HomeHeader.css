@@ -75,7 +75,7 @@
 }
 
 .invite-btn:hover {
-  background: #059669;
+  background: #333333;
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
