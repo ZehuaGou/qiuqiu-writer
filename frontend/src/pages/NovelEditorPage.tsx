@@ -36,7 +36,7 @@ import './NovelEditorPage.css';
 
 export default function NovelEditorPage(){
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const workId = searchParams.get('workId');
   
   const [activeNav, setActiveNav] = useState<'work-info' | 'tags' | 'outline' | 'characters' | 'settings' | 'map' | 'factions'>('work-info');
@@ -898,16 +898,43 @@ export default function NovelEditorPage(){
         });
         setChaptersData(chaptersDataMap);
         
-        // 如果没有选中章节，自动选中第一个章节
+        // 根据 URL 参数或最大章节号来选择章节
         if (allChapters.length > 0) {
-          setSelectedChapter(prev => {
-            if (!prev) {
-              const firstChapter = allChapters[0];
-              
-              return String(firstChapter.id);
+          // 如果 URL 中有 chapterId，优先使用
+          const urlChapterId = searchParams.get('chapterId');
+          let targetChapterId: string | null = null;
+          
+          if (urlChapterId) {
+            const chapterIdNum = parseInt(urlChapterId);
+            if (!isNaN(chapterIdNum)) {
+              const chapterExists = allChapters.some(c => c.id === chapterIdNum);
+              if (chapterExists) {
+                targetChapterId = urlChapterId;
+              }
             }
-            return prev;
-          });
+          }
+          
+          // 如果没有 URL 参数或章节不存在，选择最大章节号的章节
+          if (!targetChapterId) {
+            // 找到最大章节号的章节
+            const maxChapter = allChapters.reduce((max, chapter) => {
+              const maxNum = max.chapter_number ?? 0;
+              const chapterNum = chapter.chapter_number ?? 0;
+              return chapterNum > maxNum ? chapter : max;
+            }, allChapters[0]);
+            
+            targetChapterId = String(maxChapter.id);
+            
+            // 更新 URL 参数
+            setSearchParams(prev => {
+              const newParams = new URLSearchParams(prev);
+              newParams.set('chapterId', targetChapterId!);
+              return newParams;
+            });
+          }
+          
+          // 设置选中的章节
+          setSelectedChapter(targetChapterId);
         }
       } catch (err) {
         console.error('加载章节列表失败:', err);
@@ -915,6 +942,7 @@ export default function NovelEditorPage(){
     };
 
     loadChapters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workId]);
 
   // 关键修复：章节切换时，重新创建编辑器实例，确保每个章节有独立的状态
@@ -2117,6 +2145,12 @@ export default function NovelEditorPage(){
               selectedChapter={selectedChapter}
               onChapterSelect={(chapterId) => {
                 setSelectedChapter(chapterId);
+                // 更新 URL 参数
+                setSearchParams(prev => {
+                  const newParams = new URLSearchParams(prev);
+                  newParams.set('chapterId', chapterId);
+                  return newParams;
+                });
                 // 选择章节时，清除 activeNav，让编辑器显示
                 setActiveNav('work-info');
               }}
@@ -2149,6 +2183,12 @@ export default function NovelEditorPage(){
                   selectedChapter={selectedChapter}
                   onChapterSelect={(chapterId) => {
                     setSelectedChapter(chapterId);
+                    // 更新 URL 参数
+                    setSearchParams(prev => {
+                      const newParams = new URLSearchParams(prev);
+                      newParams.set('chapterId', chapterId);
+                      return newParams;
+                    });
                     setActiveNav('work-info');
                     setMobileMenuOpen(false);
                   }}
