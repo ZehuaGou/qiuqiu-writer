@@ -1,7 +1,7 @@
 .user-works-page {
   width: 100%;
   min-height: calc(100vh - 62px);
-  background: #ffffff;
+  background: var(--bg-primary);
 }
 
 /* 作品头部操作按钮（桌面端） */
@@ -73,7 +73,7 @@
 }
 
 .user-profile-card {
-  background: #ffffff;
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 32px;
@@ -357,7 +357,7 @@
   padding: 20px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: #ffffff;
+  background: var(--bg-primary);
   cursor: pointer;
   transition: all var(--transition-base);
   box-shadow: none;
