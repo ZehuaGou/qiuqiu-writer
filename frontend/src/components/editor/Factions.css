@@ -30,7 +30,7 @@
   border: 1px solid var(--accent-primary);
   background: var(--accent-primary);
   color: white;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -115,7 +115,7 @@
 .faction-display {
   background: var(--bg-primary);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   padding: 16px;
   transition: all var(--transition-base);
 }
@@ -137,7 +137,7 @@
   margin-top: 12px;
   padding: 12px;
   background: var(--bg-secondary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border-left: 3px solid var(--accent-primary);
 }
 
@@ -172,7 +172,7 @@
   padding: 4px 10px;
   background: var(--accent-light);
   color: var(--accent-primary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 500;
 }
@@ -208,7 +208,7 @@
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   color: var(--text-secondary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
   transition: all var(--transition-base);
@@ -235,7 +235,7 @@
 .faction-edit-form {
   background: var(--bg-primary);
   border: 1px solid var(--accent-primary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -248,7 +248,7 @@
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   color: var(--text-primary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-family: inherit;
   transition: all var(--transition-base);
@@ -267,7 +267,7 @@
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   color: var(--text-primary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-family: inherit;
   line-height: 1.6;
@@ -316,7 +316,7 @@
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   color: var(--text-primary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-family: inherit;
   transition: all var(--transition-base);
@@ -338,7 +338,7 @@
   border: 1px solid var(--accent-primary);
   background: var(--accent-primary);
   color: white;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-base);
 }
@@ -359,7 +359,7 @@
   gap: 10px;
   padding: 8px 12px;
   background: var(--bg-secondary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-light);
 }
 
@@ -414,7 +414,7 @@
   flex: 1;
   padding: 10px 20px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -520,7 +520,7 @@
   width: 100%;
   padding: 8px;
   border: 1px solid var(--border-light);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-family: inherit;
   box-sizing: border-box;
@@ -555,7 +555,7 @@
   min-width: 120px;
   padding: 12px 24px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

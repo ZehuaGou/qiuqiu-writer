@@ -271,7 +271,7 @@ select.full-width {
   gap: 6px;
   padding: 8px 16px;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   font-family: inherit;
@@ -377,7 +377,7 @@ select.full-width {
   width: 32px;
   height: 32px;
   padding: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border-light);
@@ -407,7 +407,7 @@ select.full-width {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
 }
 
 .btn-add:hover:not(:disabled) {

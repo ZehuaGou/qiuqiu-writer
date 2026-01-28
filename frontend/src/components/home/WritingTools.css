@@ -33,7 +33,7 @@
 .tool-icon {
   width: 48px;
   height: 48px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--accent-light);
   display: flex;
   align-items: center;

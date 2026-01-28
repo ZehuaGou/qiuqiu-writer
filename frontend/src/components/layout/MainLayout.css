@@ -70,7 +70,7 @@
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
   font-weight: 500;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   transition: all var(--transition-base);
   position: relative;
 }
@@ -102,7 +102,7 @@
   color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-base);
 }
@@ -222,7 +222,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-xl);
   padding: 8px 0;
   z-index: 1000;
@@ -316,7 +316,7 @@
   display: flex;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;

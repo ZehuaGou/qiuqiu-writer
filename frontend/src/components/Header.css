@@ -71,7 +71,7 @@
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   transition: all var(--transition-base);
   position: relative;
 }
@@ -115,7 +115,7 @@
   background: var(--accent-gradient);
   color: white;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;

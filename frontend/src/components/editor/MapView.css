@@ -131,7 +131,7 @@
   min-width: 120px;
   padding: 12px 24px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

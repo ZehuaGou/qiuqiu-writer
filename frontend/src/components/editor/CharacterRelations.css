@@ -37,7 +37,7 @@
   border: 1px solid var(--accent-primary);
   background: var(--bg-primary);
   color: var(--accent-primary);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -528,7 +528,7 @@
   max-width: none !important;
   padding: 12px 24px !important;
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px !important;
   font-weight: 500;
   cursor: pointer;
