@@ -251,7 +251,7 @@ class SyncManager {
 
   private async syncChapterDocument(
     documentId: string,
-    cached: any
+    cached: { data?: { content?: unknown }; content?: unknown }
   ): Promise<void> {
     // 统一格式：content 必须是字符串
     const content = cached.data?.content || cached.content;
@@ -283,4 +283,3 @@ class SyncManager {
 
 // 导出单例
 export const syncManager = new SyncManager();
-

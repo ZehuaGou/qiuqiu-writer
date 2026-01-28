@@ -76,7 +76,7 @@ export async function getCachedWorkInfo(workId: number): Promise<{
     chapterNumber: number;
     title: string;
     content: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }>;
 } | null> {
   // 尝试从多个可能的缓存键获取作品信息
@@ -132,7 +132,7 @@ export async function getCachedWorkInfo(workId: number): Promise<{
     chapterNumber: number;
     title: string;
     content: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }> = [];
   
   // 遍历 localStorage 查找该作品的所有章节
@@ -176,25 +176,30 @@ export async function getCachedWorkInfo(workId: number): Promise<{
 export async function checkWorkExists(workId: number): Promise<{
   exists: boolean;
   needsRecovery?: boolean;
-  recoveryInfo?: any;
+  recoveryInfo?: unknown;
 }> {
   try {
     // 传递 check_recovery=true 参数，让后端检查存储中是否有相关文档
     const work = await worksApi.getWork(workId, false, false, true);
     
     // 检查返回的数据是否包含恢复建议
-    if ((work as any).needs_recovery) {
+    const workWithRecovery = work as Work & {
+      needs_recovery?: boolean;
+      recovery_info?: unknown;
+    };
+    if (workWithRecovery.needs_recovery) {
       return {
         exists: false,
         needsRecovery: true,
-        recoveryInfo: (work as any).recovery_info,
+        recoveryInfo: workWithRecovery.recovery_info,
       };
     }
     
     return { exists: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 404 表示不存在
-    if (error?.status === 404 || error?.message?.includes('404')) {
+    const errorWithStatus = error as { status?: number; message?: string };
+    if (errorWithStatus?.status === 404 || errorWithStatus?.message?.includes('404')) {
       return { exists: false };
     }
     // 其他错误也认为不存在（可能是网络问题）
@@ -314,9 +319,10 @@ export async function recoverWorkFromCache(
     try {
       // 使用恢复接口，传递作品信息
       createdWork = await worksApi.recoverWork(workId, workCreateData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 如果作品已存在，返回错误
-      if (error?.status === 400 || error?.message?.includes('已存在')) {
+      const errorWithStatus = error as { status?: number; message?: string };
+      if (errorWithStatus?.status === 400 || errorWithStatus?.message?.includes('已存在')) {
         return {
           success: false,
           workCreated: false,
@@ -328,7 +334,7 @@ export async function recoverWorkFromCache(
         success: false,
         workCreated: false,
         chaptersCreated: 0,
-        error: `恢复作品失败: ${error?.message || String(error)}`,
+        error: `恢复作品失败: ${errorWithStatus?.message || String(error)}`,
       };
     }
     
@@ -387,11 +393,14 @@ export async function recoverWorkFromCache(
       
       try {
         // 创建章节
+        const volumeNumber = typeof chapter.metadata?.volume_number === 'number'
+          ? chapter.metadata.volume_number
+          : 1;
         const chapterCreateData: ChapterCreate = {
           work_id: createdWork.id,
           title: chapter.title,
           chapter_number: chapter.chapterNumber,
-          volume_number: chapter.metadata?.volume_number || 1,
+          volume_number: volumeNumber,
           content: chapter.content,
         };
         
@@ -413,8 +422,9 @@ export async function recoverWorkFromCache(
           // 继续处理下一个章节
         }
         
-      } catch (error: any) {
-        const errorMsg = `章节 ${chapter.chapterNumber} (${chapter.title}) 恢复失败: ${error?.message || String(error)}`;
+      } catch (error: unknown) {
+        const errorWithMessage = error as { message?: string };
+        const errorMsg = `章节 ${chapter.chapterNumber} (${chapter.title}) 恢复失败: ${errorWithMessage?.message || String(error)}`;
         errors.push(errorMsg);
         console.error(errorMsg, error);
         // 继续处理下一个章节
@@ -446,8 +456,9 @@ export async function recoverWorkFromCache(
       chaptersCreated,
     };
     
-  } catch (error: any) {
-    const errorMsg = error?.message || String(error);
+  } catch (error: unknown) {
+    const errorWithMessage = error as { message?: string };
+    const errorMsg = errorWithMessage?.message || String(error);
     onProgress?.({
       totalChapters: 0,
       recoveredChapters: 0,
@@ -519,4 +530,3 @@ export async function getRecoverableWorks(): Promise<Array<{
   
   return results;
 }
-

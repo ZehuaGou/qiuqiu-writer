@@ -2145,13 +2145,15 @@ export default function NovelEditorPage(){
               selectedChapter={selectedChapter}
               onChapterSelect={(chapterId) => {
                 setSelectedChapter(chapterId);
-                // 更新 URL 参数
                 setSearchParams(prev => {
                   const newParams = new URLSearchParams(prev);
-                  newParams.set('chapterId', chapterId);
+                  if (chapterId) {
+                    newParams.set('chapterId', chapterId);
+                  } else {
+                    newParams.delete('chapterId');
+                  }
                   return newParams;
                 });
-                // 选择章节时，清除 activeNav，让编辑器显示
                 setActiveNav('work-info');
               }}
               onOpenChapterModal={handleOpenChapterModal}
@@ -2183,10 +2185,13 @@ export default function NovelEditorPage(){
                   selectedChapter={selectedChapter}
                   onChapterSelect={(chapterId) => {
                     setSelectedChapter(chapterId);
-                    // 更新 URL 参数
                     setSearchParams(prev => {
                       const newParams = new URLSearchParams(prev);
-                      newParams.set('chapterId', chapterId);
+                      if (chapterId) {
+                        newParams.set('chapterId', chapterId);
+                      } else {
+                        newParams.delete('chapterId');
+                      }
                       return newParams;
                     });
                     setActiveNav('work-info');
@@ -2505,4 +2510,3 @@ export default function NovelEditorPage(){
     </div>
   );
 }
-

@@ -7,7 +7,7 @@ import { BaseApiClient } from './baseApiClient';
 
 export interface TemplateConfig {
   templateId: string;
-  modules: any[];
+  modules: unknown[];
 }
 
 class TemplatesApiClient extends BaseApiClient {
@@ -41,10 +41,10 @@ class TemplatesApiClient extends BaseApiClient {
     category?: string;
     template_config: TemplateConfig;
     is_public?: boolean;
-    settings?: Record<string, any>;
+    settings?: Record<string, unknown>;
     tags?: string[];
-  }): Promise<any> {
-    return this.post<any>('/api/v1/templates/', templateData);
+  }): Promise<unknown> {
+    return this.post<unknown>('/api/v1/templates/', templateData);
   }
 
   /**
@@ -56,13 +56,13 @@ class TemplatesApiClient extends BaseApiClient {
       name?: string;
       description?: string;
       template_config?: TemplateConfig;
-      settings?: Record<string, any>;
+      settings?: Record<string, unknown>;
       category?: string;
       is_public?: boolean;
       tags?: string[];
     }
-  ): Promise<any> {
-    return this.put<any>(`/api/v1/templates/${templateId}`, templateData);
+  ): Promise<unknown> {
+    return this.put<unknown>(`/api/v1/templates/${templateId}`, templateData);
   }
 
   /**
@@ -79,10 +79,9 @@ class TemplatesApiClient extends BaseApiClient {
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
     include_fields?: boolean;
-  }): Promise<any[]> {
-    return this.get<any[]>('/api/v1/templates', params);
+  }): Promise<unknown[]> {
+    return this.get<unknown[]>('/api/v1/templates', params);
   }
 }
 
 export const templatesApi = new TemplatesApiClient();
-

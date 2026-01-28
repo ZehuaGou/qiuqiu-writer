@@ -61,9 +61,9 @@ export interface Work {
       name: string;
       display_name?: string;
       description?: string;
-      [key: string]: any;
+      [key: string]: unknown;
     }>;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -90,9 +90,9 @@ export interface WorkUpdate {
       name: string;
       display_name?: string;
       description?: string;
-      [key: string]: any;
+      [key: string]: unknown;
     }>;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -104,7 +104,19 @@ export interface WorkListResponse {
   pages: number;
 }
 
+type BackendWorkResponse = Omit<Work, 'work_type'> & { work_type: BackendWorkType };
+
+interface WorkListResponseBackend extends Omit<WorkListResponse, 'works'> {
+  works: BackendWorkResponse[];
+}
+
 class WorksApiClient extends BaseApiClient {
+  private mapBackendWork(response: BackendWorkResponse): Work {
+    return {
+      ...response,
+      work_type: mapWorkTypeToFrontend(response.work_type),
+    };
+  }
 
   /**
    * 创建作品
@@ -122,7 +134,7 @@ class WorksApiClient extends BaseApiClient {
     });
     
     try {
-      const response = await this.post<any>('/api/v1/works/', backendData);
+      const response = await this.post<BackendWorkResponse>('/api/v1/works/', backendData);
       
       console.log('📥 [worksApi.createWork] 收到响应:', response);
       
@@ -132,10 +144,7 @@ class WorksApiClient extends BaseApiClient {
       }
       
       // 将后端类型转换为前端类型
-      const work: Work = {
-        ...response,
-        work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
-      };
+      const work = this.mapBackendWork(response);
       
       console.log('✅ [worksApi.createWork] 作品创建成功，转换后的作品:', work);
       
@@ -187,15 +196,12 @@ class WorksApiClient extends BaseApiClient {
         : params.work_type
     } : undefined;
     
-    const response = await this.get<any>('/api/v1/works', backendParams);
+    const response = await this.get<WorkListResponseBackend>('/api/v1/works', backendParams);
     
     // 转换作品类型
     return {
       ...response,
-      works: response.works?.map((work: any) => ({
-        ...work,
-        work_type: mapWorkTypeToFrontend(work.work_type as BackendWorkType),
-      })) || [],
+      works: response.works?.map((work) => this.mapBackendWork(work)) || [],
     };
   }
 
@@ -238,15 +244,12 @@ class WorksApiClient extends BaseApiClient {
         : params.work_type
     } : undefined;
     
-    const response = await this.get<any>('/api/v1/works/public', backendParams);
+    const response = await this.get<WorkListResponseBackend>('/api/v1/works/public', backendParams);
     
     // 转换作品类型
     return {
       ...response,
-      works: response.works?.map((work: any) => ({
-        ...work,
-        work_type: mapWorkTypeToFrontend(work.work_type as BackendWorkType),
-      })) || [],
+      works: response.works?.map((work) => this.mapBackendWork(work)) || [],
     };
   }
 
@@ -262,17 +265,14 @@ class WorksApiClient extends BaseApiClient {
   ): Promise<Work> {
     try {
       // 先尝试从数据库获取
-      const response = await this.get<any>(`/api/v1/works/${workId}`, {
+      const response = await this.get<BackendWorkResponse>(`/api/v1/works/${workId}`, {
         include_collaborators,
         include_chapters,
         check_recovery,
       });
       
       // 转换作品类型
-      const work: Work = {
-        ...response,
-        work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
-      };
+      const work = this.mapBackendWork(response);
       
       // 缓存作品信息到本地
       if (work && work.id) {
@@ -328,18 +328,16 @@ class WorksApiClient extends BaseApiClient {
    */
   async updateWork(workId: number, updates: WorkUpdate): Promise<Work> {
     // 如果包含 work_type，需要转换为后端类型
-    const backendUpdates = { ...updates };
-    if (updates.work_type) {
-      backendUpdates.work_type = mapWorkTypeToBackend(updates.work_type) as any;
-    }
+    const { work_type, ...restUpdates } = updates;
+    const backendUpdates: Omit<WorkUpdate, 'work_type'> & { work_type?: BackendWorkType } = {
+      ...restUpdates,
+      ...(work_type ? { work_type: mapWorkTypeToBackend(work_type) } : {}),
+    };
     
-    const response = await this.put<any>(`/api/v1/works/${workId}`, backendUpdates);
+    const response = await this.put<BackendWorkResponse>(`/api/v1/works/${workId}`, backendUpdates);
     
     // 转换作品类型
-    return {
-      ...response,
-      work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
-    };
+    return this.mapBackendWork(response);
   }
 
   /**
@@ -353,16 +351,13 @@ class WorksApiClient extends BaseApiClient {
       work_type: mapWorkTypeToBackend(workData.work_type),
     } : {};
     
-    const response = await this.post<any>(
+    const response = await this.post<BackendWorkResponse>(
       `/api/v1/works/${workId}/recover`,
       backendData
     );
     
     // 转换作品类型
-    return {
-      ...response,
-      work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
-    };
+    return this.mapBackendWork(response);
   }
 
   /**
@@ -396,4 +391,3 @@ class WorksApiClient extends BaseApiClient {
 }
 
 export const worksApi = new WorksApiClient();
-

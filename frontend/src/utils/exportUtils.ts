@@ -4,7 +4,7 @@
  */
 
 import { chaptersApi, type Chapter } from './chaptersApi';
-import { worksApi, type Work } from './worksApi';
+import { type Work } from './worksApi';
 
 /**
  * 从 HTML 内容中提取纯文本
@@ -547,4 +547,3 @@ export async function exportAsPdf(work: Work): Promise<void> {
     throw new Error('导出失败，请稍后重试');
   }
 }
-

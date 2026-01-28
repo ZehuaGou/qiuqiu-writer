@@ -27,11 +27,11 @@ function getMemosUserId(workId?: number | string | null): string | null {
       return null; // 未登录
     }
     
-    const userInfo = JSON.parse(userStr);
+    const userInfo = JSON.parse(userStr) as Record<string, unknown>;
     console.log('[getMemosUserId] 用户信息:', userInfo);
     
     // 尝试多种可能的用户ID字段名
-    const userId = userInfo.user_id || userInfo.id || userInfo.userId || userInfo.userId;
+    const userId = userInfo.user_id || userInfo.id || userInfo.userId;
     
     if (!userId) {
       console.warn('[getMemosUserId] 用户信息中未找到 user_id 或 id 字段:', userInfo);

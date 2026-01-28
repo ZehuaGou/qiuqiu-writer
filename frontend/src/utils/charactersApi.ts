@@ -14,14 +14,14 @@ export interface Character {
   avatar_url?: string;
   gender?: string;
   age?: number;
-  personality?: Record<string, any>;
-  appearance?: Record<string, any>;
-  background?: Record<string, any>;
-  relationships?: Record<string, any>;
+  personality?: Record<string, unknown>;
+  appearance?: Record<string, unknown>;
+  background?: Record<string, unknown>;
+  relationships?: Record<string, unknown>;
   tags?: string[];
   is_main_character: boolean;
   is_active: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
 }

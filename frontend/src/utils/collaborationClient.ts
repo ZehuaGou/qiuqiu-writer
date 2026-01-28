@@ -3,8 +3,8 @@
  * 支持Yjs和Automerge两种CRDT实现
  */
 
-import { YjsClient, YjsClientOptions } from './yjsClient'
-import { AutomergeClient, AutomergeClientOptions } from './automergeClient'
+import { YjsClient } from './yjsClient'
+import { AutomergeClient } from './automergeClient'
 
 export type CollaborationType = 'yjs' | 'automerge' | 'sharedb'
 
@@ -20,11 +20,9 @@ export interface CollaborationClientOptions {
 
 export class CollaborationClient {
   private client: YjsClient | AutomergeClient | null = null
-  private options: CollaborationClientOptions
   private type: CollaborationType
 
   constructor(options: CollaborationClientOptions) {
-    this.options = options
     this.type = options.type || 'yjs'
     
     // 根据类型创建客户端
@@ -35,7 +33,7 @@ export class CollaborationClient {
         wsUrl: options.wsUrl,
         onConnect: options.onConnect,
         onDisconnect: options.onDisconnect,
-        onUpdate: (update, origin) => {
+        onUpdate: () => {
           if (options.onUpdate) {
             const content = (this.client as YjsClient).getContent()
             options.onUpdate(content)
@@ -49,7 +47,7 @@ export class CollaborationClient {
         wsUrl: options.wsUrl,
         onConnect: options.onConnect,
         onDisconnect: options.onDisconnect,
-        onUpdate: (doc) => {
+        onUpdate: () => {
           if (options.onUpdate) {
             const content = (this.client as AutomergeClient).getContent()
             options.onUpdate(content)
@@ -156,7 +154,6 @@ export class CollaborationClient {
     }
   }
 }
-
 
 
 

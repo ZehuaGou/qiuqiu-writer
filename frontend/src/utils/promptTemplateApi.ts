@@ -14,8 +14,8 @@ export interface PromptTemplate {
   version?: string;
   is_default?: boolean;
   is_active?: boolean;
-  variables?: Record<string, any>;
-  metadata?: Record<string, any>;
+  variables?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   usage_count?: number;
   creator_id?: number;
   component_id?: string;
@@ -34,8 +34,8 @@ export interface PromptTemplateCreate {
   prompt_content: string;
   version?: string;
   is_default?: boolean;
-  variables?: Record<string, any>;
-  metadata?: Record<string, any>;
+  variables?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   component_id?: string;
   component_type?: string;
   prompt_category?: string; // 'generate' | 'validate' | 'analysis'
@@ -51,8 +51,8 @@ export interface PromptTemplateUpdate {
   version?: string;
   is_default?: boolean;
   is_active?: boolean;
-  variables?: Record<string, any>;
-  metadata?: Record<string, any>;
+  variables?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   data_key?: string; // 数据存储键
 }
 
@@ -90,7 +90,7 @@ class PromptTemplateApiClient extends BaseApiClient {
     templateId?: number
   ): Promise<PromptTemplate | null> {
     try {
-      const params: any = {
+      const params: Record<string, string | number> = {
         component_id: componentId,
         prompt_category: promptCategory,
       };
@@ -185,4 +185,3 @@ class PromptTemplateApiClient extends BaseApiClient {
 }
 
 export const promptTemplateApi = new PromptTemplateApiClient();
-

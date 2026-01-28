@@ -129,16 +129,18 @@ class OperationTracker {
    * 简单的 diff 算法
    * 使用 Myers 算法的简化版本
    */
-  private computeDiff(oldText: string, newText: string): Array<{
-    type: 'equal' | 'delete' | 'insert' | 'replace';
-    length?: number;
-    text?: string;
-  }> {
-    const changes: Array<{
-      type: 'equal' | 'delete' | 'insert' | 'replace';
-      length?: number;
-      text?: string;
-    }> = [];
+  private computeDiff(oldText: string, newText: string): Array<
+    | { type: 'equal'; length: number }
+    | { type: 'delete'; length: number }
+    | { type: 'insert'; text: string }
+    | { type: 'replace'; length: number; text: string }
+  > {
+    const changes: Array<
+      | { type: 'equal'; length: number }
+      | { type: 'delete'; length: number }
+      | { type: 'insert'; text: string }
+      | { type: 'replace'; length: number; text: string }
+    > = [];
 
     let i = 0;
     let j = 0;
@@ -246,29 +248,29 @@ class OperationTracker {
    */
   static applyOperation(content: string, operation: TextOperation): string {
     switch (operation.type) {
-      case 'insert':
+      case 'insert': {
         if (operation.position === undefined || operation.text === undefined) {
           return content;
         }
         const insertPos = Math.min(operation.position, content.length);
         return content.slice(0, insertPos) + operation.text + content.slice(insertPos);
-
-      case 'delete':
+      }
+      case 'delete': {
         if (operation.position === undefined || operation.length === undefined) {
           return content;
         }
         const deleteStart = Math.min(operation.position, content.length);
         const deleteEnd = Math.min(deleteStart + operation.length, content.length);
         return content.slice(0, deleteStart) + content.slice(deleteEnd);
-
-      case 'replace':
+      }
+      case 'replace': {
         if (operation.position === undefined || operation.length === undefined || operation.text === undefined) {
           return content;
         }
         const replaceStart = Math.min(operation.position, content.length);
         const replaceEnd = Math.min(replaceStart + operation.length, content.length);
         return content.slice(0, replaceStart) + operation.text + content.slice(replaceEnd);
-
+      }
       case 'retain':
         // retain 操作不改变内容
         return content;
@@ -332,4 +334,3 @@ class OperationTracker {
 
 // 导出单例
 export const operationTracker = new OperationTracker();
-

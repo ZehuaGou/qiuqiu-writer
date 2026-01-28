@@ -12,7 +12,7 @@ export interface YjsClientOptions {
   userId?: number
   onConnect?: () => void
   onDisconnect?: () => void
-  onUpdate?: (update: Uint8Array, origin: any) => void
+  onUpdate?: (update: Uint8Array, origin: unknown) => void
 }
 
 export class YjsClient {
@@ -28,7 +28,7 @@ export class YjsClient {
     this.ytext = this.ydoc.getText('content')
     
     // 监听更新
-    this.ydoc.on('update', (update: Uint8Array, origin: any) => {
+    this.ydoc.on('update', (update: Uint8Array, origin: unknown) => {
       if (this.options.onUpdate) {
         this.options.onUpdate(update, origin)
       }
@@ -128,7 +128,7 @@ export class YjsClient {
   /**
    * 获取Awareness对象（用于显示其他用户的光标和选择）
    */
-  getAwareness(): any {
+  getAwareness(): unknown {
     return this.provider?.awareness || null
   }
 
@@ -147,7 +147,6 @@ export class YjsClient {
     this.ydoc.destroy()
   }
 }
-
 
 
 

@@ -3,7 +3,7 @@
  * 展示如何在编辑器组件中使用 useIntelligentSync
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useIntelligentSync } from './intelligentSync';
 
 // 示例：在编辑器组件中使用
@@ -25,29 +25,28 @@ export function ExampleEditor({ documentId }: { documentId: string }) {
   }, []);
 
   // 使用智能同步 Hook
-  const { performSync, forceSync, stop, getStatus } = useIntelligentSync(
+  const { forceSync, getStatus } = useIntelligentSync(
     documentId,
     getCurrentContent,
     updateContent,
     {
-      syncDebounceDelay: 1000,      // 同步防抖延迟 1 秒
       pollInterval: 5000,          // 每 10 秒轮询一次
       userInputWindow: 5000,        // 5 秒内有输入视为用户正在编辑
       syncCheckInterval: 3000,      // 每 3 秒检查一次是否需要同步
       enablePolling: true,          // 启用轮询
-      onSyncSuccess: (content, version) => {
-        
-      },
+      onSyncSuccess: () => {},
       onSyncError: (error) => {
         console.error('同步失败:', error);
       },
       onCollaborativeUpdate: (hasUpdates) => {
         if (hasUpdates) {
-          
+          console.log('有协作更新');
         }
       },
       onContentChange: (synced) => {
-        
+        if (!synced) {
+          return;
+        }
       },
     }
   );
@@ -86,6 +85,7 @@ export function ExampleEditor({ documentId }: { documentId: string }) {
 // 示例：在 Lexical 编辑器中使用
 export function ExampleLexicalEditor({ documentId }: { documentId: string }) {
   const [lexicalContent, setLexicalContent] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
 
   // 获取当前 Lexical 编辑器内容（JSON 格式）
@@ -149,7 +149,7 @@ export function ExampleLexicalEditor({ documentId }: { documentId: string }) {
       if (root) {
         root.clear();
         const lines = newContent.split('\n');
-        lines.forEach((line) => {
+        lines.forEach((_line) => {
           // 创建段落节点并添加文本
           // 这里需要根据实际的 Lexical API 来实现
         });
@@ -160,12 +160,11 @@ export function ExampleLexicalEditor({ documentId }: { documentId: string }) {
   }, []);
 
   // 使用智能同步
-  const { performSync, forceSync, getStatus } = useIntelligentSync(
+  const { forceSync, getStatus } = useIntelligentSync(
     documentId,
     getCurrentContent,
     updateContent,
     {
-      syncDebounceDelay: 1000,
       pollInterval: 5000,
       enablePolling: true,
     }
@@ -183,4 +182,3 @@ export function ExampleLexicalEditor({ documentId }: { documentId: string }) {
     </div>
   );
 }
-
