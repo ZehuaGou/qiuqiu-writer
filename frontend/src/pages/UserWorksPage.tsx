@@ -229,7 +229,7 @@ export default function UserWorksPage() {
                 <User size={80} />
               )}
             </div>
-            <h1 className="user-name" style={{ fontSize: '28px', fontWeight: 700, color: '#000000' }}>
+            <h1 className="user-name" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #000000)' }}>
               {userInfo?.display_name || userInfo?.username || `用户 ${userId}`}
             </h1>
             {userInfo?.username && (

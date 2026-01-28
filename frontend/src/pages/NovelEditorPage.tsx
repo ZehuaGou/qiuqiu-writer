@@ -1977,7 +1977,7 @@ export default function NovelEditorPage(){
   if (error || !work) {
     return (
       <div className="novel-editor-page">
-        <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--error, #666666)' }}>
           {error || '作品不存在'}
           <button onClick={() => {
             const currentUser = authApi.getUserInfo();

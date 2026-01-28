@@ -101,18 +101,18 @@
 
 .landing-page .btn-primary {
   color: #ffffff !important;
-  background: rgba(59, 130, 246, 0.9) !important;
+  background: rgba(153, 153, 153, 0.9) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(147, 197, 253, 0.3) !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(153, 153, 153, 0.3) !important;
 }
 
 .landing-page .btn-primary:hover {
-  background: rgba(59, 130, 246, 1) !important;
+  background: rgba(153, 153, 153, 1) !important;
   border-color: rgba(147, 197, 253, 0.5) !important;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4) !important;
+  box-shadow: 0 6px 20px rgba(153, 153, 153, 0.4) !important;
 }
 
 .btn-secondary {
@@ -199,7 +199,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(99, 102, 241, 0.2);
+  background: rgba(102, 102, 102, 0.2);
   border-radius: var(--radius-md);
   color: var(--accent-primary);
   margin-bottom: 20px;
@@ -254,7 +254,7 @@
 .use-case-icon {
   color: var(--accent-primary);
   margin-bottom: 24px;
-  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.2));
+  filter: drop-shadow(0 2px 4px rgba(102, 102, 102, 0.2));
 }
 
 .use-case-title {

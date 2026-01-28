@@ -5333,7 +5333,7 @@ export default function WorkInfoManager({ workId, workData }: WorkInfoManagerPro
                       
                       <div className="form-group">
                         <label>
-                          数据存储键 (dataKey) <span style={{ color: '#ef4444' }}>*</span>
+                          数据存储键 (dataKey) <span style={{ color: 'var(--error, #666666)' }}>*</span>
                           <span className="label-hint">用于在 component_data 中存储和读取数据，建议使用小写字母和下划线，如：characters、character_timeline。必填项，确保组件数据能够正确保存。</span>
                         </label>
                         <input
@@ -5345,7 +5345,7 @@ export default function WorkInfoManager({ workId, workData }: WorkInfoManagerPro
                           required
                         />
                         {!newComponentForm.dataKey && (
-                          <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
+                          <div style={{ color: 'var(--error, #666666)', fontSize: '12px', marginTop: '4px' }}>
                             ⚠️ 请填写 dataKey，否则组件数据无法正确保存
                           </div>
                         )}
@@ -6038,13 +6038,13 @@ export default function WorkInfoManager({ workId, workData }: WorkInfoManagerPro
                                     editingIndex: null
                                   });
                                 }}
-                                style={{ padding: '6px 12px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                style={{ padding: '6px 12px', backgroundColor: 'var(--error, #666666)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                               >
                                 删除
                               </button>
                               <button
                                 onClick={() => setGeneratePreviewModal({ ...generatePreviewModal, editingIndex: null })}
-                                style={{ padding: '6px 12px', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                style={{ padding: '6px 12px', backgroundColor: 'var(--text-tertiary, #666666)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                               >
                                 完成
                               </button>
@@ -6077,7 +6077,7 @@ export default function WorkInfoManager({ workId, workData }: WorkInfoManagerPro
                                     e.stopPropagation();
                                     setGeneratePreviewModal({ ...generatePreviewModal, editingIndex: idx });
                                   }}
-                                  style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                  style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: 'var(--info, #999999)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                                   title="编辑"
                                 >
                                   编辑
@@ -6120,14 +6120,14 @@ export default function WorkInfoManager({ workId, workData }: WorkInfoManagerPro
                       <span>添加角色</span>
                     </button>
                     {generatePreviewModal.generatedData.length === 0 && (
-                      <div className="character-empty" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                      <div className="character-empty" style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary, #666666)' }}>
                         <Users size={32} />
                         <span>暂无角色数据</span>
                       </div>
                     )}
                     {/* JSON编辑区域（可折叠） */}
                     <details style={{ marginTop: '16px' }}>
-                      <summary style={{ cursor: 'pointer', color: '#666', fontSize: '14px', marginBottom: '8px' }}>
+                      <summary style={{ cursor: 'pointer', color: 'var(--text-tertiary, #666666)', fontSize: '14px', marginBottom: '8px' }}>
                         查看/编辑 JSON 数据
                       </summary>
                       <textarea
@@ -6215,13 +6215,13 @@ export default function WorkInfoManager({ workId, workData }: WorkInfoManagerPro
                         </div>
                       ))}
                       {generatePreviewModal.existingData.length > 5 && (
-                        <div style={{ textAlign: 'center', color: '#666', fontSize: '12px', marginTop: '8px' }}>
+                        <div style={{ textAlign: 'center', color: 'var(--text-tertiary, #666666)', fontSize: '12px', marginTop: '8px' }}>
                           ... 还有 {generatePreviewModal.existingData.length - 5} 个角色
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div style={{ fontSize: '12px', color: '#666', maxHeight: '150px', overflow: 'auto' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary, #666666)', maxHeight: '150px', overflow: 'auto' }}>
                       {Array.isArray(generatePreviewModal.existingData) ? (
                         <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
                           {JSON.stringify(generatePreviewModal.existingData.slice(0, 3), null, 2)}

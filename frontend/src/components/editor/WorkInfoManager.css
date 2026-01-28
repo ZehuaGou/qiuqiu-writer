@@ -3341,7 +3341,7 @@
 .character-add-btn:hover {
   background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(68, 68, 68, 0.3);
 }
 
 /* 角色卡片只读模式 */
@@ -3620,7 +3620,7 @@
   color: white;
   font-size: 16px;
   font-weight: 700;
-  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 3px 8px rgba(153, 153, 153, 0.4);
 }
 
 .rank-content {
@@ -3645,7 +3645,7 @@
 .rank-name-input:focus {
   outline: none;
   border-color: #999999;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 0 0 3px rgba(153, 153, 153, 0.15);
 }
 
 .rank-name-input::placeholder {
@@ -3679,7 +3679,7 @@
 .rank-desc-input:focus {
   outline: none;
   border-color: #999999;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 0 0 3px rgba(153, 153, 153, 0.15);
 }
 
 .rank-desc-input::placeholder {
@@ -3734,12 +3734,12 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  box-shadow: 0 4px 12px rgba(153, 153, 153, 0.3);
 }
 
 .rank-add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 6px 16px rgba(153, 153, 153, 0.4);
 }
 
 /* ============ 势力组件 ============ */
@@ -3865,14 +3865,14 @@
   border-radius: var(--radius) !important;
   font-size: 14px !important;
   font-weight: 500 !important;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 2px 6px rgba(68, 68, 68, 0.25);
   transition: all var(--transition-base);
   overflow: visible !important;
 }
 
 .comp-faction .faction-display .faction-levels-display .level-badge:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 12px rgba(68, 68, 68, 0.35);
 }
 
 .comp-faction .faction-display .faction-levels-display .level-badge .level-order-small {
@@ -4086,7 +4086,7 @@
   flex-direction: column;
   gap: 14px;
   padding: 18px;
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(16, 185, 129, 0.05) 100%);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(68, 68, 68, 0.05) 100%);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
 }
@@ -4146,7 +4146,7 @@
   font-size: 13px;
   font-weight: 700;
   flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 4px rgba(68, 68, 68, 0.2);
 }
 
 .level-name {
@@ -4224,12 +4224,12 @@
   cursor: pointer;
   white-space: nowrap;
   transition: all var(--transition-base);
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 2px 6px rgba(68, 68, 68, 0.25);
 }
 
 .add-level-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 12px rgba(68, 68, 68, 0.35);
 }
 
 .add-level-btn:disabled {
@@ -4451,7 +4451,7 @@
 .deps-add-btn:hover:not(:disabled) {
   background: var(--accent-hover, #333333);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
+  box-shadow: 0 2px 4px rgba(102, 102, 102, 0.3);
 }
 
 .deps-add-btn:disabled {
