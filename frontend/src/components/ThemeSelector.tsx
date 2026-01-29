@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Check, Palette } from 'lucide-react';
-import { themes, getCurrentTheme, applyTheme, type ThemeConfig } from '../utils/theme';
+import { themes, getCurrentTheme, applyTheme } from '../utils/theme';
 import './ThemeSelector.css';
 
 interface ThemeSelectorProps {
@@ -37,8 +37,6 @@ export default function ThemeSelector({ onClose }: ThemeSelectorProps) {
     setIsOpen(false);
     onClose?.();
   };
-
-  const currentTheme = themes.find(t => t.id === currentThemeId) || themes[0];
 
   return (
     <div className="theme-selector-wrapper" ref={dropdownRef}>

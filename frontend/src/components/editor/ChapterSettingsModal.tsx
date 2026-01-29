@@ -40,11 +40,8 @@ interface ChapterSettingsModalProps {
   availableCharacters?: Character[];
   availableLocations?: Location[];
   availableVolumes?: Volume[]; // 可用的卷列表
-  workType?: 'long' | 'short' | 'script' | 'video'; // 作品类型
   onClose: () => void;
   onSave: (data: ChapterData) => void;
-  onGenerateOutline?: () => string;
-  onGenerateDetailOutline?: () => string;
   // content: 当前已生成的完整文本；isFinal: 是否为最终完成（可用于结束后保存等）
   onGenerateContent?: (content: string, isFinal?: boolean) => void;  // 生成内容回调（支持流式）
 }
@@ -58,11 +55,8 @@ export default function ChapterSettingsModal({
   availableCharacters = [],
   availableLocations = [],
   availableVolumes = [],
-  workType = 'long',
   onClose,
   onSave,
-  onGenerateOutline,
-  onGenerateDetailOutline,
   onGenerateContent,
 }: ChapterSettingsModalProps) {
   const [title, setTitle] = useState('');

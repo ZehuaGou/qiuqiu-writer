@@ -47,6 +47,7 @@ export default function ChapterEditorToolbar({
   // 监听编辑器状态变化，更新当前标题类型显示
   useEffect(() => {
     if (!editor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentHeading('P');
       return;
     }

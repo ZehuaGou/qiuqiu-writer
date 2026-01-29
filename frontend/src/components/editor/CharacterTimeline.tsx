@@ -84,18 +84,10 @@ interface CharacterTimelineProps {
 export default function CharacterTimeline({ filterCharacterId, characterName, onBack }: CharacterTimelineProps) {
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [filterCharacter, setFilterCharacter] = useState<string | null>(filterCharacterId || null);
-  const [prevFilterId, setPrevFilterId] = useState(filterCharacterId);
+  const effectiveFilterCharacter = filterCharacter ?? filterCharacterId ?? null;
 
-  // 当 filterCharacterId 改变时更新筛选
-  if (filterCharacterId !== prevFilterId) {
-    setPrevFilterId(filterCharacterId);
-    if (filterCharacterId) {
-      setFilterCharacter(filterCharacterId);
-    }
-  }
-
-  const filteredEvents = filterCharacter
-    ? mockEvents.filter(event => event.characterId === filterCharacter)
+  const filteredEvents = effectiveFilterCharacter
+    ? mockEvents.filter(event => event.characterId === effectiveFilterCharacter)
     : mockEvents;
 
   const selectedEventData = mockEvents.find(e => e.id === selectedEvent);
@@ -119,7 +111,7 @@ export default function CharacterTimeline({ filterCharacterId, characterName, on
         <div className="header-actions">
           <select
             className="character-filter"
-            value={filterCharacter || ''}
+            value={effectiveFilterCharacter || ''}
             onChange={(e) => setFilterCharacter(e.target.value || null)}
           >
             <option value="">全部角色</option>
@@ -254,4 +246,3 @@ export default function CharacterTimeline({ filterCharacterId, characterName, on
     </div>
   );
 }
-

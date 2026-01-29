@@ -33,7 +33,6 @@ export default function WorkRecoveryModal({
   const [recoverableWorks, setRecoverableWorks] = useState<RecoverableWork[]>([]);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
-  const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
   const [progress, setProgress] = useState<RecoveryProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +60,6 @@ export default function WorkRecoveryModal({
   };
 
   const handleRecover = async (workId: number) => {
-    setSelectedWorkId(workId);
     setRecovering(true);
     setProgress(null);
     setError(null);
@@ -88,7 +86,6 @@ export default function WorkRecoveryModal({
   };
 
   const handleClose = () => {
-    setSelectedWorkId(null);
     setRecovering(false);
     setProgress(null);
     setError(null);

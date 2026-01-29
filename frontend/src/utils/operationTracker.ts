@@ -30,7 +30,7 @@ class OperationTracker {
   /**
    * 开始跟踪操作
    */
-  startTracking(documentId: string, initialContent: string, baseVersion: number = 0): void {
+  startTracking(documentId: string, _initialContent: string, baseVersion: number = 0): void {
     this.documentId = documentId;
     this.baseVersion = baseVersion;
     this.operations = [];
@@ -57,7 +57,6 @@ class OperationTracker {
 
     const ops = this.computeOperations(oldContent, newContent);
     this.operations.push(...ops);
-    this.lastContent = newContent;
     
     
     return ops;

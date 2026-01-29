@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { Plus, ArrowRight, User, Trash2, Maximize2, X } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
+import { Plus, User, Maximize2, X } from 'lucide-react';
 import { ExtensionCategory, Graph, register } from '@antv/g6';
 import { ReactNode } from '@antv/g6-extension-react';
 import type { GraphData } from '@antv/g6';
@@ -102,6 +102,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
         }, 0);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataId]); // 只依赖 dataId，不依赖 data 对象引用
 
   // 使用 useRef 存储 onChange 回调，避免依赖变化导致重新渲染
@@ -165,6 +166,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
           x: x, // 位置在 style 中
           y: y, // 位置在 style 中
           size: [80, 80] as [number, number], // 节点大小 [width, height]
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           component: (data: any) => <CharacterNode data={data} />, // React 组件
         },
       };
@@ -221,7 +223,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
     if (graphDataId !== prevGraphDataIdRef.current && prevGraphDataIdRef.current !== '' && graphRef.current) {
       try {
         graphRef.current.destroy();
-      } catch (e) {
+      } catch {
         // 忽略清理错误
       }
       graphRef.current = null;
@@ -272,7 +274,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       if (graphRef.current) {
         try {
           graphRef.current.destroy();
-        } catch (e) {
+        } catch {
           // 忽略清理错误
         }
         graphRef.current = null;
@@ -302,6 +304,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
               size: [80, 80] as [number, number], // 节点大小 [width, height]
               component: (data: unknown) => <CharacterNode data={data as NodeData} />, // React 组件
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any,
           edge: {
             style: {
@@ -313,6 +316,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                 fill: '#10b981',
               },
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             labelText: (d: unknown) => (d as any).data?.label || '',
             labelFill: '#10b981',
             labelFontSize: 11,
@@ -321,6 +325,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
             labelBackgroundFill: 'white',
             labelBackgroundOpacity: 0.8,
             labelPlacement: 'center', // 标签居中
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any,
           behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
         });
@@ -330,7 +335,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
           // graphDataId 已经变化，销毁刚创建的图实例
           try {
             graph.destroy();
-          } catch (e) {
+          } catch {
             // 忽略清理错误
           }
           isInitializingRef.current = false;
@@ -355,9 +360,10 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                 // 节点点击事件已移除 - 角色不允许编辑
 
                 // 边点击事件 - 直接进入编辑界面
-                graph.on('edge:click', (e: any) => {
-                  const edgeId = e.item?.getID?.() || e.target?.id || e.item?.id;
-                  if (edgeId) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            graph.on('edge:click', (e: any) => {
+              const edgeId = e.item?.getID?.() || e.target?.id || e.item?.id;
+              if (edgeId) {
                     const relation = relations.find((r) => r.id === edgeId);
                     if (relation) {
                       setEditingRelation(edgeId);
@@ -375,19 +381,19 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                 if (graph) {
                   try {
                     graph.destroy();
-                  } catch (e) {
+                  } catch {
                     // 忽略清理错误
                   }
                 }
                 isInitializingRef.current = false;
               }
             })
-            .catch((error) => {
+            .catch(() => {
               // render 失败，清理图实例
               if (graph) {
                 try {
                   graph.destroy();
-                } catch (e) {
+                } catch {
                   // 忽略清理错误
                 }
               }
@@ -406,6 +412,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
 
             // 边点击事件 - 直接进入编辑界面
             graph.on('edge:click', (e: unknown) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const event = e as any;
               const edgeId = event.item?.getID?.() || event.target?.id || event.item?.id;
               if (edgeId) {
@@ -426,18 +433,18 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
             if (graph) {
               try {
                 graph.destroy();
-              } catch (e) {
+              } catch {
                 // 忽略清理错误
               }
             }
             isInitializingRef.current = false;
           }
         }
-      } catch (error) {
+      } catch {
         if (graph) {
           try {
             graph.destroy();
-          } catch (e) {
+          } catch {
             // 忽略清理错误
           }
         }
@@ -467,6 +474,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       // 这里只重置标志，不销毁图实例（因为图实例需要在组件卸载时才销毁）
       isInitializingRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphDataId]); // 只使用稳定的 graphDataId 作为依赖，避免 graphData 对象引用变化导致循环
 
   // 组件卸载时清理图实例
@@ -475,7 +483,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       if (graphRef.current) {
         try {
           graphRef.current.destroy();
-        } catch (e) {
+        } catch {
           // 忽略清理错误
         }
         graphRef.current = null;
@@ -483,7 +491,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       if (fullscreenGraphRef.current) {
         try {
           fullscreenGraphRef.current.destroy();
-        } catch (e) {
+        } catch {
           // 忽略清理错误
         }
         fullscreenGraphRef.current = null;
@@ -498,7 +506,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       if (!isFullscreen && fullscreenGraphRef.current) {
         try {
           fullscreenGraphRef.current.destroy();
-        } catch (e) {
+        } catch {
           // 忽略清理错误
         }
         fullscreenGraphRef.current = null;
@@ -518,7 +526,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       if (fullscreenGraphRef.current) {
         try {
           fullscreenGraphRef.current.destroy();
-        } catch (e) {
+        } catch {
           // 忽略清理错误
         }
       }
@@ -536,6 +544,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
               size: [80, 80] as [number, number], // 节点大小 [width, height]
               component: (data: unknown) => <CharacterNode data={data as NodeData} />, // React 组件
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any,
           edge: {
             style: {
@@ -547,6 +556,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
                 fill: '#10b981',
               },
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             labelText: (d: unknown) => (d as any).data?.label || '',
             labelFill: '#10b981',
             labelFontSize: 12,
@@ -555,6 +565,7 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
             labelBackgroundFill: 'white',
             labelBackgroundOpacity: 0.8,
             labelPlacement: 'center',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any,
           behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
         });
@@ -597,414 +608,195 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
     };
   }, [isFullscreen, graphData, characters.length]);
 
-  // 数据更新已经在第一个 useEffect 中处理，这里不需要单独的更新逻辑
-
-
-  // 角色编辑和添加功能已移除 - 角色只能从角色列表中获取
-
-  const handleAddRelation = () => {
-    if (characters.length < 2) {
-      alert('请至少创建两个角色才能添加关系');
-      return;
-    }
-    setAddingRelation(true);
-    setEditForm({
-      relationFrom: characters[0]?.id || '',
-      relationTo: characters[1]?.id || '',
-      relationType: '新关系',
-      relationDescription: '',
-    });
-  };
-
-  const handleSaveNewRelation = () => {
-    if (editForm.relationFrom && editForm.relationTo && editForm.relationType) {
-      // 检查是否已存在相同的关系
-      const exists = relations.some(
-        (r) =>
-          (r.from === editForm.relationFrom && r.to === editForm.relationTo) ||
-          (r.from === editForm.relationTo && r.to === editForm.relationFrom)
-      );
-      if (exists) {
-        alert('这两个角色之间已经存在关系');
-        return;
-      }
-
-      const newRelation: Relation = {
-        id: `r${Date.now()}`,
-        from: editForm.relationFrom,
-        to: editForm.relationTo,
-        type: editForm.relationType,
-        description: editForm.relationDescription,
-      };
-      setRelations((prev) => [...prev, newRelation]);
-      setAddingRelation(false);
-      setEditForm({});
-      // 用户操作后通知父组件
-      setTimeout(() => {
-        if (onChangeRef.current) {
-          onChangeRef.current({ 
-            characters, 
-            relations: [...relations, newRelation] 
-          });
-        }
-      }, 0);
-    }
-  };
-
-  // 角色删除功能已移除 - 角色只能从角色列表中管理
-
-  const handleDeleteRelation = (relationId: string) => {
-    const newRelations = relations.filter((r) => r.id !== relationId);
-    setRelations(newRelations);
-    // 用户操作后通知父组件
-    setTimeout(() => {
-      if (onChangeRef.current) {
-        onChangeRef.current({ characters, relations: newRelations });
-      }
-    }, 0);
-  };
-
-  const handleSaveRelation = () => {
-    if (editingRelation && editForm.relationFrom && editForm.relationTo && editForm.relationType) {
-      // 检查是否修改了角色，如果修改了，需要检查是否会产生重复关系
-      const currentRelation = relations.find((r) => r.id === editingRelation);
-      if (currentRelation) {
-        const fromChanged = currentRelation.from !== editForm.relationFrom;
-        const toChanged = currentRelation.to !== editForm.relationTo;
-        
-        // 如果修改了角色，检查是否会产生重复关系
-        if (fromChanged || toChanged) {
-          const wouldConflict = relations.some(
-            (r) =>
-              r.id !== editingRelation && // 排除当前关系
-              ((r.from === editForm.relationFrom && r.to === editForm.relationTo) ||
-               (r.from === editForm.relationTo && r.to === editForm.relationFrom))
-          );
-          if (wouldConflict) {
-            alert('这两个角色之间已经存在关系');
-            return;
-          }
-        }
-      }
-
-      const newRelations = relations.map((r) =>
-        r.id === editingRelation
-          ? {
-              ...r,
-              from: editForm.relationFrom || r.from,
-              to: editForm.relationTo || r.to,
-              type: editForm.relationType || r.type,
-              description: editForm.relationDescription || r.description,
-            }
-          : r
-      );
-      setRelations(newRelations);
-      setEditingRelation(null);
-      setEditForm({});
-      // 用户操作后通知父组件
-      setTimeout(() => {
-        if (onChangeRef.current) {
-          onChangeRef.current({ characters, relations: newRelations });
-        }
-      }, 0);
-    }
-  };
-
   return (
-    <div className="character-relations">
-      <div className="relations-header">
-        <h3>人物关系网</h3>
-        <div className="header-actions">
-          {characters.length > 0 && (
-            <button 
-              className="action-btn" 
-              onClick={() => setIsFullscreen(true)}
-              title="放大查看"
-            >
-              <Maximize2 size={16} />
-              <span>放大</span>
-            </button>
-          )}
-          <button className="action-btn" onClick={handleAddRelation}>
-            <Plus size={16} />
-            <span>添加关系</span>
-          </button>
-        </div>
+    <div className="character-relations-container">
+      {/* 工具栏 */}
+      <div className="relations-toolbar">
+        <button 
+          className="toolbar-btn primary"
+          onClick={() => setAddingRelation(true)}
+          title="添加关系"
+        >
+          <Plus size={16} />
+          <span>添加关系</span>
+        </button>
+        <div className="toolbar-spacer"></div>
+        <button 
+          className="toolbar-btn"
+          onClick={() => setIsFullscreen(true)}
+          title="全屏查看"
+        >
+          <Maximize2 size={16} />
+        </button>
       </div>
 
-      <div className="relations-content">
-        {characters.length === 0 ? (
-          <div className="relations-empty">
-            <User size={48} />
-            <h4>暂无角色</h4>
-            <p>请在角色列表中添加角色，然后在此创建关系</p>
-          </div>
-        ) : (
-          <div className="relations-canvas" ref={containerRef}></div>
-        )}
+      {/* 关系图容器 */}
+      <div className="graph-container" ref={containerRef}></div>
 
-        {/* 侧边栏 - 角色和关系列表 */}
-        <div className="relations-sidebar">
-          <div className="sidebar-section">
-            <h4>角色列表 ({characters.length})</h4>
-            <div className="character-list">
-              {characters.length === 0 && (
-                <div className="list-empty">请在角色列表中添加角色</div>
-              )}
-              {characters.map((character) => (
-                <div
-                  key={character.id}
-                  className="character-item"
-                >
-                  <div className="character-info">
-                    <div className="character-name">{character.name}</div>
-                    <div className="character-gender">{character.gender}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="sidebar-section">
-            <h4>关系列表 ({relations.length})</h4>
-            <div className="relations-list">
-              {relations.length === 0 && (
-                <div className="list-empty">
-                  {characters.length < 2 ? '至少需要2个角色才能添加关系' : '点击上方按钮添加关系'}
-                </div>
-              )}
-              {relations.map((relation) => {
-                const fromChar = characters.find((c) => c.id === relation.from);
-                const toChar = characters.find((c) => c.id === relation.to);
-                return (
-                  <div
-                    key={relation.id}
-                    className={`relation-item ${editingRelation === relation.id ? 'active' : ''}`}
-                    onClick={() => {
-                      setEditingRelation(relation.id);
-                      const relationData = relations.find((r) => r.id === relation.id);
-                      if (relationData) {
-                        setEditForm({
-                          relationType: relationData.type,
-                          relationDescription: relationData.description,
-                          relationFrom: relationData.from,
-                          relationTo: relationData.to,
-                        });
-                      }
-                    }}
-                  >
-                    <div className="relation-item-content">
-                      <span className="relation-from">{fromChar?.name || '未知'}</span>
-                      <ArrowRight size={14} />
-                      <span className="relation-type">{relation.type || '未知'}</span>
-                      <ArrowRight size={14} />
-                      <span className="relation-to">{toChar?.name || '未知'}</span>
-                    </div>
-                    {relation.description && (
-                      <div className="relation-description">{relation.description}</div>
-                    )}
-                    <div className="relation-actions">
-                      <button
-                        className="action-icon-btn"
-                        title="删除"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteRelation(relation.id);
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 添加关系弹窗 */}
+      {/* 添加关系表单 - 简化版 */}
       {addingRelation && (
-        <div className="edit-modal-overlay" onClick={() => { setAddingRelation(false); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>添加关系</h4>
-            <div className="modal-form">
-              <label>
-                <span>起始角色</span>
-                <select
-                  value={editForm.relationFrom || ''}
-                  onChange={(e) => setEditForm({ ...editForm, relationFrom: e.target.value })}
-                  className="edit-select"
-                >
-                  {characters.map((char) => (
-                    <option key={char.id} value={char.id}>
-                      {char.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>关系类型</span>
-                <input
-                  type="text"
-                  value={editForm.relationType || ''}
-                  onChange={(e) => setEditForm({ ...editForm, relationType: e.target.value })}
-                  className="edit-input"
-                  placeholder="例如：朋友、恋人、对手等"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>目标角色</span>
-                <select
-                  value={editForm.relationTo || ''}
-                  onChange={(e) => setEditForm({ ...editForm, relationTo: e.target.value })}
-                  className="edit-select"
-                >
-                  {characters.map((char) => (
-                    <option key={char.id} value={char.id}>
-                      {char.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>关系描述（可选）</span>
-                <textarea
-                  value={editForm.relationDescription || ''}
-                  onChange={(e) => setEditForm({ ...editForm, relationDescription: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="描述这两个角色之间的关系..."
-                  rows={3}
-                />
-              </label>
-              <div className="modal-actions">
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
+        <div className="relation-form-overlay">
+          <div className="relation-form">
+            <h3>添加关系</h3>
+            <div className="form-group">
+              <label>从</label>
+              <select 
+                value={editForm.relationFrom || ''} 
+                onChange={e => setEditForm({...editForm, relationFrom: e.target.value})}
+              >
+                <option value="">选择角色...</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>到</label>
+              <select 
+                value={editForm.relationTo || ''} 
+                onChange={e => setEditForm({...editForm, relationTo: e.target.value})}
+              >
+                <option value="">选择角色...</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>关系类型</label>
+              <input 
+                type="text" 
+                value={editForm.relationType || ''} 
+                onChange={e => setEditForm({...editForm, relationType: e.target.value})}
+                placeholder="例如：朋友、敌人、亲戚"
+              />
+            </div>
+            <div className="form-group">
+              <label>描述</label>
+              <input 
+                type="text" 
+                value={editForm.relationDescription || ''} 
+                onChange={e => setEditForm({...editForm, relationDescription: e.target.value})}
+              />
+            </div>
+            <div className="form-actions">
+              <button onClick={() => setAddingRelation(false)}>取消</button>
+              <button 
+                className="primary"
+                onClick={() => {
+                  if (editForm.relationFrom && editForm.relationTo && editForm.relationType) {
+                    const newRelation: Relation = {
+                      id: `rel_${Date.now()}`,
+                      from: editForm.relationFrom,
+                      to: editForm.relationTo,
+                      type: editForm.relationType,
+                      description: editForm.relationDescription
+                    };
+                    const newRelations = [...relations, newRelation];
+                    setRelations(newRelations);
+                    if (onChange) {
+                      onChange({
+                        characters,
+                        relations: newRelations
+                      });
+                    }
                     setAddingRelation(false);
                     setEditForm({});
-                  }}
-                >
-                  取消
-                </button>
-                <div className="footer-spacer" />
-                <button className="save-btn" onClick={handleSaveNewRelation}>
-                  保存
-                </button>
-              </div>
+                  }
+                }}
+              >
+                保存
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* 编辑关系弹窗 */}
-      {editingRelation && (() => {
-        const relation = relations.find((r) => r.id === editingRelation);
-        return relation ? (
-          <div className="edit-modal-overlay" onClick={() => { setEditingRelation(null); setEditForm({}); }}>
-            <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-              <h4>编辑关系</h4>
-              <div className="modal-form">
-                <label>
-                  <span>起始角色</span>
-                  <select
-                    value={editForm.relationFrom || relation.from || ''}
-                    onChange={(e) => setEditForm({ ...editForm, relationFrom: e.target.value })}
-                    className="edit-select"
-                  >
-                    {characters.map((char) => (
-                      <option key={char.id} value={char.id}>
-                        {char.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>关系类型</span>
-                  <input
-                    type="text"
-                    value={editForm.relationType || ''}
-                    onChange={(e) => setEditForm({ ...editForm, relationType: e.target.value })}
-                    className="edit-input"
-                    placeholder="例如：朋友、恋人、对手等"
-                    autoFocus
-                  />
-                </label>
-                <label>
-                  <span>目标角色</span>
-                  <select
-                    value={editForm.relationTo || relation.to || ''}
-                    onChange={(e) => setEditForm({ ...editForm, relationTo: e.target.value })}
-                    className="edit-select"
-                  >
-                    {characters.map((char) => (
-                      <option key={char.id} value={char.id}>
-                        {char.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>关系描述（可选）</span>
-                  <textarea
-                    value={editForm.relationDescription || ''}
-                    onChange={(e) => setEditForm({ ...editForm, relationDescription: e.target.value })}
-                    className="edit-textarea"
-                    placeholder="描述这两个角色之间的关系..."
-                    rows={3}
-                  />
-                </label>
-                <div className="modal-actions">
-                  <button
-                    className="cancel-btn"
-                    onClick={() => {
-                      setEditingRelation(null);
-                      setEditForm({});
-                    }}
-                  >
-                    取消
-                  </button>
-                  <div className="footer-spacer" />
-                  <button className="save-btn" onClick={handleSaveRelation}>
-                    保存
-                  </button>
-                </div>
-              </div>
+      {editingRelation && (
+        <div className="relation-form-overlay">
+          <div className="relation-form">
+            <h3>编辑关系</h3>
+            <div className="form-group">
+              <label>类型</label>
+              <input 
+                type="text" 
+                value={editForm.relationType || ''} 
+                onChange={e => setEditForm({...editForm, relationType: e.target.value})}
+              />
             </div>
-          </div>
-        ) : null;
-      })()}
-
-      {/* 全屏放大模态框 */}
-      {isFullscreen && (
-        <div className="fullscreen-modal-overlay" onClick={() => setIsFullscreen(false)}>
-          <div className="fullscreen-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="fullscreen-header">
-              <h3>人物关系网 - 全屏查看</h3>
+            <div className="form-group">
+              <label>描述</label>
+              <input 
+                type="text" 
+                value={editForm.relationDescription || ''} 
+                onChange={e => setEditForm({...editForm, relationDescription: e.target.value})}
+              />
+            </div>
+            <div className="form-actions">
               <button 
-                className="close-fullscreen-btn" 
-                onClick={() => setIsFullscreen(false)}
-                title="关闭"
+                className="danger"
+                onClick={() => {
+                  const newRelations = relations.filter(r => r.id !== editingRelation);
+                  setRelations(newRelations);
+                  if (onChange) {
+                    onChange({
+                      characters,
+                      relations: newRelations
+                    });
+                  }
+                  setEditingRelation(null);
+                  setEditForm({});
+                }}
               >
-                <X size={20} />
+                删除
+              </button>
+              <button onClick={() => setEditingRelation(null)}>取消</button>
+              <button 
+                className="primary"
+                onClick={() => {
+                  const newRelations = relations.map(r => {
+                    if (r.id === editingRelation) {
+                      return {
+                        ...r,
+                        type: editForm.relationType || r.type,
+                        description: editForm.relationDescription || r.description
+                      };
+                    }
+                    return r;
+                  });
+                  setRelations(newRelations);
+                  if (onChange) {
+                    onChange({
+                      characters,
+                      relations: newRelations
+                    });
+                  }
+                  setEditingRelation(null);
+                  setEditForm({});
+                }}
+              >
+                保存
               </button>
             </div>
-            <div className="fullscreen-canvas" ref={fullscreenContainerRef}></div>
           </div>
+        </div>
+      )}
+
+      {/* 全屏查看 */}
+      {isFullscreen && (
+        <div className="fullscreen-overlay">
+          <div className="fullscreen-header">
+            <h2>人物关系图</h2>
+            <button onClick={() => setIsFullscreen(false)}>
+              <X size={24} />
+            </button>
+          </div>
+          <div className="fullscreen-content" ref={fullscreenContainerRef}></div>
         </div>
       )}
     </div>
   );
 }
 
-// 使用 memo 包装组件，自定义比较函数
-// 只比较 data，忽略 onChange（因为 onChange 在组件内部用 useRef 存储，变化不影响行为）
-export default memo(CharacterRelations, (prevProps, nextProps) => {
-  // 只比较 data，忽略 onChange
-  const prevDataId = getDataId(prevProps.data);
-  const nextDataId = getDataId(nextProps.data);
-  
-  // 如果数据ID相同，不重新渲染（即使 onChange 引用不同）
-  return prevDataId === nextDataId; // 返回 true 表示 props 相同，不需要重新渲染
-});
+export default memo(CharacterRelations);

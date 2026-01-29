@@ -5,9 +5,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-// @ts-expect-error - 类型定义可能缺失，但包已安装
 import Collaboration from '@tiptap/extension-collaboration'
-// @ts-expect-error - 类型定义可能缺失，但包已安装
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import { useCollaboration } from '../../hooks/useCollaboration'
 

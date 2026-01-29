@@ -190,7 +190,7 @@ export default function MapView() {
           type: 'react',
           style: {
             size: [100, 100] as [number, number],
-            component: (data: { data: LocationNodeData }) => <LocationNode data={data} />,
+            component: (data: LocationNodeData) => <LocationNode data={data} />,
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,

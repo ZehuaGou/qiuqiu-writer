@@ -25,8 +25,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
   const [status, setStatus] = useState<'idle' | 'uploading' | 'splitting' | 'creating' | 'success' | 'error'>('idle');
   const [progress, setProgress] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [workId, setWorkId] = useState<number | null>(null);
-  const [workTitle, setWorkTitle] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -51,7 +49,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
     const parts = content.split(headingPattern);
     const chapters: Chapter[] = [];
     let currentVolumeNumber = 1;
-    let chapterCountInVolumes: Record<number, number> = {}; // 记录每卷的章节数
 
     for (let i = 1; i < parts.length; i += 2) {
       if (parts[i] && parts[i + 1]) {
@@ -158,7 +155,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
     let currentVolume = 1; // 当前卷号
     let lastChapterNumber = 0; // 记录上一章的原始章节号
     let lastGlobalChapterNumber = 0; // 记录上一章的全局章节号
-    let volumeStartNumbers: Record<number, number> = { 1: 1 }; // 记录每卷的起始章节号
     
     for (let i = 0; i < chapters.length; i++) {
       const chapter = chapters[i];
@@ -176,9 +172,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
       if (origVolNum > currentVolume) {
         currentVolume = origVolNum;
         volNum = origVolNum;
-        if (!volumeStartNumbers[volNum]) {
-          volumeStartNumbers[volNum] = globalChapterNumber;
-        }
       } else {
         // 使用当前卷号
         volNum = currentVolume;
@@ -190,9 +183,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
         // 章节号回退了，应该识别为新卷
         currentVolume = currentVolume + 1;
         volNum = currentVolume;
-        if (!volumeStartNumbers[volNum]) {
-          volumeStartNumbers[volNum] = globalChapterNumber;
-        }
       }
       
       // 严格按照出现顺序递增，避免跳过章节号
@@ -324,8 +314,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
       // 调用创建接口
       const result = await createWorkFromFile(file.name, chaptersData);
 
-      setWorkId(result.work_id);
-      setWorkTitle(result.work_title);
       setStatus('success');
       setProgress(`成功创建作品 "${result.work_title}"，共 ${result.chapters_created} 个章节`);
 
@@ -350,8 +338,6 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
     setStatus('idle');
     setProgress('');
     setErrorMessage('');
-    setWorkId(null);
-    setWorkTitle('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

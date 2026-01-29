@@ -108,7 +108,7 @@ export default function Characters({ availableCharacters = [] }: CharactersProps
       {activeTab === 'list' && (
         <div className="characters-content">
           <div className="characters-actions">
-            <button className="action-btn primary">
+            <button className="action-btn">
               <Plus size={16} />
               <span>添加角色</span>
             </button>
@@ -196,7 +196,7 @@ export default function Characters({ availableCharacters = [] }: CharactersProps
               </div>
             )}
             <div className="section-actions">
-              <button className="action-btn primary">
+              <button className="action-btn">
                 <Plus size={16} />
                 <span>添加角色</span>
               </button>

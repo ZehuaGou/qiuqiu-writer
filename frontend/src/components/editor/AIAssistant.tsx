@@ -1,4 +1,4 @@
-import { MessageSquare, Send, ChevronUp, Copy, Check, Loader2, Trash2, BookOpen, User, FileText } from 'lucide-react';
+import { Send, Copy, Check, Loader2, Trash2, BookOpen, User, FileText } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { streamChatMessage } from '../../utils/chatApi';
 import type { ChatMessage } from '../../utils/chatApi';
@@ -114,7 +114,8 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
         
         // 从作品metadata的component_data中提取角色信息
         const componentData = workData.metadata?.component_data || {characters: []};
-        const charactersFromComponentData = componentData.characters || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const charactersFromComponentData = (componentData as any).characters || [];
         setCharacters(charactersFromComponentData);
       } catch (err) {
         console.error('加载章节/作品信息失败:', err);
@@ -224,16 +225,6 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
         const characterKeywords = ['character', 'cha', '角色', 'juese', 'js'];
         const chapterKeywords = ['chapter', 'chap', '章节', 'zhangjie', 'zj'];
         
-        // 检查查询是否匹配关键词（支持前缀匹配）
-        const isCharacterKeyword = characterKeywords.some(keyword => {
-          return keyword.toLowerCase().startsWith(query) || 
-                 query.startsWith(keyword.toLowerCase());
-        });
-        const isChapterKeyword = chapterKeywords.some(keyword => {
-          return keyword.toLowerCase().startsWith(query) || 
-                 query.startsWith(keyword.toLowerCase());
-        });
-        
         // 构建提及选项
         const options: MentionOption[] = [];
         
@@ -293,8 +284,8 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
             .forEach((char, index) => {
               // 构建角色详细信息作为副标题
               const subtitleParts: string[] = [];
-              if (char.type) subtitleParts.push(char.type);
-              if (char.gender) subtitleParts.push(char.gender);
+              if (char.type) subtitleParts.push(String(char.type));
+              if (char.gender) subtitleParts.push(String(char.gender));
               if (char.description) {
                 subtitleParts.push(char.description.substring(0, 30));
               }

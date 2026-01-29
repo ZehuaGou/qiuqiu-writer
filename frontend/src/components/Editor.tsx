@@ -15,7 +15,7 @@ interface EditorProps {
 const DEFAULT_USER_ID = 'planetwriter_user_1';
 const SAVE_DEBOUNCE_MS = 2000; // 2 seconds
 
-export default function Editor({ docId, onDocChange: _onDocChange }: EditorProps) {
+export default function Editor({ docId }: EditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -35,6 +35,25 @@ export default function Editor({ docId, onDocChange: _onDocChange }: EditorProps
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentDocIdRef = useRef<string | null>(null);
 
+  const loadDocument = async (id: string) => {
+    try {
+      const doc = await apiClient.getDocument(id, DEFAULT_USER_ID);
+      if (editor && doc.content) {
+        editor.commands.setContent(doc.content);
+      }
+    } catch (error) {
+      console.error('Failed to load document:', error);
+    }
+  };
+
+  const saveDocument = async (id: string, content: string) => {
+    try {
+      await apiClient.updateDocument(id, DEFAULT_USER_ID, { content });
+    } catch (error) {
+      console.error('Failed to save document:', error);
+    }
+  };
+
   // Load document when docId changes
   useEffect(() => {
     if (editor && docId && docId !== currentDocIdRef.current) {
@@ -44,6 +63,7 @@ export default function Editor({ docId, onDocChange: _onDocChange }: EditorProps
       editor.commands.setContent('<p></p>');
       currentDocIdRef.current = null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, docId]);
 
   // Auto-save on content change
@@ -71,25 +91,6 @@ export default function Editor({ docId, onDocChange: _onDocChange }: EditorProps
       }
     };
   }, [editor, docId]);
-
-  const loadDocument = async (id: string) => {
-    try {
-      const doc = await apiClient.getDocument(id, DEFAULT_USER_ID);
-      if (editor && doc.content) {
-        editor.commands.setContent(doc.content);
-      }
-    } catch (error) {
-      console.error('Failed to load document:', error);
-    }
-  };
-
-  const saveDocument = async (id: string, content: string) => {
-    try {
-      await apiClient.updateDocument(id, DEFAULT_USER_ID, { content });
-    } catch (error) {
-      console.error('Failed to save document:', error);
-    }
-  };
 
   return (
     <div className="editor-container">

@@ -1223,10 +1223,6 @@
   gap: 8px;
 }
 
-button {
-  background: black;
-}
-
 .comp-character-cards {
   display: flex;
   flex-direction: column;
