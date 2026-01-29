@@ -2264,6 +2264,7 @@ export default function NovelEditorPage(){
           {activeNav === 'work-info' && selectedChapter === null && (
             <WorkInfoManager 
               workId={workId} 
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               workData={work ? ({ metadata: { ...(work.metadata || {}) } } as any) : undefined} 
             />
           )}

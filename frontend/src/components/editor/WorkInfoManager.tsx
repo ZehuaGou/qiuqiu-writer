@@ -135,7 +135,7 @@ interface WorkMetadata {
   component_data?: Record<string, unknown>;
 }
 
-interface WorkData {
+export interface WorkData {
   metadata?: WorkMetadata;
 }
 
@@ -163,6 +163,13 @@ const getModulesFromTemplateConfig = (templateConfig?: unknown): ModuleConfig[] 
 const extractComponentDataFromTemplate = (modules: ModuleConfig[]): Record<string, unknown> => {
   const data: Record<string, unknown> = {};
 
+  const getDefaultDataKey = (comp: ComponentConfig): string | null => {
+    if (comp.type === 'relation-graph') return 'character_relations';
+    if (comp.type === 'timeline') return 'character_timeline';
+    if (comp.type === 'character-card') return 'characters';
+    return null;
+  };
+
   const collectFromComponents = (components: ComponentConfig[]) => {
     for (const comp of components) {
       if (comp.type === 'tabs' && comp.config?.tabs) {
@@ -171,7 +178,7 @@ const extractComponentDataFromTemplate = (modules: ModuleConfig[]): Record<strin
         }
         continue;
       }
-      const storageKey = comp.dataKey || comp.id;
+      const storageKey = comp.dataKey || getDefaultDataKey(comp) || comp.id;
       if (comp.value !== undefined) {
         data[storageKey] = comp.value;
       }
@@ -203,7 +210,7 @@ const writeComponentDataToTemplate = (
           }
         };
       }
-      const storageKey = comp.dataKey || comp.id;
+      const storageKey = comp.dataKey || (comp.type === 'relation-graph' ? 'character_relations' : comp.type === 'timeline' ? 'character_timeline' : comp.type === 'character-card' ? 'characters' : null) || comp.id;
       if (Object.prototype.hasOwnProperty.call(data, storageKey)) {
         return { ...comp, value: data[storageKey] };
       }
@@ -560,22 +567,40 @@ interface TabsComponentProps {
   tabsComponentId: string;  // tabs组件的ID
   renderComponent: (comp: ComponentConfig, moduleId: string, tabsComponentId?: string, tabId?: string) => React.ReactNode;
   onUpdateTabs?: (tabs: { id: string; label: string; components: ComponentConfig[] }[]) => void;
-  onAddComponentToTab?: (tabId: string) => void;
   onEditComponentInTab?: (comp: ComponentConfig, tabId: string) => void;
   onGenerateComponent?: (comp: ComponentConfig, moduleId: string, tabsComponentId?: string, tabId?: string) => void;
   generatingComponents?: Record<string, boolean>;
   isEditMode?: boolean;  // 是否处于编辑模式
+  activeTabId?: string;
+  onActiveTabChange?: (tabId: string) => void;
 }
 
-function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpdateTabs, onAddComponentToTab, onEditComponentInTab, onGenerateComponent, generatingComponents = {}, isEditMode = false }: TabsComponentProps) {
-  const [activeTab, setActiveTab] = useState(tabs[0]?.id || '');
+function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpdateTabs, onEditComponentInTab, onGenerateComponent, generatingComponents = {}, isEditMode = false, activeTabId, onActiveTabChange }: TabsComponentProps) {
+  const [internalActiveTab, setInternalActiveTab] = useState(tabs[0]?.id || '');
+  
+  const activeTab = activeTabId !== undefined ? activeTabId : internalActiveTab;
+  
+  const handleTabChange = (tabId: string) => {
+    if (onActiveTabChange) {
+      onActiveTabChange(tabId);
+    } else {
+      setInternalActiveTab(tabId);
+    }
+  };
+
+  useEffect(() => {
+    if (tabs.length > 0) {
+      handleTabChange(activeTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (tabs.length === 0) {
     return <div className="comp-empty">暂无标签页</div>;
   }
 
-  const activeTabData = tabs.find(t => t.id === activeTab);
-  const activeTabIndex = tabs.findIndex(t => t.id === activeTab);
+  const activeTabData = tabs.find(t => t.id === activeTab) || tabs[0];
+  const activeTabIndex = tabs.findIndex(t => t.id === activeTabData?.id);
 
   return (
     <div className="comp-tabs">
@@ -583,8 +608,8 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
         {tabs.map(tab => (
           <button
             key={tab.id}
-            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            className={`tab-btn ${activeTabData?.id === tab.id ? 'active' : ''}`}
+            onClick={() => handleTabChange(tab.id)}
           >
             {tab.label}
           </button>
@@ -650,18 +675,7 @@ function TabsComponent({ tabs, moduleId, tabsComponentId, renderComponent, onUpd
                 </div>
               );
             })}
-            {isEditMode && onAddComponentToTab && (
-              <div className="tabs-add-component">
-                <button
-                  className="tabs-add-component-btn"
-                  onClick={() => onAddComponentToTab(activeTab)}
-                  title="在此分页中添加组件"
-                >
-                  <Plus size={16} />
-                  <span>添加组件</span>
-                </button>
-              </div>
-            )}
+
           </>
         )}
       </div>
@@ -974,6 +988,9 @@ function TimelineCharacterSelector({
 }
 
 export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
+  // 记录每个 tabs 组件的当前激活 tab
+  const [activeTabs, setActiveTabs] = useState<Record<string, string>>({});
+  const [currentTabsCompId, setCurrentTabsCompId] = useState<string | null>(null);
   const { workId, workData } = props;
   // 初始化时尝试从缓存加载（基于 workId）
   const [template, setTemplate] = useState<TemplateConfig>(() => {
@@ -1030,9 +1047,13 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
   const [newCardFieldForm, setNewCardFieldForm] = useState({ label: '', type: 'text' as 'text' | 'textarea' | 'image' });
   const [newTagOption, setNewTagOption] = useState({ label: '', color: '#64748b' });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  // 保存原始作品数据快照（用于比较是否有修改）
+  // 记录上次加载的模板更新时间，避免重复加载覆盖本地修改
+   const lastLoadedTemplateTimeRef = useRef<number>(0);
+   // 标记是否是内部更新（如加载模板），用于防止触发自动保存
+   const isInternalUpdateRef = useRef(false);
+   // 保存原始作品数据快照（用于比较是否有修改）
   const [originalWorkDataSnapshot, setOriginalWorkDataSnapshot] = useState<string | null>(null);
-  
+
   // 角色编辑弹窗状态
   const [characterModal, setCharacterModal] = useState<{
     isOpen: boolean;
@@ -1102,6 +1123,19 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
   // 当 workId 变化时，从数据库加载模板配置
   useEffect(() => {
+    // 如果有未保存的更改，跳过加载，防止覆盖
+    if (hasUnsavedChanges) {
+      return;
+    }
+
+    // 如果 workData 没有变化（基于 lastModified），则跳过加载
+    if (workId && workData?.metadata?.template_config?.lastModified) {
+       const lastModified = workData.metadata.template_config.lastModified;
+       if (typeof lastModified === 'number' && lastModified <= lastLoadedTemplateTimeRef.current) {
+         return;
+       }
+    }
+
     const loadTemplate = async () => {
       if (!workId) {
         // 如果没有 workId，从本地缓存加载，或从数据库加载默认模板
@@ -1141,6 +1175,8 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                 }
                 
                 if (dbModules.length > 0) {
+                  // 标记为内部更新，避免触发自动保存
+                  isInternalUpdateRef.current = true;
                   setTemplate({
                     id: `db-${dbTemplate.id}`,
                     name: dbTemplate.name,
@@ -1164,9 +1200,13 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
         // 如果没有缓存或加载失败，从数据库加载默认模板
         const defaultTemplate = await loadDefaultTemplate(userTemplates);
         if (defaultTemplate) {
+          // 标记为内部更新，避免触发自动保存
+          isInternalUpdateRef.current = true;
           setTemplate(defaultTemplate);
         } else {
           // 如果数据库也没有，使用空模板
+          // 标记为内部更新，避免触发自动保存
+          isInternalUpdateRef.current = true;
           setTemplate({
             id: '',
             name: '无模板',
@@ -1361,9 +1401,9 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
           const validateLoadedModules = (components: ComponentConfig[], path: string = ''): void => {
             for (const comp of components) {
               const currentPath = path ? `${path} > ${comp.label || comp.id}` : comp.label || comp.id;
-              if (comp.dataKey) {
-                console.log(`✅ 加载 - 组件 "${currentPath}": dataKey="${comp.dataKey}", dataDependencies=${JSON.stringify(comp.dataDependencies || [])}`);
-              }
+              // if (comp.dataKey) {
+              //   console.log(`✅ 加载 - 组件 "${currentPath}": dataKey="${comp.dataKey}", dataDependencies=${JSON.stringify(comp.dataDependencies || [])}`);
+              // }
               // 递归检查 tabs 中的组件
               if (comp.type === 'tabs' && comp.config?.tabs) {
                 for (const tab of comp.config.tabs) {
@@ -1401,7 +1441,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                     : typeof comp.value === 'object' 
                       ? `对象(${Object.keys(comp.value || {}).length}键)` 
                       : typeof comp.value;
-                  console.log(`✅ 数据已写入 - 组件 "${currentPath}" (dataKey: ${storageKey}): ${hasValue ? valueType : '无值'}`);
+                  // console.log(`✅ 数据已写入 - 组件 "${currentPath}" (dataKey: ${storageKey}): ${hasValue ? valueType : '无值'}`);
                 }
                 // 递归检查 tabs 中的组件
                 if (comp.type === 'tabs' && comp.config?.tabs) {
@@ -1425,10 +1465,19 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             }
           }
           
+          // 标记为内部更新，避免触发自动保存
+          isInternalUpdateRef.current = true;
           setTemplate({
             ...baseTemplate,
             modules: modules
           });
+          
+          // 更新上次加载时间
+          if (templateConfig.lastModified && typeof templateConfig.lastModified === 'number') {
+            lastLoadedTemplateTimeRef.current = templateConfig.lastModified;
+          } else {
+            lastLoadedTemplateTimeRef.current = Date.now();
+          }
           
           // 同时更新本地缓存（使用模板ID作为key的一部分）
           saveToCache({
@@ -1477,6 +1526,8 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                   if (dbModules.length > 0) {
                     // 加载 prompt 内容
                     const modulesWithPrompts = await loadPromptsForComponents(dbModules);
+                    // 标记为内部更新，避免触发自动保存
+                    isInternalUpdateRef.current = true;
                     setTemplate({
                       id: `db-${dbTemplate.id}`,
                       name: dbTemplate.name,
@@ -1501,8 +1552,12 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
           // 如果没有缓存或加载失败，从数据库加载默认模板
           const defaultTemplate = await loadDefaultTemplate();
           if (defaultTemplate) {
+            // 标记为内部更新，避免触发自动保存
+            isInternalUpdateRef.current = true;
             setTemplate(defaultTemplate);
           } else {
+            // 标记为内部更新，避免触发自动保存
+            isInternalUpdateRef.current = true;
             setTemplate({
               id: '',
               name: '无模板',
@@ -1554,6 +1609,8 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                 }
                 
                 if (dbModules.length > 0) {
+                  // 标记为内部更新，避免触发自动保存
+                  isInternalUpdateRef.current = true;
                   setTemplate({
                     id: `db-${dbTemplate.id}`,
                     name: dbTemplate.name,
@@ -1577,8 +1634,12 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
         // 如果没有缓存或加载失败，从数据库加载默认模板
         const defaultTemplate = await loadDefaultTemplate(userTemplates);
         if (defaultTemplate) {
+          // 标记为内部更新，避免触发自动保存
+          isInternalUpdateRef.current = true;
           setTemplate(defaultTemplate);
         } else {
+          // 标记为内部更新，避免触发自动保存
+          isInternalUpdateRef.current = true;
           setTemplate({
             id: '',
             name: '无模板',
@@ -1646,12 +1707,13 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       // 这样可以避免重复保存模板结构
       
       // 构建要更新的 metadata
+      const now = Date.now();
       const metadataUpdate: Record<string, unknown> = {
         // 保存模板配置（包括 templateId 和完整的 modules 结构，确保 dataKey 和 dataDependencies 被保存）
         template_config: {
           templateId: template.id, // 指向 work_template 的 ID（如 db-1 表示 work_template 表中 id=1）
           modules: cleanedModules, // 保存完整的模块结构，包括所有组件的 dataKey 和 dataDependencies
-          lastModified: Date.now()
+          lastModified: now
         },
         // 保存简化格式的组件数据（使用 dataKey 作为键）
         component_data: mergedComponentData
@@ -1663,14 +1725,14 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
           component_data: mergedComponentData
         });
         
-        console.log('🔍 比较数据变化:');
-        console.log('   原始快照长度:', originalSnapshot.length);
-        console.log('   当前数据长度:', currentDataStr.length);
+        // console.log('🔍 比较数据变化:');
+        // console.log('   原始快照长度:', originalSnapshot.length);
+        // console.log('   当前数据长度:', currentDataStr.length);
         
         try {
           const originalData = JSON.parse(originalSnapshot) as { component_data?: Record<string, unknown> };
-          console.log('   原始 component_data keys:', originalData.component_data ? Object.keys(originalData.component_data) : []);
-          console.log('   当前 component_data keys:', Object.keys(mergedComponentData));
+          // console.log('   原始 component_data keys:', originalData.component_data ? Object.keys(originalData.component_data) : []);
+          // console.log('   当前 component_data keys:', Object.keys(mergedComponentData));
           
           if (currentDataStr === originalSnapshot) {
             console.log('ℹ️ 作品数据未修改，跳过保存');
@@ -1678,6 +1740,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
           } else {
             console.log('✅ 检测到数据变化，需要保存');
             // 显示变化的详细信息
+            /*
             const originalKeys = Object.keys(originalData.component_data || {});
             const currentKeys = Object.keys(mergedComponentData);
             const addedKeys = currentKeys.filter(k => !originalKeys.includes(k));
@@ -1694,6 +1757,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                 }
               }
             });
+            */
           }
         } catch (e) {
           console.warn('比较数据时出错:', e);
@@ -1705,6 +1769,9 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       await worksApi.updateWork(Number(workId), {
         metadata: metadataUpdate
       });
+
+      // 更新上次加载时间，防止因为自己保存的数据返回而触发重新加载
+      lastLoadedTemplateTimeRef.current = now;
 
       console.log('✅ 作品信息已保存：模板结构（含 dataKey 和 dataDependencies）保存在 template_config.modules，组件数据保存在 component_data');
       
@@ -1740,6 +1807,41 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       throw error; // 重新抛出错误，让调用者处理
     }
   }, [workId]);
+
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAutoSavingRef = useRef(false);
+  const scheduleAutoSave = useCallback(() => {
+    if (!workId) return;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = setTimeout(async () => {
+      if (isAutoSavingRef.current) return;
+      isAutoSavingRef.current = true;
+      try {
+        const saved = await saveWorkInfoToMetadata(template, originalWorkDataSnapshot);
+        if (saved) {
+          const componentDataFromTemplate = extractComponentDataFromTemplate(template.modules);
+          const currentDataStr = JSON.stringify({
+            component_data: componentDataFromTemplate
+          });
+          setOriginalWorkDataSnapshot(currentDataStr);
+          setHasUnsavedChanges(false);
+        }
+      } catch {
+        // 忽略自动保存错误，保留未保存状态提示
+      } finally {
+        isAutoSavingRef.current = false;
+      }
+    }, 800);
+  }, [workId, template, originalWorkDataSnapshot, saveWorkInfoToMetadata]);
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   // 递归保存组件 prompt 到 prompt_templates 表，并返回更新后的组件配置（只包含 prompt id）
   const saveComponentPrompts = useCallback(async (
@@ -1897,6 +1999,12 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
   // 不再自动保存，改为手动保存
   // 当模板变化时，只标记为未保存状态
   useEffect(() => {
+    // 如果是内部更新（如加载模板），不标记为未保存
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      return;
+    }
+
     // 如果模板为空或没有模块，不标记
     if (!template || !template.modules || template.modules.length === 0) {
       return;
@@ -1905,6 +2013,12 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
     // 标记为未保存状态，但不自动保存
     setHasUnsavedChanges(true);
   }, [template]);
+
+  useEffect(() => {
+    if (hasUnsavedChanges && !isEditMode) {
+      scheduleAutoSave();
+    }
+  }, [hasUnsavedChanges, isEditMode, scheduleAutoSave]);
 
 
   // 更新组件值
@@ -1920,14 +2034,9 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
           };
         })
       };
-      // 如果是关系图谱组件，添加调试信息
       if (value && typeof value === 'object' && Array.isArray((value as { relations?: unknown[] }).relations)) {
         console.log(`✅ updateComponentValue: 更新关系图谱组件 ${componentId}，${(value as { relations: unknown[] }).relations.length} 个关系`, value);
       }
-      
-      // 不再自动保存，只标记为未保存状态
-      // 用户需要手动点击保存按钮来保存
-      
       return updated;
     });
   };
@@ -2567,15 +2676,56 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       }));
       setAddingToTab(null);
     } else {
-      // 添加到模块中
-      setTemplate(prev => ({
-        ...prev,
-        modules: prev.modules.map((m, i) => 
-          i === activeModuleIndex 
-            ? { ...m, components: [...m.components, newComp] }
-            : m
-        )
-      }));
+      // 检查当前模块是否有 tabs 组件，优先使用最近交互的组件
+      const tabsComponent = (currentTabsCompId
+        ? activeModule.components.find(c => c.type === 'tabs' && c.id === currentTabsCompId)
+        : activeModule.components.find(c => c.type === 'tabs')) || null;
+      
+      if (tabsComponent && tabsComponent.config.tabs && tabsComponent.config.tabs.length > 0) {
+        // 如果有 tabs 组件，添加到当前激活的 tab
+        const activeTabId = activeTabs[tabsComponent.id] || tabsComponent.config.tabs[0].id;
+        
+        setTemplate(prev => ({
+          ...prev,
+          modules: prev.modules.map((m, i) => {
+             if (i !== activeModuleIndex) return m;
+             
+             return {
+               ...m,
+               components: m.components.map(comp => {
+                 if (comp.id === tabsComponent.id) {
+                   return {
+                     ...comp,
+                     config: {
+                       ...comp.config,
+                       tabs: comp.config.tabs!.map(tab => {
+                         if (tab.id === activeTabId) {
+                           return {
+                             ...tab,
+                             components: [...tab.components, newComp]
+                           };
+                         }
+                         return tab;
+                       })
+                     }
+                   };
+                 }
+                 return comp;
+               })
+             };
+          })
+        }));
+      } else {
+        // 添加到模块中
+        setTemplate(prev => ({
+          ...prev,
+          modules: prev.modules.map((m, i) => 
+            i === activeModuleIndex 
+              ? { ...m, components: [...m.components, newComp] }
+              : m
+          )
+        }));
+      }
     }
     closeAddComponentModal();
   };
@@ -3195,12 +3345,6 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             })
           }));
         };
-        const handleAddComponentToTab = (tabId: string) => {
-          // 打开添加组件弹窗，并标记是要添加到分页中
-          setAddingToTab({ tabId, componentId: comp.id });
-          setShowAddComponent(true);
-          setAddComponentStep('type');
-        };
         const handleEditComponentInTab = (subComp: ComponentConfig, tabId: string) => {
           // 编辑 tabs 中的组件
           startEditComponent(subComp, comp.id, tabId);
@@ -3214,9 +3358,13 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             onUpdateTabs={handleUpdateTabs}
             onGenerateComponent={handleGenerateComponent}
             generatingComponents={generatingComponents}
-            onAddComponentToTab={handleAddComponentToTab}
             onEditComponentInTab={handleEditComponentInTab}
             isEditMode={isEditMode}
+            activeTabId={activeTabs[comp.id]}
+            onActiveTabChange={(tabId) => {
+              setActiveTabs(prev => ({ ...prev, [comp.id]: tabId }));
+              setCurrentTabsCompId(comp.id);
+            }}
           />
         );
       }
@@ -4535,10 +4683,13 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       {/* 模块标签栏 */}
       <div className="module-tabs">
         {template.modules.map((m, i) => (
-          <button
+          <div
             key={m.id}
+            role="button"
+            tabIndex={0}
             className={`module-tab ${i === activeModuleIndex ? 'active' : ''}`}
             onClick={() => setActiveModuleIndex(i)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveModuleIndex(i); }}
             style={{ '--tab-color': m.color } as React.CSSProperties}
           >
             <span className="tab-icon" style={{ color: m.color }}>{IconMap[m.icon] || <LayoutGrid size={16} />}</span>
@@ -4546,7 +4697,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             {isEditMode && template.modules.length > 1 && (
               <button className="tab-del" onClick={(e) => { e.stopPropagation(); deleteModule(i); }}><X size={12} /></button>
             )}
-          </button>
+          </div>
         ))}
         {isEditMode && (
           <button className="module-tab add-tab" onClick={() => setShowAddModule(true)}>
@@ -4617,7 +4768,19 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
               {isEditMode && (
                 <div className="add-comp-area">
-                  <button className="add-comp-btn" onClick={() => setShowAddComponent(true)}>
+          <button className="add-comp-btn" onClick={() => {
+            const tabsComp = (currentTabsCompId
+              ? activeModule.components.find(c => c.type === 'tabs' && c.id === currentTabsCompId)
+              : activeModule.components.find(c => c.type === 'tabs')) || null;
+            if (tabsComp && tabsComp.config.tabs && tabsComp.config.tabs.length > 0) {
+              const tabId = activeTabs[tabsComp.id] || tabsComp.config.tabs[0].id;
+              setAddingToTab({ tabId, componentId: tabsComp.id });
+            } else {
+              setAddingToTab(null);
+            }
+            setShowAddComponent(true);
+            setAddComponentStep('type');
+          }}>
                     <Plus size={16} />
                     <span>添加组件</span>
                   </button>
