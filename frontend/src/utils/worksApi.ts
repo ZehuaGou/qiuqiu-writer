@@ -315,7 +315,7 @@ class WorksApiClient extends BaseApiClient {
         await localCacheManager.set(cacheKey, {
           ...work,
           cached_at: new Date().toISOString(),
-        }, 1);
+        }, 1, { synced: true });
         console.log(`✅ [WorksApi] 已缓存作品信息: ${cacheKey}`);
       } catch (error) {
         console.warn(`⚠️ [WorksApi] 缓存作品信息失败: ${error}`);

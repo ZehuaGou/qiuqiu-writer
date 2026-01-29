@@ -77,18 +77,24 @@ class LocalCacheManager {
   /**
    * 设置缓存项（本地优先）
    */
-  async set<T>(key: string, data: T, version?: number): Promise<void> {
+  async set<T>(key: string, data: T, version?: number, options?: { synced?: boolean }): Promise<void> {
 
     const itemVersion = version ?? this.getNextVersion(key);
+    const synced = options?.synced ?? false;
 
     // 1. 立即写入内存缓存
-    this.setToMemory(key, data, itemVersion, false);
+    this.setToMemory(key, data, itemVersion, synced);
 
     // 2. 异步写入 localStorage
-    this.setToLocalStorage(key, data, itemVersion, false);
+    this.setToLocalStorage(key, data, itemVersion, synced);
 
-    // 3. 标记为待同步
-    this.syncQueue.add(key);
+    // 3. 标记为待同步（仅当 synced 为 false 时）
+    if (!synced) {
+      this.syncQueue.add(key);
+    } else {
+      // 如果明确标记为已同步，则从同步队列中移除
+      this.syncQueue.delete(key);
+    }
     
   }
 

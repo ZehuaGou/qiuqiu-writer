@@ -16,7 +16,6 @@ import Factions from '../components/editor/Factions';
 import WorkInfoManager from '../components/editor/WorkInfoManager';
 import ThemeSelector from '../components/ThemeSelector';
 import ChapterEditorToolbar from '../components/editor/ChapterEditorToolbar';
-import { useWorkInfoCache } from '../hooks/useWorkInfoCache';
 import { useChapterAutoSave } from '../hooks/useChapterAutoSave';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { worksApi, type Work } from '../utils/worksApi';
@@ -123,14 +122,6 @@ export default function NovelEditorPage(){
   // 卷和章节数据 - 从API获取
   const [volumes, setVolumes] = useState<Array<{ id: string; title: string; chapters: Array<{ id: string; volumeId: string; title: string; chapter_number?: number; characters?: string[]; locations?: string[]; outline?: string; detailOutline?: string }> }>>([]);
 
-  // 角色和地点数据 - 从WorkInfoManager的缓存中获取
-  const {
-    availableCharacters,
-    hasCharacterModule,
-    availableLocations,
-    hasLocationModule,
-  } = useWorkInfoCache(workId);
-  
   // 自动保存定时器
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentChapterIdRef = useRef<number | null>(null);
@@ -972,14 +963,26 @@ export default function NovelEditorPage(){
 
   // 加载章节内容（使用本地缓存和 ShareDB）
   useEffect(() => {
-    if (!selectedChapter || !editor) return;
+    if (!selectedChapter || !editor) {
+      // 关键修复：清除活动文档 ID
+      syncManager.setActiveDocumentId(null);
+      return;
+    }
 
     const chapterId = parseInt(selectedChapter);
     if (isNaN(chapterId)) {
       // 如果是草稿或其他非数字ID，不加载
+      // 关键修复：清除活动文档 ID
+      syncManager.setActiveDocumentId(null);
       editor.commands.setContent('<p></p>');
       currentChapterIdRef.current = null;
       return;
+    }
+
+    // 关键修复：设置活动文档 ID，防止后台同步其他未打开的章节
+    if (workId) {
+      const documentId = `work_${workId}_chapter_${chapterId}`;
+      syncManager.setActiveDocumentId(documentId);
     }
     
     // 关键修复：确保编辑器已经创建完成（不是被销毁的状态）
@@ -1029,6 +1032,10 @@ export default function NovelEditorPage(){
       lastSetContentRef,
       stopSync,
     });
+
+    return () => {
+      syncManager.setActiveDocumentId(null);
+    };
   }, [selectedChapter, editor, editorKey, workId]); // 关键修复：移除 chaptersData 和 allChapters 依赖，使用 ref 避免无限循环
 
   // 手动保存函数（用于主动保存当前章节内容）
@@ -2271,7 +2278,7 @@ export default function NovelEditorPage(){
           {activeNav === 'tags' && <TagsManager />}
           {activeNav === 'outline' && <ChapterOutline />}
           {activeNav === 'map' && <MapView />}
-          {activeNav === 'characters' && <Characters availableCharacters={availableCharacters} />}
+          {activeNav === 'characters' && <Characters availableCharacters={[]} />}
           {activeNav === 'factions' && <Factions />}
           {activeNav === 'settings' && (
             <div className="placeholder-content">
@@ -2482,8 +2489,8 @@ export default function NovelEditorPage(){
         volumeId={currentVolumeId}
         volumeTitle={currentVolumeTitle}
         initialData={currentChapterData}
-        availableCharacters={hasCharacterModule ? availableCharacters : []}
-        availableLocations={hasLocationModule ? availableLocations : []}
+        availableCharacters={[]}
+        availableLocations={[]}
         availableVolumes={volumes.map(vol => ({ id: vol.id, title: vol.title }))}
         onClose={() => setIsChapterModalOpen(false)}
         onSave={handleSaveChapter}

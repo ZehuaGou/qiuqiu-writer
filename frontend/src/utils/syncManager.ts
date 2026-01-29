@@ -39,11 +39,21 @@ class SyncManager {
   private lastSyncTime: number | null = null;
   private error: string | null = null;
   private options: Required<SyncOptions>;
+  // 当前打开的文档 ID
+  private activeDocumentId: string | null = null;
 
   constructor(options: SyncOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.setupNetworkListeners();
     this.startSyncTimer();
+  }
+
+  /**
+   * 设置当前打开的文档 ID
+   */
+  setActiveDocumentId(id: string | null): void {
+    this.activeDocumentId = id;
+    // console.log('📝 [syncManager] 设置当前活动文档:', id);
   }
 
   /**
@@ -127,14 +137,17 @@ class SyncManager {
       
       const cached = await localCacheManager.get<ShareDBDocument>(documentId);
       if (!cached) {
+        // 如果缓存不存在，也标记为已同步以避免重复尝试
+        localCacheManager.markAsSynced(documentId);
         return;
       }
 
       // 根据文档类型选择同步方式
       await this.syncChapterDocument(documentId, cached);
       
-
-      localCacheManager.markAsSynced(documentId);
+      // 注意：syncChapterDocument 内部可能会调用 markAsSynced
+      // 但为了保险起见，这里也可以调用，markAsSynced 是幂等的
+      // localCacheManager.markAsSynced(documentId);
     } catch (error) {
       console.error(`同步文档 ${documentId} 失败:`, error);
       throw error;
@@ -257,6 +270,15 @@ class SyncManager {
     const content = cached.data?.content || cached.content;
     const contentStr = typeof content === 'string' ? content : '';
 
+    // 关键修复：未打开章节不要同步
+    if (this.activeDocumentId && documentId !== this.activeDocumentId) {
+      console.log('ℹ️ [syncManager] 跳过未打开章节的同步:', documentId, '当前活动文档:', this.activeDocumentId);
+      // 关键修复：对于未打开的章节，暂时不移除 pending 状态，等待下次检查
+      // 这样当用户打开该章节时，可以继续同步
+      // 但为了避免无限循环日志，我们可以不在这里输出日志，或者降低日志频率
+      return;
+    }
+
     // 关键修复：检查内容是否为空，如果为空则跳过同步
     if (!contentStr || contentStr.trim() === '' || contentStr.trim() === '<p></p>') {
       console.warn('⚠️ [syncManager] 章节内容为空，跳过同步:', {
@@ -272,6 +294,9 @@ class SyncManager {
     // 使用新的同步方法（借鉴 nexcode_web 的实现）
     // 这会自动处理版本控制和冲突解决
     await documentCache.syncDocumentState(documentId, contentStr);
+    
+    // 同步成功后，标记为已同步
+    localCacheManager.markAsSynced(documentId);
   }
 
 

@@ -156,7 +156,7 @@ class ChaptersApiClient extends BaseApiClient {
         await localCacheManager.set(cacheKey, {
           ...response,
           cached_at: new Date().toISOString(),
-        }, 1);
+        }, 1, { synced: true });
         console.log('✅ [ChaptersApi] 已缓存章节列表:', cacheKey);
         
         // 同时缓存每个章节的详情（用于快速访问）
@@ -165,7 +165,7 @@ class ChaptersApiClient extends BaseApiClient {
           await localCacheManager.set(chapterCacheKey, {
             ...chapter,
             cached_at: new Date().toISOString(),
-          }, 1);
+          }, 1, { synced: true });
         }
         console.log(`✅ [ChaptersApi] 已缓存 ${response.chapters.length} 个章节详情`);
       } catch (error) {
@@ -240,7 +240,7 @@ class ChaptersApiClient extends BaseApiClient {
         await localCacheManager.set(key, {
           ...response,
           cached_at: new Date().toISOString(),
-        }, 1);
+        }, 1, { synced: true });
         console.log('✅ [ChaptersApi] 已缓存章节详情:', key);
       } catch (error) {
         console.warn('⚠️ [ChaptersApi] 缓存章节详情失败:', error);
