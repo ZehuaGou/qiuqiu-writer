@@ -1,15 +1,14 @@
-import { ArrowLeft, Cloud, Coins, Info, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Cloud, Info, MoreVertical } from 'lucide-react';
 import { useState } from 'react';
 import './TopBar.css';
 
 interface TopBarProps {
   workTitle: string;
-  workType: string;
   perspective: string;
   frequency: string;
 }
 
-export default function TopBar({ workTitle, workType, perspective, frequency }: TopBarProps) {
+export default function TopBar({ workTitle, perspective, frequency }: TopBarProps) {
   const [showMenu, setShowMenu] = useState(false);
 
   return (

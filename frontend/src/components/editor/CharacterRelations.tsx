@@ -901,8 +901,6 @@ function CharacterRelations({ data, onChange }: CharacterRelationsProps) {
       {/* 编辑关系弹窗 */}
       {editingRelation && (() => {
         const relation = relations.find((r) => r.id === editingRelation);
-        const fromChar = characters.find((c) => c.id === editForm.relationFrom || relation?.from);
-        const toChar = characters.find((c) => c.id === editForm.relationTo || relation?.to);
         return relation ? (
           <div className="edit-modal-overlay" onClick={() => { setEditingRelation(null); setEditForm({}); }}>
             <div className="edit-modal" onClick={(e) => e.stopPropagation()}>

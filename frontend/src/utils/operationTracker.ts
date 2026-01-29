@@ -23,7 +23,6 @@ export interface OperationBatch {
 
 class OperationTracker {
   private operations: TextOperation[] = [];
-  private lastContent: string = '';
   private baseVersion: number = 0;
   private documentId: string = '';
   private isTracking: boolean = false;
@@ -33,7 +32,6 @@ class OperationTracker {
    */
   startTracking(documentId: string, initialContent: string, baseVersion: number = 0): void {
     this.documentId = documentId;
-    this.lastContent = initialContent;
     this.baseVersion = baseVersion;
     this.operations = [];
     this.isTracking = true;

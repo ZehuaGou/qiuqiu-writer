@@ -8,15 +8,11 @@ import './NovelEditor.css';
 interface NovelEditorProps {
   smartCompletion?: boolean;
   onSmartCompletionChange?: (value: boolean) => void;
-  font?: string;
-  onFontChange?: (value: string) => void;
 }
 
 export default function NovelEditor({
   smartCompletion = false,
   onSmartCompletionChange,
-  font = '默认',
-  onFontChange,
 }: NovelEditorProps) {
   const editor = useEditor({
     extensions: [

@@ -45,10 +45,10 @@ interface SideNavProps {
   workType?: 'long' | 'short' | 'script' | 'video';  // 作品类型：长篇支持分卷，短篇不分卷
 }
 
-// 导出 Chapter 和 Volume 类型供外部使用
-export type { Chapter, Volume };
+// 导出 Chapter, Volume, SideNavProps 类型供外部使用
+export type { Chapter, Volume, SideNavProps };
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onChapterDelete, volumes: externalVolumes, onVolumesChange, workType = 'long' }: SideNavProps) {
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onChapterDelete, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
   

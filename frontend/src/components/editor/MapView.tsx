@@ -116,7 +116,7 @@ export default function MapView() {
           x: x,
           y: y,
           size: [100, 100] as [number, number],
-          component: (data: any) => <LocationNode data={data} />,
+          component: (data: LocationNodeData) => <LocationNode data={data} />,
         },
       };
     });
@@ -190,8 +190,9 @@ export default function MapView() {
           type: 'react',
           style: {
             size: [100, 100] as [number, number],
-            component: (data: any) => <LocationNode data={data} />,
+            component: (data: { data: LocationNodeData }) => <LocationNode data={data} />,
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
         edge: {
           style: {
@@ -203,6 +204,7 @@ export default function MapView() {
               fill: '#10b981',
             },
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           labelText: (d: any) => d.data?.label || '',
           labelFill: '#10b981',
           labelFontSize: 11,
@@ -211,6 +213,7 @@ export default function MapView() {
           labelBackgroundFill: 'white',
           labelBackgroundOpacity: 0.8,
           labelPlacement: 'center',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
         behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
       });
@@ -219,6 +222,7 @@ export default function MapView() {
       graphRef.current = graph;
 
       // 节点点击事件
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       graph.on('node:click', (e: any) => {
         const nodeId = e.item?.getID?.() || e.target?.id || e.item?.id;
         if (nodeId) {
@@ -235,6 +239,7 @@ export default function MapView() {
 
       // 边点击事件
       graph.on('edge:click', (e: unknown) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const event = e as any;
         const edgeId = event.item?.getID?.() || event.target?.id || event.item?.id;
         if (edgeId) {

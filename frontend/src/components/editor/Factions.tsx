@@ -125,6 +125,7 @@ export default function Factions() {
     if (!factionForm.name.trim()) return;
 
     const newFaction: Faction = {
+      // eslint-disable-next-line react-hooks/purity
       id: String(Date.now()),
       name: factionForm.name,
       summary: factionForm.summary,

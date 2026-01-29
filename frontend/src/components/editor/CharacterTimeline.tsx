@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Edit2, Trash2, User, MapPin, Calendar, FileText } from 'lucide-react';
 import './CharacterTimeline.css';
 
@@ -84,13 +84,15 @@ interface CharacterTimelineProps {
 export default function CharacterTimeline({ filterCharacterId, characterName, onBack }: CharacterTimelineProps) {
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [filterCharacter, setFilterCharacter] = useState<string | null>(filterCharacterId || null);
+  const [prevFilterId, setPrevFilterId] = useState(filterCharacterId);
 
   // 当 filterCharacterId 改变时更新筛选
-  useEffect(() => {
+  if (filterCharacterId !== prevFilterId) {
+    setPrevFilterId(filterCharacterId);
     if (filterCharacterId) {
       setFilterCharacter(filterCharacterId);
     }
-  }, [filterCharacterId]);
+  }
 
   const filteredEvents = filterCharacter
     ? mockEvents.filter(event => event.characterId === filterCharacter)

@@ -1590,7 +1590,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
     };
 
     loadTemplate();
-  }, [workId, workData, extractComponentDataFromTemplate, userTemplates, writeComponentDataToTemplate]);
+  }, [workId, workData, userTemplates]);
 
 
 
@@ -1739,7 +1739,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       console.error('❌ 保存作品信息到 metadata 失败:', error);
       throw error; // 重新抛出错误，让调用者处理
     }
-  }, [workId, extractComponentDataFromTemplate, writeComponentDataToTemplate, cleanTemplateStructure]);
+  }, [workId]);
 
   // 递归保存组件 prompt 到 prompt_templates 表，并返回更新后的组件配置（只包含 prompt id）
   const saveComponentPrompts = useCallback(async (
@@ -1892,7 +1892,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       console.error('❌ 保存模板结构失败:', error);
       throw error;
     }
-  }, [template, cleanTemplateStructure, saveComponentPrompts]);
+  }, [template, saveComponentPrompts]);
 
   // 不再自动保存，改为手动保存
   // 当模板变化时，只标记为未保存状态
