@@ -37,6 +37,7 @@ export interface UserInfo {
   status: string;
   created_at?: string;
   updated_at?: string;
+  is_superuser?: boolean;
 }
 
 export interface AuthError {

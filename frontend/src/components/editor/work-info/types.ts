@@ -62,6 +62,8 @@ export interface TemplateConfig {
   modules: ModuleConfig[];
   lastModified?: number;
   templateId?: string; // 用于 metadata 存储
+  is_public?: boolean;
+  creator_id?: number;
   [key: string]: unknown;
 }
 

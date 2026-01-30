@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, LayoutTemplate, Save, Download, Globe, User } from 'lucide-react';
+import { X, Search, LayoutTemplate, Save, Download, Globe, User, Edit2 } from 'lucide-react';
 import { templatesApi } from '../../../utils/templatesApi';
 import type { WorkTemplate, TemplateConfig } from '../../../utils/templatesApi';
+import { authApi } from '../../../utils/authApi';
+import type { UserInfo } from '../../../utils/authApi';
 
 interface TemplateMarketModalProps {
   isOpen: boolean;
@@ -26,6 +28,19 @@ export default function TemplateMarketModal({
     description: '',
     is_public: false
   });
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        const info = await authApi.getUserInfo();
+        setUserInfo(info);
+      } catch (error) {
+        console.error('Failed to load user info:', error);
+      }
+    };
+    loadUserInfo();
+  }, []);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -41,11 +56,14 @@ export default function TemplateMarketModal({
         // 实际上 listTemplates 可能返回所有我有权限看到的，我们需要在前端或后端过滤
       });
       
-      // 简单的前端过滤（如果 API 不支持完全过滤）
-      // 假设 market 显示所有公开的，mine 显示当前用户的（这里暂时无法区分当前用户 ID，假设 API 返回的就是合适的列表）
-      // 如果 activeTab 是 'mine'，我们可能需要后端支持 filter by creator
+      // 简单的前端过滤
+      let filteredData = data;
+      if (activeTab === 'mine' && userInfo) {
+        // 在“我的模板”中，只显示我自己创建的
+        filteredData = data.filter(t => t.creator_id === userInfo.id);
+      }
       
-      setTemplates(data);
+      setTemplates(filteredData);
     } catch (error) {
       console.error('Failed to fetch templates:', error);
     } finally {
@@ -57,11 +75,33 @@ export default function TemplateMarketModal({
     if (isOpen) {
       fetchTemplates();
     }
-  }, [isOpen, activeTab, searchQuery]);
+  }, [isOpen, activeTab, searchQuery, userInfo]);
 
   const [targetTemplateConfig, setTargetTemplateConfig] = useState<TemplateConfig | undefined>(undefined);
+  const [editingTemplate, setEditingTemplate] = useState<WorkTemplate | null>(null);
 
   const handleSaveTemplate = async () => {
+    // If editing an existing template (metadata update)
+    if (editingTemplate) {
+      if (!saveForm.name) return;
+      try {
+        await templatesApi.updateTemplate(editingTemplate.id, {
+          name: saveForm.name,
+          description: saveForm.description,
+          is_public: saveForm.is_public
+        });
+        alert('模板更新成功！');
+        setShowSaveForm(false);
+        setEditingTemplate(null);
+        setSaveForm({ name: '', description: '', is_public: false });
+        fetchTemplates();
+      } catch (error) {
+        console.error('Failed to update template:', error);
+        alert('更新失败，请重试');
+      }
+      return;
+    }
+
     // Use targetTemplateConfig if set (for forking), otherwise use currentTemplateConfig (for saving current work)
     const configToSave = targetTemplateConfig || currentTemplateConfig;
     if (!configToSave || !saveForm.name) return;
@@ -90,8 +130,40 @@ export default function TemplateMarketModal({
 
   const openSaveForm = (config?: TemplateConfig) => {
     setTargetTemplateConfig(config);
+    setEditingTemplate(null);
+    setSaveForm({ name: '', description: '', is_public: false });
     setShowSaveForm(true);
   };
+
+  const openEditForm = (template: WorkTemplate) => {
+    setEditingTemplate(template);
+    setTargetTemplateConfig(undefined);
+    setSaveForm({
+      name: template.name,
+      description: template.description || '',
+      is_public: template.is_public || false
+    });
+    setShowSaveForm(true);
+  };
+
+  const handleDeleteTemplate = async (templateId: number) => {
+    if (!confirm('确定要删除这个模板吗？')) return;
+    try {
+      // Assuming there's a delete method, but I need to check templatesApi or use a generic request
+      // templatesApi.ts doesn't show deleteTemplate, let's check baseApiClient or just assume I might need to add it.
+      // Wait, I didn't see deleteTemplate in templatesApi.ts. I should check or add it.
+      // For now, I will skip delete or try to add it.
+      // Actually, user didn't explicitly ask for delete, but "edit" usually implies management.
+      // User said "Public templates cannot be edited...".
+      // I'll stick to Edit for now to be safe, or add delete if easy.
+      // I'll assume delete is not strictly requested yet, but I'll add the button if I can.
+      // Let's check templatesApi again. It does NOT have deleteTemplate.
+      // I will skip delete implementation for now to avoid errors, or I can add it to api.
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+    }
+  };
+
 
   if (!isOpen) return null;
 
@@ -216,6 +288,27 @@ export default function TemplateMarketModal({
                     {tpl.description || '暂无描述'}
                   </p>
                   <div className="card-footer" style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    {((userInfo?.is_superuser) || (!tpl.is_public && (activeTab === 'mine' || tpl.creator_id === userInfo?.id))) && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditForm(tpl);
+                        }}
+                        style={{ 
+                          padding: '6px 12px', 
+                          borderRadius: '4px', 
+                          background: 'white', 
+                          color: '#64748b', 
+                          border: '1px solid #e2e8f0', 
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '4px'
+                        }}
+                        title="编辑模板信息"
+                      >
+                        <Edit2 size={14} /> 编辑
+                      </button>
+                    )}
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -237,9 +330,9 @@ export default function TemplateMarketModal({
                       style={{ 
                         padding: '6px 12px', 
                         borderRadius: '4px', 
-                        background: 'white', 
-                        color: '#64748b', 
-                        border: '1px solid #e2e8f0', 
+                        background: tpl.is_public ? '#3b82f6' : 'white', 
+                        color: tpl.is_public ? 'white' : '#64748b', 
+                        border: tpl.is_public ? 'none' : '1px solid #e2e8f0', 
                         fontSize: '13px',
                         cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: '4px'
@@ -248,6 +341,7 @@ export default function TemplateMarketModal({
                     >
                       <Save size={14} /> 另存为
                     </button>
+                    {!tpl.is_public && (
                     <button 
                       onClick={() => onSelectTemplate(tpl)}
                       style={{ 
@@ -263,6 +357,7 @@ export default function TemplateMarketModal({
                     >
                       <Download size={14} /> 使用
                     </button>
+                    )}
                   </div>
                 </div>
               );
@@ -279,7 +374,7 @@ export default function TemplateMarketModal({
         {showSaveForm && (
           <div className="modal-overlay" style={{ zIndex: 1001 }}>
             <div className="modal-content" style={{ maxWidth: '500px' }}>
-              <h3>保存为新模板</h3>
+              <h3>{editingTemplate ? '编辑模板' : '保存为新模板'}</h3>
               <div className="form-group">
                 <label>模板名称</label>
                 <input 
@@ -299,17 +394,23 @@ export default function TemplateMarketModal({
                 />
               </div>
               <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-                <input 
-                  type="checkbox" 
-                  id="is_public"
-                  checked={saveForm.is_public}
-                  onChange={e => setSaveForm({...saveForm, is_public: e.target.checked})}
-                />
-                <label htmlFor="is_public" style={{ margin: 0 }}>设为公开模板</label>
+                {userInfo?.is_superuser && (
+                  <>
+                    <input 
+                      type="checkbox" 
+                      id="is_public"
+                      checked={saveForm.is_public}
+                      onChange={e => setSaveForm({...saveForm, is_public: e.target.checked})}
+                    />
+                    <label htmlFor="is_public" style={{ margin: 0 }}>设为公开模板</label>
+                  </>
+                )}
               </div>
               <div className="modal-footer">
                 <button onClick={() => setShowSaveForm(false)}>取消</button>
-                <button className="primary" onClick={handleSaveTemplate}>确认保存</button>
+                <button className="primary" onClick={handleSaveTemplate}>
+                  {editingTemplate ? '确认更新' : '确认保存'}
+                </button>
               </div>
             </div>
           </div>
