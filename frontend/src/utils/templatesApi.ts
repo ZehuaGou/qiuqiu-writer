@@ -84,6 +84,13 @@ class TemplatesApiClient extends BaseApiClient {
   }
 
   /**
+   * 删除模板
+   */
+  async deleteTemplate(templateId: number): Promise<void> {
+    return this.delete<void>(`/api/v1/templates/${templateId}`);
+  }
+
+  /**
    * 获取模板列表
    */
   async listTemplates(params?: {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, LayoutTemplate, Save, Download, Globe, User, Edit2 } from 'lucide-react';
+import { X, Search, LayoutTemplate, Save, Download, Globe, User, Edit2, Trash2 } from 'lucide-react';
 import { templatesApi } from '../../../utils/templatesApi';
 import type { WorkTemplate, TemplateConfig } from '../../../utils/templatesApi';
 import { authApi } from '../../../utils/authApi';
@@ -147,20 +147,14 @@ export default function TemplateMarketModal({
   };
 
   const handleDeleteTemplate = async (templateId: number) => {
-    if (!confirm('确定要删除这个模板吗？')) return;
+    if (!confirm('确定要删除这个模板吗？此操作无法撤销。')) return;
     try {
-      // Assuming there's a delete method, but I need to check templatesApi or use a generic request
-      // templatesApi.ts doesn't show deleteTemplate, let's check baseApiClient or just assume I might need to add it.
-      // Wait, I didn't see deleteTemplate in templatesApi.ts. I should check or add it.
-      // For now, I will skip delete or try to add it.
-      // Actually, user didn't explicitly ask for delete, but "edit" usually implies management.
-      // User said "Public templates cannot be edited...".
-      // I'll stick to Edit for now to be safe, or add delete if easy.
-      // I'll assume delete is not strictly requested yet, but I'll add the button if I can.
-      // Let's check templatesApi again. It does NOT have deleteTemplate.
-      // I will skip delete implementation for now to avoid errors, or I can add it to api.
+      await templatesApi.deleteTemplate(templateId);
+      alert('模板删除成功');
+      fetchTemplates();
     } catch (error) {
       console.error('Failed to delete template:', error);
+      alert('删除失败，请重试');
     }
   };
 
@@ -168,8 +162,29 @@ export default function TemplateMarketModal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '900px', width: '90%', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="modal-overlay" style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000
+    }}>
+      <div className="modal-content" style={{ 
+        maxWidth: '900px', 
+        width: '90%', 
+        height: '80vh', 
+        display: 'flex', 
+        flexDirection: 'column',
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        overflow: 'hidden'
+      }}>
         <div className="modal-header">
           <h3>模板市场</h3>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
@@ -289,6 +304,7 @@ export default function TemplateMarketModal({
                   </p>
                   <div className="card-footer" style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                     {((userInfo?.is_superuser) || (!tpl.is_public && (activeTab === 'mine' || tpl.creator_id === userInfo?.id))) && (
+                      <>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -308,6 +324,26 @@ export default function TemplateMarketModal({
                       >
                         <Edit2 size={14} /> 编辑
                       </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTemplate(tpl.id);
+                        }}
+                        style={{ 
+                          padding: '6px 12px', 
+                          borderRadius: '4px', 
+                          background: 'white', 
+                          color: '#ef4444', 
+                          border: '1px solid #e2e8f0', 
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '4px'
+                        }}
+                        title="删除模板"
+                      >
+                        <Trash2 size={14} /> 删除
+                      </button>
+                      </>
                     )}
                     <button 
                       onClick={(e) => {
@@ -372,8 +408,29 @@ export default function TemplateMarketModal({
         </div>
 
         {showSaveForm && (
-          <div className="modal-overlay" style={{ zIndex: 1001 }}>
-            <div className="modal-content" style={{ maxWidth: '500px' }}>
+          <div className="modal-overlay" style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1001
+          }}>
+            <div className="modal-content" style={{ 
+              maxWidth: '500px',
+              width: '90%',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+            }}>
               <h3>{editingTemplate ? '编辑模板' : '保存为新模板'}</h3>
               <div className="form-group">
                 <label>模板名称</label>
