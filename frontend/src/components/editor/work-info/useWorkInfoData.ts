@@ -62,6 +62,7 @@ export const useWorkInfoData = (
         if (modules.length > 0) {
           return {
             id: `db-${defaultTemplate.id}`,
+            templateId: `db-${defaultTemplate.id}`, // Explicitly set templateId
             name: defaultTemplate.name,
             description: defaultTemplate.description || '',
             modules: modules
@@ -118,6 +119,7 @@ export const useWorkInfoData = (
                 if (dbModules.length > 0) {
                   baseTemplate = {
                     id: `db-${dbTemplate.id}`,
+                    templateId: `db-${dbTemplate.id}`, // Explicitly set templateId
                     name: dbTemplate.name,
                     description: dbTemplate.description || '',
                     modules: await loadPromptsForComponents(dbModules)
@@ -130,6 +132,7 @@ export const useWorkInfoData = (
            if (!baseTemplate && templateConfig.modules && Array.isArray(templateConfig.modules)) {
              baseTemplate = {
                id: templateConfig.templateId || '',
+               templateId: templateConfig.templateId || '', // Explicitly set templateId
                name: '作品模板',
                description: '',
                modules: await loadPromptsForComponents(templateConfig.modules)
@@ -155,6 +158,7 @@ export const useWorkInfoData = (
           if (cached.modules && cached.modules.length > 0) {
             baseTemplate = {
               id: cached.templateId,
+              templateId: cached.templateId, // Explicitly set templateId
               name: '缓存模板',
               description: '',
               modules: cached.modules,

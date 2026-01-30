@@ -607,7 +607,8 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
        if (config.modules) {
           setTemplate({
             ...config,
-            id: tpl.id.toString(), // 确保 ID 存在
+            id: tpl.id.toString(),
+            templateId: tpl.id.toString(), // Ensure templateId is set for identification
             name: tpl.name,
             description: tpl.description || ''
           });

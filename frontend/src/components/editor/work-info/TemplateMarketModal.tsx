@@ -59,21 +59,26 @@ export default function TemplateMarketModal({
     }
   }, [isOpen, activeTab, searchQuery]);
 
+  const [targetTemplateConfig, setTargetTemplateConfig] = useState<TemplateConfig | undefined>(undefined);
+
   const handleSaveTemplate = async () => {
-    if (!currentTemplateConfig || !saveForm.name) return;
+    // Use targetTemplateConfig if set (for forking), otherwise use currentTemplateConfig (for saving current work)
+    const configToSave = targetTemplateConfig || currentTemplateConfig;
+    if (!configToSave || !saveForm.name) return;
     
     try {
       await templatesApi.createTemplate({
         name: saveForm.name,
         description: saveForm.description,
         work_type: 'novel', // 默认类型
-        template_config: currentTemplateConfig,
+        template_config: configToSave,
         is_public: saveForm.is_public
       });
       
       alert('模板保存成功！');
       setShowSaveForm(false);
       setSaveForm({ name: '', description: '', is_public: false });
+      setTargetTemplateConfig(undefined); // Reset
       if (activeTab === 'mine') {
         fetchTemplates();
       }
@@ -81,6 +86,11 @@ export default function TemplateMarketModal({
       console.error('Failed to save template:', error);
       alert('保存失败，请重试');
     }
+  };
+
+  const openSaveForm = (config?: TemplateConfig) => {
+    setTargetTemplateConfig(config);
+    setShowSaveForm(true);
   };
 
   if (!isOpen) return null;
@@ -146,7 +156,7 @@ export default function TemplateMarketModal({
           
           <button 
             className="save-template-btn"
-            onClick={() => setShowSaveForm(true)}
+            onClick={() => openSaveForm(undefined)}
             style={{ 
               padding: '8px 16px', 
               borderRadius: '6px', 
@@ -156,8 +166,9 @@ export default function TemplateMarketModal({
               cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px'
             }}
+            title="创建一个全新的模板（基于当前编辑的内容）"
           >
-            <Save size={16} /> 保存当前为模板
+            <Save size={16} /> 创建新模板
           </button>
         </div>
 
@@ -166,18 +177,37 @@ export default function TemplateMarketModal({
             <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>加载中...</div>
           ) : (
             <div className="templates-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-              {templates.map(tpl => (
+              {templates.map(tpl => {
+                const isCurrent = currentTemplateConfig?.templateId === tpl.id.toString();
+                return (
                 <div key={tpl.id} className="template-card" style={{ 
-                  background: 'white', 
+                  background: isCurrent ? '#f0f9ff' : 'white', 
                   borderRadius: '8px', 
-                  border: '1px solid #e2e8f0', 
+                  border: isCurrent ? '2px solid #3b82f6' : '1px solid #e2e8f0', 
                   padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '12px',
                   transition: 'all 0.2s',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  position: 'relative'
                 }}>
+                  {isCurrent && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-10px',
+                      right: '10px',
+                      background: '#3b82f6',
+                      color: 'white',
+                      fontSize: '12px',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 4px rgba(59,130,246,0.3)'
+                    }}>
+                      当前使用
+                    </div>
+                  )}
                   <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                     <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{tpl.name}</h4>
                     {tpl.is_public && <span style={{ fontSize: '10px', background: '#dbeafe', color: '#2563eb', padding: '2px 6px', borderRadius: '4px' }}>公开</span>}
@@ -185,7 +215,39 @@ export default function TemplateMarketModal({
                   <p style={{ margin: 0, fontSize: '13px', color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
                     {tpl.description || '暂无描述'}
                   </p>
-                  <div className="card-footer" style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end' }}>
+                  <div className="card-footer" style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Extract modules/config from template
+                        let config: TemplateConfig | undefined;
+                        if (tpl.template_config) {
+                          if (Array.isArray(tpl.template_config)) {
+                            config = { modules: tpl.template_config };
+                          } else if (typeof tpl.template_config === 'object') {
+                             config = tpl.template_config as TemplateConfig;
+                          }
+                        }
+                        if (config) {
+                           openSaveForm(config);
+                        } else {
+                           alert('无法读取该模板配置');
+                        }
+                      }}
+                      style={{ 
+                        padding: '6px 12px', 
+                        borderRadius: '4px', 
+                        background: 'white', 
+                        color: '#64748b', 
+                        border: '1px solid #e2e8f0', 
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '4px'
+                      }}
+                      title="基于此模板创建新模板"
+                    >
+                      <Save size={14} /> 另存为
+                    </button>
                     <button 
                       onClick={() => onSelectTemplate(tpl)}
                       style={{ 
@@ -199,11 +261,12 @@ export default function TemplateMarketModal({
                         display: 'flex', alignItems: 'center', gap: '4px'
                       }}
                     >
-                      <Download size={14} /> 使用此模板
+                      <Download size={14} /> 使用
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+              })}
               {templates.length === 0 && (
                 <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
                   未找到相关模板
