@@ -108,23 +108,32 @@ class ShareDBService:
         if not self._initialized:
             await self.initialize()
 
+        logger.info(f"🔍 [ShareDB] 正在获取文档: {document_id}, use_mongodb={self.use_mongodb}")
+
         try:
             if self.use_mongodb and self.mongodb_db is not None:
                 # 从MongoDB获取
                 collection = self.mongodb_db.documents
                 document = await collection.find_one({"id": document_id})
                 if document:
+                    content_len = len(str(document.get("content", "")))
+                    logger.info(f"✅ [ShareDB] MongoDB 命中文档: {document_id}, content_len={content_len}")
                     # 移除MongoDB的_id字段
                     if "_id" in document:
                         del document["_id"]
                     return document
+                else:
+                    logger.warning(f"⚠️ [ShareDB] MongoDB 未找到文档: {document_id}")
             else:
                 # 从Redis获取
                 if not self.redis_client:
                     raise RuntimeError("Redis客户端未初始化，且MongoDB不可用")
                 document_data = await self.redis_client.get(f"doc:{document_id}")
                 if document_data:
+                    logger.info(f"✅ [ShareDB] Redis 命中文档: {document_id}")
                     return json.loads(document_data)
+                else:
+                    logger.warning(f"⚠️ [ShareDB] Redis 未找到文档: {document_id}")
         except Exception as e:
             logger.error(f"获取文档失败 {document_id}: {e}")
 

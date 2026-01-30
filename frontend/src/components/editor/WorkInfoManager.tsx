@@ -9,6 +9,7 @@ import type { SelectOption } from '../CustomSelect';
 import { templatesApi } from '../../utils/templatesApi';
 import type { WorkTemplate } from '../../utils/templatesApi';
 import { generateComponentData } from '../../utils/bookAnalysisApi';
+import { GeneratedDataPreviewModal } from './work-info/GeneratedDataPreviewModal';
 import './WorkInfoManager.css';
 
 // Import refactored modules
@@ -86,6 +87,19 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentImageId, setCurrentImageId] = useState<string | null>(null);
   const [generatingComponents, setGeneratingComponents] = useState<Record<string, boolean>>({});
+
+  // 生成数据预览状态
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    rawData: string;
+    dataKey?: string;
+    target: {
+      componentId: string;
+      moduleId: string;
+      tabsComponentId?: string;
+      tabId?: string;
+    };
+  } | null>(null);
 
   // 处理 activeModuleId prop 变化
   useEffect(() => {
@@ -231,7 +245,17 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
        );
        
        if (result && result.generated_data) {
-           updateComponentValue(comp.id, result.generated_data, moduleId);
+           setPreviewData({
+             rawData: result.generated_data,
+             dataKey: result.data_key,
+             target: {
+               componentId: comp.id,
+               moduleId,
+               tabsComponentId,
+               tabId
+             }
+           });
+           setPreviewModalOpen(true);
        }
     } catch (error) {
       console.error('Generate failed', error);
@@ -239,6 +263,12 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
     } finally {
       setGeneratingComponents(prev => ({ ...prev, [comp.id]: false }));
     }
+  };
+
+  const handlePreviewSave = (data: any) => {
+    if (!previewData) return;
+    const { target } = previewData;
+    updateComponentValue(target.componentId, data, target.moduleId);
   };
 
   // 这里需要保留 renderComponent 函数，因为它包含很多 UI 逻辑
@@ -808,6 +838,14 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
         onClose={() => setShowTemplateMarket(false)}
         onSelectTemplate={handleSelectTemplate}
         currentTemplateConfig={template}
+      />
+
+      <GeneratedDataPreviewModal
+        isOpen={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        onSave={handlePreviewSave}
+        rawData={previewData?.rawData || ''}
+        dataKey={previewData?.dataKey}
       />
     </div>
   );

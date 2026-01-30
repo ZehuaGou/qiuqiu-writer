@@ -8,7 +8,7 @@ import { documentCache } from './documentCache';
 import { localCacheManager } from './localCacheManager';
 import { countCharacters } from './textUtils';
 import type { ShareDBDocument, ChapterFullData } from '../types/document';
-import type { Chapter } from './chaptersApi';
+import { chaptersApi, type Chapter } from './chaptersApi';
 
 interface CustomWindow extends Window {
   __chapterSaveTimeout?: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
@@ -409,12 +409,60 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
       // 避免频繁请求，优先使用已缓存的数据
       if (!hasOutlineInCache || !hasDetailOutlineInCache) {
         // 关键优化：不再自动从服务器获取，避免不必要的请求
-      // 如果用户需要最新的大纲/细纲，可以通过手动刷新或编辑章节设置来获取
-      console.log('ℹ️ [loadChapterContent] 缓存中没有大纲/细纲，跳过自动获取（本地优先策略）');
+        // 如果用户需要最新的大纲/细纲，可以通过手动刷新或编辑章节设置来获取
+        console.log('ℹ️ [loadChapterContent] 缓存中没有大纲/细纲，跳过自动获取（本地优先策略）');
+      }
 
-      // 关键优化：本地优先策略 - 只有当缓存中完全没有大纲和细纲时，才从服务器获取
-      // 目前已禁用自动从服务器获取，若需要可手动刷新
-      // (Original server fetch logic removed/skipped here)
+      // 3. 如果缓存中没有内容，尝试从后端 API 获取
+      if (content === null || (typeof content === 'string' && content.trim() === '')) {
+        console.log('🔍 [loadChapterContent] 缓存中无内容，尝试从后端 API 获取:', {
+          chapterId,
+          timestamp: new Date().toISOString(),
+        });
+
+        try {
+          // 调用后端接口获取章节文档内容（直接从 ShareDB/MongoDB 获取）
+          // 使用专门的文档接口 /document，而不是通用的章节详情接口
+          const docResponse = await chaptersApi.getChapterDocument(chapterId);
+          
+          if (docResponse && typeof docResponse.content === 'string') {
+            content = docResponse.content;
+            console.log('✅ [loadChapterContent] 从后端文档接口获取内容成功:', {
+              chapterId,
+              contentLength: content.length,
+              documentExists: docResponse.document_exists
+            });
+
+            // 更新本地缓存，以便下次直接从缓存加载
+            const documentId = `work_${workId}_chapter_${chapterId}`;
+            const newDoc: ShareDBDocument = {
+              document_id: documentId,
+              content: content,
+              version: 1,
+              metadata: {
+                work_id: Number(workId),
+                chapter_id: chapterId,
+                chapter_number: docResponse.chapter_info.chapter_number,
+                title: docResponse.chapter_info.title,
+                outline: JSON.stringify(docResponse.chapter_info.outline || {}),
+                detailed_outline: JSON.stringify(docResponse.chapter_info.detailed_outline || {}),
+                updated_at: new Date().toISOString(),
+              },
+            };
+            
+            // 异步更新缓存
+            localCacheManager.set(documentId, newDoc, 1).catch(err => {
+              console.warn('⚠️ [loadChapterContent] 更新缓存失败:', err);
+            });
+          } else {
+            console.warn('⚠️ [loadChapterContent] 后端文档接口返回的内容为空:', {
+              chapterId,
+              hasContent: !!docResponse?.content,
+            });
+          }
+        } catch (apiErr) {
+          console.error('❌ [loadChapterContent] 从后端文档接口获取内容失败:', apiErr);
+        }
       }
       
       // 关键修复：在设置编辑器前，添加调试日志

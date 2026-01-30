@@ -72,6 +72,7 @@ class ChapterResponse(BaseModel):
     word_count: int
     created_at: str
     updated_at: str
+    content: Optional[str] = None
 
 class ChapterListResponse(BaseModel):
     chapters: List[ChapterResponse]
@@ -309,12 +310,30 @@ async def get_chapter(
     try:
         document_id_new = f"work_{chapter.work_id}_chapter_{chapter_id}"
         document_id_old = f"chapter_{chapter_id}"
+        
+        logger.info(f"🔍 [GetChapter] 正在尝试从ShareDB获取内容: new_id={document_id_new}, old_id={document_id_old}")
+        
         document = await sharedb_service.get_document(document_id_new)
-        if not document:
-            document = await sharedb_service.get_document(document_id_old)
         if document:
-            chapter.content = document.get("content", chapter.content)
+            logger.info(f"✅ [GetChapter] 命中新格式文档: {document_id_new}")
+        
+        if not document:
+            logger.info(f"⚠️ [GetChapter] 新格式文档未找到，尝试旧格式: {document_id_old}")
+            document = await sharedb_service.get_document(document_id_old)
+            if document:
+                logger.info(f"✅ [GetChapter] 命中旧格式文档: {document_id_old}")
+        
+        if document:
+            content = document.get("content", "")
+            logger.info(f"📄 [GetChapter] ShareDB返回内容长度: {len(str(content))}")
+            chapter.content = content
+        else:
+            # Chapter模型本身没有content字段，所以这里不能访问chapter.content
+            logger.warning(f"❌ [GetChapter] ShareDB中未找到任何文档，且SQL数据库不存储内容")
+            chapter.content = ""
+            
     except Exception as e:
+        logger.error(f"❌ [GetChapter] ShareDB获取失败: {e}")
         # 如果ShareDB获取失败，使用数据库中的内容
         pass
 
@@ -682,15 +701,9 @@ async def get_chapter_document(
     # 获取ShareDB文档
     # 优先使用新格式 work_{work_id}_chapter_{chapter_id}，兼容旧格式 chapter_{chapter_id}
     document_id_new = f"work_{chapter.work_id}_chapter_{chapter_id}"
-    document_id_old = f"chapter_{chapter_id}"
     
     document = await sharedb_service.get_document(document_id_new)
-    if not document:
-        # 尝试旧格式（向后兼容）
-        document = await sharedb_service.get_document(document_id_old)
-        if document:
-            logger.info(f"使用旧格式文档ID: {document_id_old}")
-    
+
     # 关键修复：只返回文档的 content 字段，而不是整个 document 对象
     # 这样前端就不会显示 JSON 信息，只显示内容
     import json

@@ -71,12 +71,19 @@ export interface ChapterVersion {
 
 export interface ChapterDocumentResponse {
   document_id: string;
-  content: unknown;
+  content: string;
   chapter_info: Chapter;
-  document_exists?: boolean;
+  document_exists: boolean;
 }
 
 class ChaptersApiClient extends BaseApiClient {
+
+  /**
+   * 获取章节文档内容（直接从 ShareDB/MongoDB 获取）
+   */
+  async getChapterDocument(chapterId: number): Promise<ChapterDocumentResponse> {
+    return this.get<ChapterDocumentResponse>(`/api/v1/chapters/${chapterId}/document`);
+  }
 
   /**
    * 创建章节
@@ -294,12 +301,6 @@ class ChaptersApiClient extends BaseApiClient {
     );
   }
 
-  /**
-   * 获取章节ShareDB文档内容
-   */
-  async getChapterDocument(chapterId: number): Promise<ChapterDocumentResponse> {
-    return this.get(`/api/v1/chapters/${chapterId}/document`);
-  }
 }
 
 export const chaptersApi = new ChaptersApiClient();
