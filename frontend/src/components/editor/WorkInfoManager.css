@@ -7,22 +7,30 @@
 }
 
 .work-info-sidebar {
-  width: 240px;
+  width: 56px;
   background: var(--bg-primary);
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 12px 6px;
   gap: 8px;
   overflow-y: auto;
+  overflow-x: hidden;
   flex-shrink: 0;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+.work-info-sidebar:hover {
+  width: 240px;
+  padding: 12px;
 }
 
 .module-btn {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 12px;
   background: transparent;
   
   /* Border styles to utilize inline border-color as a left strip indicator */
@@ -38,6 +46,25 @@
   transition: all 0.2s ease;
   text-align: left;
   margin-bottom: 4px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.work-info-sidebar:hover .module-btn {
+  justify-content: flex-start;
+  padding: 12px 16px;
+}
+
+.module-btn span {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.work-info-sidebar:hover .module-btn span {
+  display: inline;
+  opacity: 1;
+  transition-delay: 0.1s;
 }
 
 .module-btn:hover {
