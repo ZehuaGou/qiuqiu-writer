@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Loader2, Maximize2 } from 'lucide-react';
 import type { ComponentType, ComponentConfig, TemplateConfig } from './types';
 import { DataDependenciesSelector } from './DataDependenciesSelector';
+import { promptTemplateApi } from '../../../utils/promptTemplateApi';
 
 interface ComponentEditorModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export default function ComponentEditorModal({
   isEditing = false
 }: ComponentEditorModalProps) {
   const [step, setStep] = useState<'type' | 'config'>('type');
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [expandedPromptField, setExpandedPromptField] = useState<'generatePrompt' | 'validatePrompt' | 'analysisPrompt' | null>(null);
   const [formData, setFormData] = useState<{
     type: ComponentType;
     label: string;
@@ -62,6 +65,33 @@ export default function ComponentEditorModal({
           dataKey: initialData.dataKey || '',
           dataDependencies: initialData.dataDependencies || []
         });
+
+        // Load prompts from API if editing
+        if (initialData.id) {
+          const loadPrompts = async () => {
+            setLoadingPrompts(true);
+            try {
+              const templateId = template.id;
+              const prompts = await promptTemplateApi.getComponentPrompts(initialData.id, templateId);
+              
+              const gen = prompts.find(p => p.prompt_category === 'generate');
+              const val = prompts.find(p => p.prompt_category === 'validate');
+              const ana = prompts.find(p => p.prompt_category === 'analysis');
+              
+              setFormData(prev => ({
+                ...prev,
+                generatePrompt: gen?.prompt_content || prev.generatePrompt,
+                validatePrompt: val?.prompt_content || prev.validatePrompt,
+                analysisPrompt: ana?.prompt_content || prev.analysisPrompt
+              }));
+            } catch (e) {
+              console.error("Failed to load prompts", e);
+            } finally {
+              setLoadingPrompts(false);
+            }
+          };
+          loadPrompts();
+        }
       } else {
         setStep('type');
         setFormData({
@@ -82,7 +112,7 @@ export default function ComponentEditorModal({
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Construct the final component config
     const finalConfig: any = { ...formData.config };
     
@@ -96,6 +126,33 @@ export default function ComponentEditorModal({
     
     if (formData.type === 'character-card' || formData.type === 'faction') {
       finalConfig.cardFields = formData.cardFields;
+    }
+
+    // Save prompts to API if editing existing component
+    if (isEditing && initialData?.id) {
+      try {
+        const templateId = template.id;
+        
+        const promises = [];
+        if (formData.generatePrompt) {
+          promises.push(promptTemplateApi.upsertComponentPrompt(
+            initialData.id, formData.type, 'generate', formData.generatePrompt, templateId, formData.dataKey
+          ));
+        }
+        if (formData.validatePrompt) {
+          promises.push(promptTemplateApi.upsertComponentPrompt(
+            initialData.id, formData.type, 'validate', formData.validatePrompt, templateId, formData.dataKey
+          ));
+        }
+        if (formData.analysisPrompt) {
+          promises.push(promptTemplateApi.upsertComponentPrompt(
+            initialData.id, formData.type, 'analysis', formData.analysisPrompt, templateId, formData.dataKey
+          ));
+        }
+        await Promise.all(promises);
+      } catch (e) {
+        console.error("Failed to save prompts to API", e);
+      }
     }
 
     onSave({
@@ -150,6 +207,9 @@ export default function ComponentEditorModal({
             </div>
           ) : (
             <div className="component-config-form">
+              {/* ... existing config form fields ... */}
+              {/* This is a placeholder for where the config fields start */}
+              
               <div className="form-group">
                 <label>组件名称</label>
                 <input
@@ -170,7 +230,9 @@ export default function ComponentEditorModal({
                 />
                 <small>其他组件可以通过此 Key 引用该组件的数据</small>
               </div>
-
+              
+              {/* ... rest of the form ... */}
+              
               {(formData.type === 'select' || formData.type === 'multiselect') && (
                 <div className="form-group">
                   <label>选项配置 (每行一个)</label>
@@ -217,38 +279,76 @@ export default function ComponentEditorModal({
               )}
 
               <div className="form-divider" style={{ margin: '20px 0', borderTop: '1px solid #e2e8f0' }}></div>
-              <h4>AI 配置</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <h4 style={{ margin: 0 }}>AI 配置</h4>
+                {loadingPrompts && (
+                  <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: '#666' }}>
+                    <Loader2 size={14} className="animate-spin" style={{ marginRight: '4px' }} />
+                    正在加载...
+                  </div>
+                )}
+              </div>
               
               <div className="form-group">
-                <label>生成 Prompt (用于生成数据)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label>生成 Prompt (用于生成数据)</label>
+                  <button 
+                    className="icon-btn" 
+                    onClick={() => setExpandedPromptField('generatePrompt')}
+                    title="放大编辑"
+                    style={{ padding: '2px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                </div>
                 <textarea
                   value={formData.generatePrompt}
                   onChange={e => setFormData({ ...formData, generatePrompt: e.target.value })}
                   placeholder="输入用于生成该组件数据的 Prompt 模板..."
                   rows={4}
-                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                  style={{ fontFamily: 'monospace', fontSize: '13px', width: '100%' }}
                 />
               </div>
 
               <div className="form-group">
-                <label>校验 Prompt (用于校验数据)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label>校验 Prompt (用于校验数据)</label>
+                  <button 
+                    className="icon-btn" 
+                    onClick={() => setExpandedPromptField('validatePrompt')}
+                    title="放大编辑"
+                    style={{ padding: '2px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                </div>
                 <textarea
                   value={formData.validatePrompt}
                   onChange={e => setFormData({ ...formData, validatePrompt: e.target.value })}
                   placeholder="输入用于校验该组件数据的 Prompt 模板..."
                   rows={4}
-                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                  style={{ fontFamily: 'monospace', fontSize: '13px', width: '100%' }}
                 />
               </div>
 
               <div className="form-group">
-                <label>分析 Prompt (用于分析现有内容)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label>分析 Prompt (用于分析现有内容)</label>
+                  <button 
+                    className="icon-btn" 
+                    onClick={() => setExpandedPromptField('analysisPrompt')}
+                    title="放大编辑"
+                    style={{ padding: '2px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                </div>
                 <textarea
                   value={formData.analysisPrompt}
                   onChange={e => setFormData({ ...formData, analysisPrompt: e.target.value })}
                   placeholder="输入用于从文本分析提取数据的 Prompt 模板..."
                   rows={4}
-                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                  style={{ fontFamily: 'monospace', fontSize: '13px', width: '100%' }}
                 />
               </div>
               
@@ -264,6 +364,44 @@ export default function ComponentEditorModal({
           )}
         </div>
       </div>
+
+      {/* Expanded Prompt Editor Modal */}
+      {expandedPromptField && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '90vw', width: '800px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3>
+                编辑
+                {expandedPromptField === 'generatePrompt' ? '生成 Prompt' :
+                 expandedPromptField === 'validatePrompt' ? '校验 Prompt' :
+                 '分析 Prompt'}
+              </h3>
+              <button className="close-btn" onClick={() => setExpandedPromptField(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column' }}>
+              <textarea
+                value={formData[expandedPromptField]}
+                onChange={e => setFormData({ ...formData, [expandedPromptField]: e.target.value })}
+                placeholder="输入 Prompt 模板..."
+                style={{ 
+                  flex: 1, 
+                  fontFamily: 'monospace', 
+                  fontSize: '14px', 
+                  width: '100%', 
+                  resize: 'none',
+                  padding: '12px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px'
+                }}
+                autoFocus
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="primary" onClick={() => setExpandedPromptField(null)}>完成</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export interface PromptTemplateCreate {
   prompt_category?: string; // 'generate' | 'validate' | 'analysis'
   data_key?: string; // 数据存储键
   work_id?: number; // 向后兼容
-  work_template_id?: number; // 关联的模板ID
+  work_template_id?: number | string; // 关联的模板ID
 }
 
 export interface PromptTemplateUpdate {
@@ -82,19 +82,43 @@ class PromptTemplateApiClient extends BaseApiClient {
   }
 
   /**
+   * 根据组件ID获取所有类别的Prompt模板列表
+   */
+  async getComponentPrompts(
+    componentId: string,
+    templateId?: number | string
+  ): Promise<PromptTemplate[]> {
+    try {
+      const params: Record<string, string | number> = {
+        component_id: componentId,
+      };
+      if (templateId !== undefined && templateId !== null) {
+        params.work_template_id = templateId;
+      }
+      return await this.get<PromptTemplate[]>(
+        '/api/v1/prompt-templates/',
+        params
+      );
+    } catch (error) {
+      console.error('获取组件Prompts失败:', error);
+      return [];
+    }
+  }
+
+  /**
    * 根据组件ID和类别获取Prompt模板
    */
   async getComponentPrompt(
     componentId: string,
     promptCategory: 'generate' | 'validate' | 'analysis',
-    templateId?: number
+    templateId?: number | string
   ): Promise<PromptTemplate | null> {
     try {
       const params: Record<string, string | number> = {
         component_id: componentId,
         prompt_category: promptCategory,
       };
-      if (templateId) {
+      if (templateId !== undefined && templateId !== null) {
         params.work_template_id = templateId;
       }
       const response = await this.get<PromptTemplate[]>(
@@ -116,7 +140,7 @@ class PromptTemplateApiClient extends BaseApiClient {
     componentType: string,
     promptCategory: 'generate' | 'validate' | 'analysis',
     promptContent: string,
-    templateId?: number,
+    templateId?: number | string,
     dataKey?: string
   ): Promise<PromptTemplate> {
     // 先尝试查找现有的prompt

@@ -99,7 +99,7 @@ function SingleCharacterCard({
 
   // Find the name field to display in header
   const nameField = fields.find(f => f.key === 'name') || fields[0];
-  const nameValue = value[nameField.key] || '未命名角色';
+  const nameValue = nameField ? (value[nameField.key] || '未命名角色') : '未命名角色';
 
   // const renderValue = (val: any) => {
   //   if (typeof val === 'object' && val !== null) {
