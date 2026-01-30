@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Sparkles, ChevronLeft, ChevronRight, Info, Menu, X, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Trash2, Sparkles, ChevronLeft, ChevronRight, Info, Menu, X, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExtension from '@tiptap/extension-underline';
@@ -2112,14 +2112,14 @@ export default function NovelEditorPage(){
                   onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
                   title={leftSidebarCollapsed ? '展开左侧边栏' : '折叠左侧边栏'}
                 >
-                  {leftSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+                  {leftSidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
                 </button>
                 <button
                   className={`sidebar-toggle-btn-header right-toggle-header ${rightSidebarCollapsed ? 'collapsed' : ''}`}
                   onClick={() => setRightSidebarCollapsed(!rightSidebarCollapsed)}
                   title={rightSidebarCollapsed ? '展开右侧边栏' : '折叠右侧边栏'}
                 >
-                  {rightSidebarCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                  {rightSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
                 </button>
               </div>
             </>
