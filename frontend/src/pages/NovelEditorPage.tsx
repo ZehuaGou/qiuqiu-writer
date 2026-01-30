@@ -2005,7 +2005,13 @@ export default function NovelEditorPage(){
       {/* 顶部工具栏 */}
       <header className="novel-editor-header">
         <div className="header-left">
-          <button className="exit-btn" onClick={() => navigate(-1)}>
+          <button className="exit-btn" onClick={() => {
+            if (work?.owner_id) {
+              navigate(`/users/${work.owner_id}`);
+            } else {
+              navigate(-1);
+            }
+          }}>
             <ArrowLeft size={16} />
             <span>退出</span>
           </button>
