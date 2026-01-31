@@ -12,7 +12,7 @@ export interface Chapter {
   outline: Record<string, unknown>;
   detailed_outline: Record<string, unknown>;
   id: number;
-  work_id: number;
+  work_id: string;
   title: string;
   chapter_number: number;
   volume_number: number;
@@ -30,7 +30,7 @@ export interface Chapter {
 }
 
 export interface ChapterCreate {
-  work_id: number;
+  work_id: string;
   title: string;
   chapter_number?: number;  // 可选，如果未提供，后端自动计算
   volume_number?: number;
@@ -100,7 +100,7 @@ class ChaptersApiClient extends BaseApiClient {
    * 本地优先策略：优先使用缓存，后台刷新
    */
   async listChapters(params: {
-    work_id: number;
+    work_id: string;
     page?: number;
     size?: number;
     status?: string;
@@ -149,7 +149,7 @@ class ChaptersApiClient extends BaseApiClient {
    */
   private async listChaptersFromServer(
     params: {
-      work_id: number;
+      work_id: string;
       page?: number;
       size?: number;
       status?: string;

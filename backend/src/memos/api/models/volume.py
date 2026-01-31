@@ -20,7 +20,7 @@ class Volume(Base):
     __tablename__ = "volumes"
 
     id = Column(Integer, primary_key=True, index=True)
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
+    work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
     volume_number = Column(Integer, nullable=False)
     outline = Column(Text)  # 卷大纲

@@ -30,7 +30,7 @@ class WritingPrompt(Base):
     language = Column(String(10), default="zh-CN")
     is_public = Column(Boolean, default=True, index=True)
     usage_count = Column(Integer, default=0)
-    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    creator_id = Column(String(40), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -71,7 +71,7 @@ class AIAnalysis(Base):
     model_name = Column(String(50))
     analysis_result = Column(JSON, nullable=False)
     status = Column(String(20), default="completed", index=True)  # pending/processing/completed/failed
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(40), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系

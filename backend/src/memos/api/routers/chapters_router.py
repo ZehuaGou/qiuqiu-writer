@@ -50,7 +50,7 @@ async def create_chapter(
     chapter_data: ChapterCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     创建新章节
@@ -120,14 +120,14 @@ async def create_chapter(
 
 @router.get("/", response_model=ChapterListResponse)
 async def list_chapters(
-    work_id: int = Query(..., description="作品ID"),
+    work_id: str = Query(..., description="作品ID"),
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     status: Optional[str] = Query(None, description="章节状态"),
     sort_by: str = Query("chapter_number", description="排序字段"),
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="排序方向"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取章节列表
@@ -171,7 +171,7 @@ async def get_chapter(
     include_versions: bool = Query(False, description="是否包含版本历史"),
     check_recovery: bool = Query(False, description="是否检查恢复建议"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取章节详情
@@ -294,7 +294,7 @@ async def update_chapter(
     chapter_update: ChapterUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     更新章节元数据（不包含内容，内容通过ShareDB实时编辑）
@@ -392,7 +392,7 @@ async def delete_chapter(
     chapter_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     删除章节
@@ -451,7 +451,7 @@ async def get_chapter_versions(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> List[Dict[str, Any]]:
     """
     获取章节版本历史
@@ -490,7 +490,7 @@ async def create_chapter_version(
     version_data: ChapterVersionCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     创建章节版本快照
@@ -622,7 +622,7 @@ async def websocket_collaborate(
 async def get_chapter_document(
     chapter_id: int,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取章节ShareDB文档内容
@@ -684,7 +684,7 @@ async def submit_document_operation(
     chapter_id: int,
     operation: Dict[str, Any],
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     提交文档操作（通过ShareDB）

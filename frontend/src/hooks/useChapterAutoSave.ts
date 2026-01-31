@@ -159,7 +159,7 @@ export function useChapterAutoSave({
           
           // 关键修复：构建包含 title 的 metadata
           const metadata = {
-            work_id: Number(workId),
+            work_id: workId,
             chapter_id: chapterId,
             chapter_number: chapterNumber,
             title: chapterTitle, // 关键修复：保存章节标题

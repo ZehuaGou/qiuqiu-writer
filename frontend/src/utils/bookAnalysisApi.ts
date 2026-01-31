@@ -6,7 +6,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 
 export interface BookAnalysisResult {
-  work_id?: number;
+  work_id?: string;
   work_title?: string;
   characters_count?: number;
   locations_count?: number;
@@ -493,7 +493,7 @@ export async function analyzeBookEnhanced(
  */
 export async function analyzeChaptersIncremental(
   content: string,
-  workId: number,
+  workId: string,
   onProgress?: (progress: AnalysisProgress & { 
     chapterIndex?: number;
     totalChapters?: number;
@@ -668,13 +668,13 @@ export async function analyzeChapterByFile(
   volumeNumber: number = 1,
   onProgress?: (progress: AnalysisProgress & {
     workCreated?: boolean;
-    workId?: number;
+    workId?: string;
     workTitle?: string;
     chapterId?: number;
   }) => void,
   settings?: AnalysisSettings
 ): Promise<{
-  work_id: number;
+  work_id: string;
   work_title: string;
   chapter_id: number;
   chapter_number: number;
@@ -721,7 +721,7 @@ export async function analyzeChapterByFile(
     const decoder = new TextDecoder();
     let buffer = '';
     const workResult: {
-      work_id?: number;
+      work_id?: string;
       work_title?: string;
       chapter_id?: number;
       work_created?: boolean;
@@ -894,7 +894,7 @@ export async function createWorkFromFile(
     volume_number?: number;
   }>
 ): Promise<{
-  work_id: number;
+  work_id: string;
   work_title: string;
   work_created: boolean;
   chapters_created: number;
@@ -967,7 +967,7 @@ export async function createWorkFromFile(
  * @returns Promise<{ outline: Record<string, unknown>; detailed_outline: Record<string, unknown> }>
  */
 export async function analyzeChapter(
-  workId: number,
+  workId: string,
   chapterId: number,
   onProgress?: (progress: { message?: string; status?: string }) => void,
   settings?: AnalysisSettings
@@ -1098,7 +1098,7 @@ export async function testAPIConnection(): Promise<{
  * @returns Promise<{ component_id: string; data_key: string; generated_data: string }>
  */
 export async function generateComponentData(
-  workId: number,
+  workId: string,
   componentId: string,
   dataKey: string,
   generatePromptId?: number,

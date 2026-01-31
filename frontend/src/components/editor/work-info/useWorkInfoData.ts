@@ -298,7 +298,7 @@ export const useWorkInfoData = (
       };
 
       console.log('正在手动保存作品信息到后端:', workId);
-      await worksApi.updateWork(parseInt(workId), {
+      await worksApi.updateWork(workId, {
         metadata: metadataToSave
       });
       console.log('手动保存成功');
@@ -342,7 +342,7 @@ export const useWorkInfoData = (
           };
 
           console.log('正在保存作品信息到后端:', workId);
-          await worksApi.updateWork(parseInt(workId), {
+          await worksApi.updateWork(workId, {
             metadata: metadataToSave
           });
           console.log('作品信息保存成功');

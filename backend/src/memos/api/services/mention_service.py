@@ -27,15 +27,15 @@ class MentionService:
         self.sharedb_service = ShareDBService()
         self._sharedb_initialized = False
     
-    def _extract_work_id_from_user_id(self, user_id: str) -> Optional[int]:
-        """从 user_id 格式 user_{userId}_work_{workId} 中提取 work_id"""
+    def _extract_work_id_from_user_id(self, user_id: str) -> Optional[str]:
+        """从 user_id 格式 user_{userId}_work_{workId} 中提取 work_id（40位字符串）"""
         try:
             # 格式：user_{userId}_work_{workId}
             if '_work_' in user_id:
                 parts = user_id.split('_work_')
                 if len(parts) == 2:
                     work_id_str = parts[1]
-                    return int(work_id_str)
+                    return work_id_str
         except (ValueError, IndexError) as e:
             logger.warning(f"无法从 user_id {user_id} 中提取 work_id: {e}")
         return None

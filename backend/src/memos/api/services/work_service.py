@@ -11,6 +11,7 @@ from sqlalchemy.future import select
 from memos.api.models.work import Work, WorkCollaborator
 from memos.api.models.user import User
 from memos.api.models.system import AuditLog
+from memos.api.core.id_utils import generate_id
 
 
 class WorkService:
@@ -20,14 +21,13 @@ class WorkService:
         self.db = db
 
     async def create_work(self, **kwargs) -> Work:
-        """创建作品"""
+        """创建作品（id 为 40 位字符串）"""
         # 如果指定了 id，使用指定的 id（用于恢复作品时保持原有 ID）
         work_id = kwargs.pop("id", None)
+        if work_id is None:
+            work_id = generate_id()
+        kwargs["id"] = work_id
         work = Work(**kwargs)
-        
-        if work_id is not None:
-            # 设置指定的 ID（需要确保该 ID 不存在）
-            work.id = work_id
 
         self.db.add(work)
         await self.db.commit()
@@ -35,7 +35,7 @@ class WorkService:
 
         return work
 
-    async def get_work_by_id(self, work_id: int) -> Optional[Work]:
+    async def get_work_by_id(self, work_id: str) -> Optional[Work]:
         """根据ID获取作品"""
         stmt = select(Work).options(
             selectinload(Work.collaborators),
@@ -45,7 +45,7 @@ class WorkService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def find_work_by_filename(self, file_name: str, user_id: int) -> Optional[Work]:
+    async def find_work_by_filename(self, file_name: str, user_id: str) -> Optional[Work]:
         """根据文件名查找作品（从work_metadata中查找source_file）"""
         # 使用 cast 将 JSONB 字段转换为字符串进行比较
         # PostgreSQL JSONB 使用 ->> 操作符提取文本值，在 SQLAlchemy 中使用 cast
@@ -60,7 +60,7 @@ class WorkService:
 
     async def get_user_works(
         self,
-        user_id: int,
+        user_id: str,
         filters: Dict[str, Any] = None,
         page: int = 1,
         size: int = 20,
@@ -177,7 +177,7 @@ class WorkService:
 
         return list(works), total
 
-    async def update_work(self, work_id: int, **kwargs) -> Work:
+    async def update_work(self, work_id: str, **kwargs) -> Work:
         """更新作品"""
         work = await self.get_work_by_id(work_id)
         if not work:
@@ -220,7 +220,7 @@ class WorkService:
 
         return work
 
-    async def delete_work(self, work_id: int) -> bool:
+    async def delete_work(self, work_id: str) -> bool:
         """删除作品"""
         work = await self.get_work_by_id(work_id)
         if not work:
@@ -231,7 +231,7 @@ class WorkService:
 
         return True
 
-    async def publish_work(self, work_id: int) -> Work:
+    async def publish_work(self, work_id: str) -> Work:
         """发布作品"""
         work = await self.get_work_by_id(work_id)
         if not work:
@@ -245,7 +245,7 @@ class WorkService:
 
         return work
 
-    async def archive_work(self, work_id: int) -> Work:
+    async def archive_work(self, work_id: str) -> Work:
         """归档作品"""
         work = await self.get_work_by_id(work_id)
         if not work:
@@ -259,7 +259,7 @@ class WorkService:
         return work
 
     # 协作者管理
-    async def get_work_collaborators(self, work_id: int) -> List[WorkCollaborator]:
+    async def get_work_collaborators(self, work_id: str) -> List[WorkCollaborator]:
         """获取作品协作者列表"""
         stmt = select(WorkCollaborator).options(
             selectinload(WorkCollaborator.user)
@@ -270,11 +270,11 @@ class WorkService:
 
     async def add_collaborator(
         self,
-        work_id: int,
-        user_id: int,
+        work_id: str,
+        user_id: str,
         permission: str = "reader",
         role: str = None,
-        invited_by: int = None
+        invited_by: str = None
     ) -> WorkCollaborator:
         """添加协作者"""
         collaborator = WorkCollaborator(
@@ -291,7 +291,7 @@ class WorkService:
 
         return collaborator
 
-    async def update_collaborator(self, work_id: int, user_id: int, **kwargs) -> Optional[WorkCollaborator]:
+    async def update_collaborator(self, work_id: str, user_id: str, **kwargs) -> Optional[WorkCollaborator]:
         """更新协作者"""
         stmt = select(WorkCollaborator).where(
             and_(
@@ -316,7 +316,7 @@ class WorkService:
 
         return collaborator
 
-    async def remove_collaborator(self, work_id: int, user_id: int) -> bool:
+    async def remove_collaborator(self, work_id: str, user_id: str) -> bool:
         """移除协作者"""
         stmt = select(WorkCollaborator).where(
             and_(
@@ -337,7 +337,7 @@ class WorkService:
         return True
 
     # 权限检查
-    async def can_access_work(self, user_id: int, work_id: int) -> bool:
+    async def can_access_work(self, user_id: str, work_id: str) -> bool:
         """检查用户是否可以访问作品"""
         work = await self.get_work_by_id(work_id)
         if not work:
@@ -359,7 +359,7 @@ class WorkService:
 
         return collaborator is not None or work.is_public
 
-    async def can_edit_work(self, user_id: int, work_id: int) -> bool:
+    async def can_edit_work(self, user_id: str, work_id: str) -> bool:
         """检查用户是否可以编辑作品"""
         work = await self.get_work_by_id(work_id)
         if not work:
@@ -397,10 +397,10 @@ class WorkService:
 
     async def create_audit_log(
         self,
-        user_id: int,
+        user_id: str,
         action: str,
         target_type: str,
-        target_id: int,
+        target_id: Any,
         details: Dict[str, Any],
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None

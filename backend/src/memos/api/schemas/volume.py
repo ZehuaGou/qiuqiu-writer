@@ -35,7 +35,7 @@ class VolumeUpdate(BaseModel):
 class Volume(VolumeBase):
     """卷详情模式"""
     id: int
-    work_id: int
+    work_id: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

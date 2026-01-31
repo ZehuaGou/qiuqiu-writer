@@ -149,9 +149,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> int:
+) -> str:
     """
-    从请求头中获取当前用户ID
+    从请求头中获取当前用户ID（40位字符串）
 
     解析JWT令牌并返回用户ID，用于依赖注入
 
@@ -159,7 +159,7 @@ async def get_current_user_id(
         credentials: HTTP认证凭据
 
     Returns:
-        用户ID
+        用户ID（40位字符串）
 
     Raises:
         HTTPException: 认证失败时抛出401异常
@@ -176,27 +176,27 @@ async def get_current_user_id(
         if payload is None:
             raise credentials_exception
 
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        user_id_raw = payload.get("sub")
+        if user_id_raw is None:
             raise credentials_exception
+        user_id_raw = str(user_id_raw)
 
-        user_id = int(user_id)
-
-        # 检查用户是否在线（可选的）
+        # 检查用户是否在线（用原始 sub，兼容迁移前存的 session:1）
         redis = await get_redis()
-        session_exists = await redis.exists(f"session:{user_id}")
-
+        session_exists = await redis.exists(f"session:{user_id_raw}")
         if not session_exists:
             raise credentials_exception
 
-        return user_id
+        # 返回 40 位规范 id，与 DB 中 users.id 一致，避免 FK 违反
+        from memos.api.core.id_utils import normalize_legacy_id
+        return normalize_legacy_id(user_id_raw) or user_id_raw
 
     except (JWTError, ValueError):
         raise credentials_exception
 
 
 async def get_current_active_user(
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> dict:
     """
     获取当前活跃用户信息

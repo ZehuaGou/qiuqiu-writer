@@ -43,8 +43,8 @@ function mapWorkTypeToFrontend(backendType: BackendWorkType): FrontendWorkType {
 }
 
 export interface Work {
-  id: number;
-  owner_id: number;
+  id: string;
+  owner_id: string;
   title: string;
   description?: string;
   work_type: FrontendWorkType;
@@ -258,7 +258,7 @@ class WorksApiClient extends BaseApiClient {
    * 支持缓存降级：数据库查询失败时自动从缓存加载
    */
   async getWork(
-    workId: number,
+    workId: string,
     include_collaborators?: boolean,
     include_chapters?: boolean,
     check_recovery?: boolean
@@ -326,7 +326,7 @@ class WorksApiClient extends BaseApiClient {
   /**
    * 更新作品
    */
-  async updateWork(workId: number, updates: WorkUpdate): Promise<Work> {
+  async updateWork(workId: string, updates: WorkUpdate): Promise<Work> {
     // 如果包含 work_type，需要转换为后端类型
     const { work_type, ...restUpdates } = updates;
     const backendUpdates: Omit<WorkUpdate, 'work_type'> & { work_type?: BackendWorkType } = {
@@ -344,7 +344,7 @@ class WorksApiClient extends BaseApiClient {
    * 恢复作品
    * 从本地缓存或存储中恢复作品
    */
-  async recoverWork(workId: number, workData?: WorkCreate): Promise<Work> {
+  async recoverWork(workId: string, workData?: WorkCreate): Promise<Work> {
     // 关键修复：将前端类型转换为后端类型
     const backendData = workData ? {
       ...workData,
@@ -363,14 +363,14 @@ class WorksApiClient extends BaseApiClient {
   /**
    * 删除作品
    */
-  async deleteWork(workId: number): Promise<void> {
+  async deleteWork(workId: string): Promise<void> {
     await this.delete(`/api/v1/works/${workId}`);
   }
 
   /**
    * 发布作品
    */
-  async publishWork(workId: number): Promise<Work> {
+  async publishWork(workId: string): Promise<Work> {
     const response = await this.post<Work>(`/api/v1/works/${workId}/publish`);
     return {
       ...response,
@@ -381,7 +381,7 @@ class WorksApiClient extends BaseApiClient {
   /**
    * 归档作品
    */
-  async archiveWork(workId: number): Promise<Work> {
+  async archiveWork(workId: string): Promise<Work> {
     const response = await this.post<Work>(`/api/v1/works/${workId}/archive`);
     return {
       ...response,

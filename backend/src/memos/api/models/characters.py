@@ -21,7 +21,7 @@ class Faction(Base):
     __tablename__ = "factions"
 
     id = Column(Integer, primary_key=True, index=True)
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
+    work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     display_name = Column(String(100))
     description = Column(Text)

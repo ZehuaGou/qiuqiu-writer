@@ -6,7 +6,7 @@ import { BaseApiClient } from './baseApiClient';
 
 export interface Volume {
   id: number;
-  work_id: number;
+  work_id: string;
   title: string;
   volume_number: number;
   outline?: string;
@@ -33,7 +33,7 @@ class VolumesApiClient extends BaseApiClient {
   /**
    * Create a new volume
    */
-  async createVolume(workId: number, data: VolumeCreate): Promise<Volume> {
+  async createVolume(workId: string, data: VolumeCreate): Promise<Volume> {
     const response = await this.post<Volume>(`/api/v1/volumes/?work_id=${workId}`, data);
     return response;
   }
@@ -41,7 +41,7 @@ class VolumesApiClient extends BaseApiClient {
   /**
    * List volumes for a work
    */
-  async listVolumes(workId: number): Promise<Volume[]> {
+  async listVolumes(workId: string): Promise<Volume[]> {
     const response = await this.get<Volume[]>(`/api/v1/volumes/?work_id=${workId}`);
     return response;
   }

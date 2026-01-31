@@ -142,7 +142,7 @@ class AuthService:
             if await is_token_blacklisted(refresh_token):
                 return None
 
-            user_id = int(payload.get("sub", 0))
+            user_id = payload.get("sub") or ""
             if not user_id:
                 return None
 
@@ -201,7 +201,7 @@ class AuthService:
                 await blacklist_token(refresh_token)
 
             # 删除用户会话
-            await self._delete_user_session(int(user_id))
+            await self._delete_user_session(str(user_id))
 
             return True
 
@@ -230,7 +230,7 @@ class AuthService:
                 return None
 
             # 检查用户会话
-            user_id = int(payload.get("sub", 0))
+            user_id = payload.get("sub") or ""
             if not user_id:
                 return None
 
@@ -262,7 +262,7 @@ class AuthService:
                 return None
 
             # 获取用户信息
-            user_id = int(payload.get("sub", 0))
+            user_id = payload.get("sub") or ""
             user = await self.user_service.get_user_by_id(user_id)
             if not user or user.get("status") != "active":
                 return None
@@ -275,7 +275,7 @@ class AuthService:
 
     async def change_password(
         self,
-        user_id: int,
+        user_id: str,
         current_password: str,
         new_password: str,
         confirm_password: str
@@ -327,7 +327,7 @@ class AuthService:
 
     async def _create_user_session(
         self,
-        user_id: int,
+        user_id: str,
         access_token: str,
         device_info: Optional[Dict[str, Any]] = None,
         ttl: int = 30 * 24 * 60 * 60  # 30天
@@ -365,7 +365,7 @@ class AuthService:
             print(f"❌ 创建用户会话失败: {e}")
             return False
 
-    async def _delete_user_session(self, user_id: int) -> bool:
+    async def _delete_user_session(self, user_id: str) -> bool:
         """
         删除用户会话
 
@@ -384,7 +384,7 @@ class AuthService:
             print(f"❌ 删除用户会话失败: {e}")
             return False
 
-    async def update_session_activity(self, user_id: int) -> bool:
+    async def update_session_activity(self, user_id: str) -> bool:
         """
         更新用户会话活动时间
 
@@ -411,7 +411,7 @@ class AuthService:
             print(f"❌ 更新会话活动时间失败: {e}")
             return False
 
-    async def get_user_sessions(self, user_id: int) -> Optional[Dict[str, Any]]:
+    async def get_user_sessions(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         获取用户会话信息
 

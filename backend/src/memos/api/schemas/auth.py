@@ -196,7 +196,7 @@ class UserAvailabilityResponse(BaseModel):
 
 class SessionInfo(BaseModel):
     """会话信息模式"""
-    user_id: int
+    user_id: str
     access_token: str
     device_info: Optional[Dict[str, Any]] = None
     last_activity: str

@@ -9,7 +9,7 @@ export interface ShareDBDocument {
   version?: number;
   document_exists?: boolean; // 表示文档是否存在于 MongoDB
   metadata?: {
-    work_id?: number;
+    work_id?: string;
     chapter_id?: number;
     chapter_number?: number;
     title?: string;
@@ -30,7 +30,7 @@ export interface SyncResponse {
     doc_id: string;
     version: number;
     operation: unknown;
-    user_id: number;
+    user_id: string;
     timestamp: string;
   }>;
   error?: string;

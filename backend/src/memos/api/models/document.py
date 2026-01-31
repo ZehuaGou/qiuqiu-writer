@@ -26,7 +26,7 @@ class DocumentSyncHistory(Base):
     version = Column(Integer, nullable=False, index=True)  # 同步后的版本号
     content = Column(Text)  # 同步后的内容（可选，用于版本快照）
     content_hash = Column(String(32), index=True)  # 内容哈希
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # 同步用户
+    user_id = Column(String(40), ForeignKey("users.id"), nullable=True, index=True)  # 同步用户
     sync_type = Column(String(20), default="sync", index=True)  # sync/version_snapshot/merge
     conflict_resolved = Column(Boolean, default=False)  # 是否解决了冲突
     merge_strategy = Column(String(50))  # 合并策略：smart_merge/diff_based/last_write_wins

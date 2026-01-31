@@ -97,11 +97,11 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
 
     const loadData = async () => {
       try {
-        const workIdNum = Number(workId);
+        const workIdStr = workId;
         
         // 加载章节列表
         const chaptersResponse = await chaptersApi.listChapters({
-          work_id: workIdNum,
+          work_id: workIdStr,
           page: 1,
           size: 100,
           sort_by: 'chapter_number',
@@ -110,7 +110,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
         setChapters(chaptersResponse.chapters);
 
         // 加载作品详情（包含metadata中的角色信息）
-        const workData = await worksApi.getWork(workIdNum);
+        const workData = await worksApi.getWork(workIdStr);
         
         // 从作品metadata的component_data中提取角色信息
         const componentData = workData.metadata?.component_data || {characters: []};

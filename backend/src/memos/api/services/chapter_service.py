@@ -21,7 +21,7 @@ class ChapterService:
 
     async def get_max_chapter_number(
         self,
-        work_id: int,
+        work_id: str,
         volume_number: Optional[int] = None
     ) -> int:
         """获取指定作品（或卷）的最大章节号"""
@@ -174,7 +174,7 @@ class ChapterService:
         return list(versions), total
 
     # 权限检查方法
-    async def can_access_work(self, user_id: int, work_id: int) -> bool:
+    async def can_access_work(self, user_id: str, work_id: str) -> bool:
         """检查用户是否可以访问作品"""
         stmt = select(Work).where(Work.id == work_id)
         result = await self.db.execute(stmt)
@@ -199,7 +199,7 @@ class ChapterService:
 
         return collaborator is not None or work.is_public
 
-    async def can_edit_work(self, user_id: int, work_id: int) -> bool:
+    async def can_edit_work(self, user_id: str, work_id: str) -> bool:
         """检查用户是否可以编辑作品"""
         stmt = select(Work).where(Work.id == work_id)
         result = await self.db.execute(stmt)
@@ -227,7 +227,7 @@ class ChapterService:
 
     async def create_audit_log(
         self,
-        user_id: int,
+        user_id: str,
         action: str,
         target_type: str,
         target_id: int,

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from memos.api.core.database import engine, AsyncSessionLocal
 from memos.api.core.security import get_password_hash, verify_password
 from memos.api.core.redis import get_redis
+from memos.api.core.id_utils import generate_id, normalize_legacy_id
 from memos.api.models.user import User, UserProfile
 from memos.api.models.system import AuditLog
 
@@ -57,8 +58,9 @@ class UserService:
                 if existing_user:
                     return None
 
-                # 创建用户
+                # 创建用户（40位字符串ID）
                 user = User(
+                    id=generate_id(),
                     username=username,
                     email=email,
                     password_hash=get_password_hash(password),
@@ -137,7 +139,7 @@ class UserService:
                 print(f"❌ 用户认证失败: {e}")
                 return None
 
-    async def get_user_by_id(self, user_id: int, include_profile: bool = True) -> Optional[Dict[str, Any]]:
+    async def get_user_by_id(self, user_id: str, include_profile: bool = True) -> Optional[Dict[str, Any]]:
         """
         根据ID获取用户信息
 
@@ -150,12 +152,14 @@ class UserService:
         """
         async with AsyncSessionLocal() as session:
             try:
+                # 迁移后 DB 中为 40 位零填充；JWT/请求中可能仍为 "1"，需规范化再查
+                lookup_id = normalize_legacy_id(user_id) or user_id
                 if include_profile:
                     stmt = select(User).options(
                         selectinload(User.profile)
-                    ).filter(User.id == user_id)
+                    ).filter(User.id == lookup_id)
                 else:
-                    stmt = select(User).filter(User.id == user_id)
+                    stmt = select(User).filter(User.id == lookup_id)
 
                 result = await session.execute(stmt)
                 user = result.scalar_one_or_none()

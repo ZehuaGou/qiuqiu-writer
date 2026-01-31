@@ -203,7 +203,7 @@ class PromptContextService:
     async def build_context(
         self,
         work: Optional[Work] = None,
-        work_id: Optional[int] = None,
+        work_id: Optional[str] = None,
         chapter: Optional[Chapter] = None,
         chapter_id: Optional[int] = None,
         include_previous_chapters: int = 3,  # 包含前N章（用于摘要等基本信息）
@@ -415,7 +415,7 @@ class PromptContextService:
     
     async def _get_previous_chapters_info(
         self,
-        work_id: int,
+        work_id: str,
         current_chapter_number: int,
         current_volume_number: int,
         basic_count: int,  # 基本信息数量（用于摘要等）
@@ -551,7 +551,7 @@ class PromptContextService:
         template: PromptTemplate,
         context: Optional[PromptContext] = None,
         work: Optional[Work] = None,
-        work_id: Optional[int] = None,
+        work_id: Optional[str] = None,
         chapter: Optional[Chapter] = None,
         chapter_id: Optional[int] = None,
         additional_vars: Optional[Dict[str, Any]] = None,
@@ -853,12 +853,12 @@ class PromptContextService:
         template_type: str,
         ai_response: str,
         context: PromptContext,
-        work_id: int,
-        user_id: int
+        work_id: str,
+        user_id: str
     ) -> Dict[str, Any]:
         """
         处理AI响应，解析并存储到数据库
-        
+
         Args:
             template_type: 模板类型
             ai_response: AI返回的响应
@@ -921,8 +921,8 @@ class PromptContextService:
         self,
         ai_response: str,
         context: PromptContext,
-        work_id: int,
-        user_id: int
+        work_id: str,
+        user_id: str
     ) -> Dict[str, Any]:
         """处理角色相关的AI响应"""
         try:
@@ -1040,8 +1040,8 @@ class PromptContextService:
         self,
         ai_response: str,
         context: PromptContext,
-        work_id: int,
-        user_id: int
+        work_id: str,
+        user_id: str
     ) -> Dict[str, Any]:
         """处理章节生成的AI响应"""
         try:
@@ -1113,7 +1113,7 @@ class PromptContextService:
         ai_response: str,
         context: PromptContext,
         template_type: str,
-        user_id: int
+        user_id: str
     ) -> Dict[str, Any]:
         """处理章节元数据（大纲、细纲、总结）的AI响应"""
         if not context.current_chapter:

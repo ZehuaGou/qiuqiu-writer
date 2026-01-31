@@ -20,7 +20,7 @@ class Work(Base):
 
     __tablename__ = "works"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(40), primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     subtitle = Column(String(300))
     description = Column(Text)
@@ -35,7 +35,7 @@ class Work(Base):
     word_count = Column(Integer, default=0)
     chapter_count = Column(Integer, default=0)
     reading_time = Column(Integer, default=0)  # 预估阅读时间（分钟）
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id = Column(String(40), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     collaborator_count = Column(Integer, default=0)
     is_public = Column(Boolean, default=False, index=True)
     is_collaborative = Column(Boolean, default=False)
@@ -144,11 +144,11 @@ class WorkCollaborator(Base):
     __tablename__ = "work_collaborators"
 
     id = Column(Integer, primary_key=True, index=True)
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(40), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     permission = Column(String(20), nullable=False)  # owner/editor/reader
     role = Column(String(50))  # writer/editor/beta_reader/etc.
-    invited_by = Column(Integer, ForeignKey("users.id"))
+    invited_by = Column(String(40), ForeignKey("users.id"))
     joined_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -21,7 +21,7 @@ class Chapter(Base):
     __tablename__ = "chapters"
 
     id = Column(Integer, primary_key=True, index=True)
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
+    work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True)
     volume_id = Column(Integer, ForeignKey("volumes.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     chapter_number = Column(Integer, nullable=False)
@@ -128,7 +128,7 @@ class ChapterVersion(Base):
     content_hash = Column(String(32), index=True)
     word_count = Column(Integer, default=0)
     change_description = Column(Text)
-    created_by = Column(Integer, ForeignKey("users.id"), index=True)
+    created_by = Column(String(40), ForeignKey("users.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     # 关系

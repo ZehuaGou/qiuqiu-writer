@@ -31,7 +31,7 @@ class ChapterBase(BaseModel):
 
 class ChapterCreate(ChapterBase):
     """创建章节模式"""
-    work_id: int
+    work_id: str
     content: Optional[str] = None
 
 class ChapterUpdate(BaseModel):
@@ -52,7 +52,7 @@ class ChapterUpdate(BaseModel):
 class ChapterResponse(ChapterBase):
     """章节响应模式"""
     id: int
-    work_id: int
+    work_id: str
     content: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

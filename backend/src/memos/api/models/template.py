@@ -26,7 +26,7 @@ class WorkTemplate(Base):
     work_type = Column(String(20), nullable=False, index=True)
     is_system = Column(Boolean, default=False, index=True)  # 系统模板 vs 用户模板
     is_public = Column(Boolean, default=False, index=True)
-    creator_id = Column(Integer, ForeignKey("users.id"), index=True)
+    creator_id = Column(String(40), ForeignKey("users.id"), index=True)
     category = Column(String(50), index=True)
     tags = Column(JSON, default=list)
     template_config = Column(JSON, nullable=False)  # 模板配置信息
@@ -167,7 +167,7 @@ class WorkInfoExtended(Base):
     __tablename__ = "work_info_extended"
 
     id = Column(Integer, primary_key=True, index=True)
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     template_id = Column(Integer, ForeignKey("work_templates.id"), index=True)
     field_values = Column(JSON, default=dict)  # 存储模板字段的具体值
     created_at = Column(DateTime(timezone=True), server_default=func.now())

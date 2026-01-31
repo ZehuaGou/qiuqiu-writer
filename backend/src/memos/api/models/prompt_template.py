@@ -37,14 +37,14 @@ class PromptTemplate(Base):
     variables = Column(JSON, default=dict)  # 模板变量定义，如{"content": "章节内容", "settings": "分析设置"}
     template_metadata = Column("metadata", JSON, default=dict)  # 扩展元数据
     usage_count = Column(Integer, default=0)  # 使用次数
-    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    creator_id = Column(String(40), ForeignKey("users.id"), nullable=True)
     
     # 组件相关字段（用于组件级别的prompt）
     component_id = Column(String(100), nullable=True, index=True)  # 组件ID（如：char-cards, cp-relations等）
     component_type = Column(String(50), nullable=True, index=True)  # 组件类型（如：character-card, relation-graph等）
     prompt_category = Column(String(20), nullable=True, index=True)  # prompt类别：generate（生成）或validate（验证）或analysis（分析）
     data_key = Column(String(100), nullable=True, index=True)  # 数据存储键（用于在 component_data 中存储数据）
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=True, index=True)  # 关联的作品ID（如果prompt是作品级别的，向后兼容）
+    work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=True, index=True)  # 关联的作品ID（如果prompt是作品级别的，向后兼容）
     work_template_id = Column(Integer, ForeignKey("work_templates.id", ondelete="CASCADE"), nullable=True, index=True)  # 关联的模板ID（如果prompt是模板级别的）
     chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=True, index=True)  # 关联的章节ID（如果prompt是章节级别的）
     

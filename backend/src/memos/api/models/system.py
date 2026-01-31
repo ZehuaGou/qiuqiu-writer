@@ -53,10 +53,10 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    user_id = Column(String(40), ForeignKey("users.id"), nullable=True, index=True)
     action = Column(String(50), nullable=False, index=True)  # create/update/delete/login/logout
     target_type = Column(String(50), index=True)  # work/chapter/user
-    target_id = Column(Integer, index=True)
+    target_id = Column(String(50), index=True)  # work_id(40) 或 chapter_id 等字符串形式
     details = Column(JSON, default=dict)
     ip_address = Column(INET)
     user_agent = Column(Text)

@@ -232,7 +232,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
     
     try {
        const result = await generateComponentData(
-         workId ? parseInt(workId) : 0, 
+         workId || '', 
          comp.id,
          comp.dataKey || comp.id,
          promptId,

@@ -157,7 +157,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
               currentContent, 
               undefined, 
               {
-                work_id: Number(workId),
+                work_id: workId,
                 chapter_id: previousChapterId,
                 chapter_number: previousChapterNumber,
                 updated_at: new Date().toISOString(),
@@ -440,7 +440,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
               content: content,
               version: 1,
               metadata: {
-                work_id: Number(workId),
+                work_id: workId,
                 chapter_id: chapterId,
                 chapter_number: docResponse.chapter_info.chapter_number,
                 title: docResponse.chapter_info.title,

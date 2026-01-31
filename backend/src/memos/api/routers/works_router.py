@@ -44,7 +44,7 @@ async def create_work(
     work_data: WorkCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     创建新作品
@@ -83,7 +83,7 @@ async def list_works(
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
     include_collaborators: bool = Query(False, description="是否包含协作者信息"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取作品列表
@@ -223,12 +223,12 @@ async def get_public_works(
 
 @router.get("/{work_id}", response_model=WorkResponse)
 async def get_work(
-    work_id: int,
+    work_id: str,
     include_collaborators: bool = Query(False, description="是否包含协作者信息"),
     include_chapters: bool = Query(False, description="是否包含章节信息"),
     check_recovery: bool = Query(False, description="是否检查恢复建议"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取作品详情
@@ -337,11 +337,11 @@ async def get_work(
 
 @router.post("/{work_id}/recover", response_model=WorkResponse)
 async def recover_work(
-    work_id: int,
+    work_id: str,
     work_data: Optional[WorkCreate] = None,
     request: Request = None,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     恢复作品
@@ -455,11 +455,11 @@ async def recover_work(
 
 @router.put("/{work_id}", response_model=WorkResponse)
 async def update_work(
-    work_id: int,
+    work_id: str,
     work_update: WorkUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     更新作品信息
@@ -506,10 +506,10 @@ async def update_work(
 
 @router.delete("/{work_id}")
 async def delete_work(
-    work_id: int,
+    work_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     删除作品
@@ -550,10 +550,10 @@ async def delete_work(
 
 @router.post("/{work_id}/publish")
 async def publish_work(
-    work_id: int,
+    work_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     发布作品
@@ -597,10 +597,10 @@ async def publish_work(
 
 @router.post("/{work_id}/archive")
 async def archive_work(
-    work_id: int,
+    work_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     归档作品
@@ -645,9 +645,9 @@ async def archive_work(
 # 协作者管理
 @router.get("/{work_id}/collaborators", response_model=List[WorkCollaboratorResponse])
 async def get_work_collaborators(
-    work_id: int,
+    work_id: str,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> List[Dict[str, Any]]:
     """
     获取作品协作者列表
@@ -670,11 +670,11 @@ async def get_work_collaborators(
 
 @router.post("/{work_id}/collaborators", response_model=WorkCollaboratorResponse)
 async def add_collaborator(
-    work_id: int,
+    work_id: str,
     collaborator_data: WorkCollaboratorCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     添加协作者
@@ -729,12 +729,12 @@ async def add_collaborator(
 
 @router.put("/{work_id}/collaborators/{user_id}", response_model=WorkCollaboratorResponse)
 async def update_collaborator(
-    work_id: int,
-    user_id: int,
+    work_id: str,
+    user_id: str,
     collaborator_update: WorkCollaboratorUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     更新协作者权限
@@ -781,11 +781,11 @@ async def update_collaborator(
 
 @router.delete("/{work_id}/collaborators/{user_id}")
 async def remove_collaborator(
-    work_id: int,
-    user_id: int,
+    work_id: str,
+    user_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     移除协作者

@@ -513,7 +513,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                     raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
 
                 chapter_service = ChapterService(db)
-                if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+                if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
 
                 ai_service = get_ai_service()
@@ -575,7 +575,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                     raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
 
                 chapter_service = ChapterService(db)
-                if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+                if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
 
                 # 解析章节ID（从原始命令中提取，在替换提及之前）
@@ -604,7 +604,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                 book_analysis_service = BookAnalysisService(db)
 
                 # 解析当前用户ID
-                current_user_id = int(work.owner_id)
+                current_user_id = work.owner_id
 
                 # 处理每个章节
                 total = len(chapter_ids)
@@ -675,7 +675,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                     raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
 
                 chapter_service = ChapterService(db)
-                if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+                if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
 
                 # 解析章节ID（从原始命令中提取，在替换提及之前）
@@ -704,7 +704,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
                 book_analysis_service = BookAnalysisService(db)
 
                 # 解析当前用户ID
-                current_user_id = int(work.owner_id)
+                current_user_id = work.owner_id
 
                 # 处理每个章节
                 total = len(chapter_ids)
@@ -896,7 +896,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
             if not work:
                 raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
 
-            if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+            if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                 raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
 
             ai_service = get_ai_service()
@@ -905,7 +905,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
 
             analysis_settings = AnalysisSettings()
             book_analysis_service = BookAnalysisService(db)
-            current_user_id = int(work.owner_id)
+            current_user_id = work.owner_id
 
             # 处理每个章节
             all_summaries = []
@@ -974,7 +974,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
             if not work:
                 raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
 
-            if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+            if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                 raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
 
             ai_service = get_ai_service()
@@ -983,7 +983,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
 
             analysis_settings = AnalysisSettings()
             book_analysis_service = BookAnalysisService(db)
-            current_user_id = int(work.owner_id)
+            current_user_id = work.owner_id
 
             # 处理每个章节
             all_summaries = []
@@ -1039,7 +1039,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
                 raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
 
             chapter_service = ChapterService(db)
-            if not await chapter_service.can_edit_work(user_id=int(work.owner_id), work_id=work_id):
+            if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                 raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
 
             ai_service = get_ai_service()

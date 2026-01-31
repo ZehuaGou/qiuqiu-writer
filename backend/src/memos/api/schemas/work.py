@@ -123,7 +123,7 @@ class WorkUpdate(BaseModel):
 
 class WorkResponse(BaseModel):
     """作品响应模式"""
-    id: int
+    id: str
     title: str
     subtitle: Optional[str]
     description: Optional[str]
@@ -146,7 +146,7 @@ class WorkResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime]
-    owner_id: int
+    owner_id: str
 
     class Config:
         from_attributes = True
@@ -154,7 +154,7 @@ class WorkResponse(BaseModel):
 
 class WorkListItem(BaseModel):
     """作品列表项模式"""
-    id: int
+    id: str
     title: str
     subtitle: Optional[str]
     description: Optional[str]
@@ -184,7 +184,7 @@ class WorkListResponse(BaseModel):
 
 class WorkCollaboratorBase(BaseModel):
     """作品协作者基础模式"""
-    user_id: int
+    user_id: str
     permission: str  # owner/editor/reader
     role: Optional[str] = None
 
@@ -218,11 +218,11 @@ class WorkCollaboratorUpdate(BaseModel):
 class WorkCollaboratorResponse(BaseModel):
     """作品协作者响应模式"""
     id: int
-    work_id: int
-    user_id: int
+    work_id: str
+    user_id: str
     permission: str
     role: Optional[str]
-    invited_by: Optional[int]
+    invited_by: Optional[str]
     joined_at: datetime
     created_at: datetime
 
@@ -232,7 +232,7 @@ class WorkCollaboratorResponse(BaseModel):
 
 class WorkStatistics(BaseModel):
     """作品统计信息模式"""
-    work_id: int
+    work_id: str
     total_word_count: int
     total_chapter_count: int
     estimated_reading_time: int

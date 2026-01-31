@@ -222,7 +222,7 @@ class ShareDBService:
 
         logger.info(f"删除ShareDB文档: {document_id}")
 
-    async def submit_operation(self, document_id: str, operation: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+    async def submit_operation(self, document_id: str, operation: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """提交操作到文档"""
         if not self._initialized:
             await self.initialize()
@@ -283,7 +283,7 @@ class ShareDBService:
 
             return op_result
 
-    async def join_collaboration(self, websocket: WebSocket, document_id: str, user_id: int):
+    async def join_collaboration(self, websocket: WebSocket, document_id: str, user_id: str):
         """加入协作会话"""
         if not self._initialized:
             await self.initialize()
@@ -351,7 +351,7 @@ class ShareDBService:
             for i in range(len(self.active_connections[document_id]))
         ]
 
-    async def _apply_operation(self, document: Dict[str, Any], operation: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+    async def _apply_operation(self, document: Dict[str, Any], operation: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """应用操作到文档"""
         op_type = operation.get("type")
         path = operation.get("path", [])
@@ -434,7 +434,7 @@ class ShareDBService:
         for websocket in disconnected:
             self.active_connections[document_id].discard(websocket)
 
-    async def _broadcast_operation(self, document_id: str, message: Dict[str, Any], exclude_user_id: Optional[int] = None):
+    async def _broadcast_operation(self, document_id: str, message: Dict[str, Any], exclude_user_id: Optional[str] = None):
         """广播操作给其他用户"""
         await self._broadcast_update(document_id, message)
 
@@ -452,7 +452,7 @@ class ShareDBService:
                 except Exception:
                     pass
 
-    async def _cleanup_connection(self, websocket: WebSocket, document_id: str, user_id: int):
+    async def _cleanup_connection(self, websocket: WebSocket, document_id: str, user_id: str):
         """清理连接资源"""
         # 从活跃连接中移除
         if document_id in self.active_connections:
@@ -1300,7 +1300,7 @@ class ShareDBService:
         base_content: Optional[str] = None,  # 上次同步的内容（HTML 格式，用于计算差异）
         content_json: Optional[Dict[str, Any]] = None,  # TipTap JSON 格式内容（用于更精确的段落级合并）
         base_content_json: Optional[Dict[str, Any]] = None,  # 上次同步的内容（JSON 格式，用于更精确的合并）
-        user_id: Optional[int] = None,
+        user_id: Optional[str] = None,
         create_version: bool = False,
         db_session: Optional[Any] = None,
         metadata: Optional[Dict[str, Any]] = None  # 文档的元数据（章节信息等）
@@ -1342,7 +1342,7 @@ class ShareDBService:
                         "version": new_version,
                         "created_at": datetime.utcnow().isoformat(),
                         "updated_at": datetime.utcnow().isoformat(),
-                        "last_editor_id": user_id
+                        "last_editor_id": user_id or ""
                     }
                     # 如果提供了 JSON 格式，也保存到文档中
                     if content_json:
@@ -1800,7 +1800,7 @@ class ShareDBService:
                         "type": "full_update",
                         "content": content
                     },
-                    "user_id": user_id or 0,
+                    "user_id": user_id or "",
                     "timestamp": datetime.utcnow().isoformat()
                 }
 
@@ -1822,10 +1822,10 @@ class ShareDBService:
                         from memos.api.services.chapter_service import ChapterService
                         from memos.api.services.work_service import WorkService
                         
-                        # 从 document_id 中提取 work_id 和 chapter_id
-                        match = re.match(r"work_(\d+)_chapter_(\d+)", document_id)
+                        # 从 document_id 中提取 work_id（40位字符串）和 chapter_id
+                        match = re.match(r"work_([a-zA-Z0-9_-]+)_chapter_(\d+)", document_id)
                         if match:
-                            work_id = int(match.group(1))
+                            work_id = match.group(1)
                             chapter_id = int(match.group(2))
                             
                             # 计算章节字数（去除HTML标签，统计纯文本字符数）

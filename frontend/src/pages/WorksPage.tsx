@@ -96,7 +96,7 @@ export default function WorksPage() {
       
       
       // 调用删除API
-      await worksApi.deleteWork(Number(workId));
+      await worksApi.deleteWork(workId);
       
       
       
@@ -142,7 +142,7 @@ export default function WorksPage() {
           try {
             // 获取作品信息
             
-            const work = await worksApi.getWork(Number(workId));
+            const work = await worksApi.getWork(workId);
             
             
             // 根据格式调用相应的导出函数

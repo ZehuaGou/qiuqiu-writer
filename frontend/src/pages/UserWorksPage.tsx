@@ -26,7 +26,7 @@ export default function UserWorksPage() {
   const [saving, setSaving] = useState(false);
   const itemsPerPage = 20;
   const isCurrentUser = authApi.isAuthenticated() && 
-    authApi.getUserInfo()?.id === Number(userId);
+    authApi.getUserInfo()?.id === userId;
 
   const loadUserWorks = useCallback(async () => {
     if (!userId) return;
@@ -52,7 +52,7 @@ export default function UserWorksPage() {
           size: itemsPerPage,
         });
         // 过滤出该用户的作品
-        const userWorks = response.works.filter(w => w.owner_id === Number(userId));
+        const userWorks = response.works.filter(w => w.owner_id === userId);
         setWorks(userWorks);
         setTotal(userWorks.length);
       }
@@ -92,7 +92,7 @@ export default function UserWorksPage() {
       // TODO: 添加获取其他用户信息的API调用
       // 目前使用占位符
       setUserInfo({
-        id: Number(userId),
+        id: userId,
         username: `user_${userId}`,
         email: '',
         display_name: `用户 ${userId}`,

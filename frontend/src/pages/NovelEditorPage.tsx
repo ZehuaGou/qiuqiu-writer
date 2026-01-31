@@ -197,7 +197,7 @@ export default function NovelEditorPage(){
     const loadWork = async () => {
       try {
         setLoading(true);
-        const workData = await worksApi.getWork(Number(workId), true, true);
+        const workData = await worksApi.getWork(workId!, true, true);
         setWork(workData);
         
         // 检查是否来自缓存
@@ -300,7 +300,7 @@ export default function NovelEditorPage(){
     }
 
     try {
-      const updatedWork = await worksApi.updateWork(Number(workId), {
+      const updatedWork = await worksApi.updateWork(workId!, {
         title: newTitle,
       });
       setWork(updatedWork);
@@ -412,7 +412,7 @@ export default function NovelEditorPage(){
     if (!confirmed) return;
     
     try {
-      await worksApi.deleteWork(Number(workId));
+      await worksApi.deleteWork(workId!);
       alert('作品删除成功');
       // 导航到当前用户的作品页面
       const currentUser = authApi.getUserInfo();
@@ -695,7 +695,7 @@ export default function NovelEditorPage(){
           if (workId) {
             try {
               // 重新加载作品和章节数据
-              const workData = await worksApi.getWork(Number(workId));
+              const workData = await worksApi.getWork(workId!);
               setWork(workData);
               // 触发章节列表重新加载
               window.dispatchEvent(new Event('chapters-updated'));
@@ -751,7 +751,7 @@ export default function NovelEditorPage(){
                   // 静默刷新数据（不刷新整个页面）
                   if (workId) {
                     // 重新加载作品和章节数据
-                    const workData = await worksApi.getWork(Number(workId));
+                    const workData = await worksApi.getWork(workId!);
                     setWork(workData);
                     // 触发章节列表重新加载
                     window.dispatchEvent(new Event('chapters-updated'));
@@ -802,7 +802,7 @@ export default function NovelEditorPage(){
       try {
         // 1. 并行获取卷列表和章节列表
         const [volumesResponse, chaptersResponse] = await Promise.all([
-          volumesApi.listVolumes(Number(workId)).catch(e => {
+          volumesApi.listVolumes(workId!).catch(e => {
             console.warn('加载卷列表失败:', e);
             return [] as Volume[];
           }),
@@ -813,7 +813,7 @@ export default function NovelEditorPage(){
             let hasMore = true;
             while (hasMore) {
               const res = await chaptersApi.listChapters({
-                work_id: Number(workId),
+                work_id: workId!,
                 page: page,
                 size: pageSize,
                 sort_by: 'chapter_number',
@@ -1146,7 +1146,7 @@ export default function NovelEditorPage(){
       
       // 关键修复：构建包含 title 的 metadata
       const metadata = {
-        work_id: Number(workId),
+        work_id: workId!,
         chapter_id: chapterId,
         chapter_number: chapterNumber, // 关键修复：保存正确的章节号
         title: chapterTitle, // 关键修复：保存章节标题
@@ -1209,7 +1209,7 @@ export default function NovelEditorPage(){
       // 关键修复：即使保存失败，也尝试保存到本地缓存（作为最后的备份）
       try {
         await documentCache.updateDocument(documentId, editorContent, {
-          work_id: Number(workId),
+          work_id: workId!,
           chapter_id: chapterId,
           updated_at: new Date().toISOString(),
         });
@@ -1511,7 +1511,7 @@ export default function NovelEditorPage(){
              volumeNumber = maxVolNum + 1;
         }
 
-        savedVolume = await volumesApi.createVolume(Number(workId), {
+        savedVolume = await volumesApi.createVolume(workId!, {
           title,
           volume_number: volumeNumber,
           outline,
@@ -1747,7 +1747,7 @@ export default function NovelEditorPage(){
           : 0;
         
         const newChapter = await chaptersApi.createChapter({
-          work_id: Number(workId),
+          work_id: workId!,
           title: data.title,
           chapter_number: maxChapterNumber + 1,
           // 如果 volNum > 0 则设置，否则为 undefined（未分卷）
@@ -1911,7 +1911,7 @@ export default function NovelEditorPage(){
 
     try {
       const result = await analyzeChapter(
-        Number(workId),
+        workId!,
         chapterIdNum,
         (progress) => {
           if (progress.message) {

@@ -89,7 +89,7 @@ class YjsService:
 
         return self.documents[document_id]
 
-    async def apply_update(self, document_id: str, update: bytes, user_id: Optional[int] = None):
+    async def apply_update(self, document_id: str, update: bytes, user_id: Optional[str] = None):
         """应用更新到文档"""
         if not self._initialized:
             await self.initialize()
@@ -136,7 +136,7 @@ class YjsService:
         else:
             return yjs.encode_state_as_update(ydoc)
 
-    async def join_collaboration(self, websocket: WebSocket, document_id: str, user_id: int):
+    async def join_collaboration(self, websocket: WebSocket, document_id: str, user_id: str):
         """加入协作会话"""
         if not self._initialized:
             await self.initialize()
@@ -194,7 +194,7 @@ class YjsService:
             # 清理连接
             await self._cleanup_connection(websocket, document_id, user_id)
 
-    async def _broadcast_update(self, document_id: str, update: bytes, exclude_user_id: Optional[int] = None):
+    async def _broadcast_update(self, document_id: str, update: bytes, exclude_user_id: Optional[str] = None):
         """广播更新给所有连接的客户端"""
         if document_id not in self.active_connections:
             return
@@ -211,7 +211,7 @@ class YjsService:
         for websocket in disconnected:
             self.active_connections[document_id].discard(websocket)
 
-    async def _cleanup_connection(self, websocket: WebSocket, document_id: str, user_id: int):
+    async def _cleanup_connection(self, websocket: WebSocket, document_id: str, user_id: str):
         """清理连接"""
         if document_id in self.active_connections:
             self.active_connections[document_id].discard(websocket)
