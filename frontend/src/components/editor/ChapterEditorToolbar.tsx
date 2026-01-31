@@ -136,20 +136,12 @@ export default function ChapterEditorToolbar({
                 setTimeout(() => {
                   if (headingButtonRef.current && dropdownMenuRef.current) {
                     const rect = headingButtonRef.current.getBoundingClientRect();
-                    const isMobile = window.innerWidth <= 768;
-                    if (isMobile) {
-                      // 移动端使用 fixed 定位
-                      dropdownMenuRef.current.style.position = 'fixed';
-                      dropdownMenuRef.current.style.left = `${rect.left}px`;
-                      dropdownMenuRef.current.style.top = `${rect.bottom + 4}px`;
-                      dropdownMenuRef.current.style.transform = 'none';
-                    } else {
-                      // 桌面端使用 absolute 定位（相对于按钮）
-                      dropdownMenuRef.current.style.position = 'absolute';
-                      dropdownMenuRef.current.style.left = '0';
-                      dropdownMenuRef.current.style.top = '100%';
-                      dropdownMenuRef.current.style.transform = 'none';
-                    }
+                    // 统一使用 fixed 定位，避免被父容器 overflow 裁剪
+                    dropdownMenuRef.current.style.position = 'fixed';
+                    dropdownMenuRef.current.style.left = `${rect.left}px`;
+                    dropdownMenuRef.current.style.top = `${rect.bottom + 4}px`;
+                    dropdownMenuRef.current.style.transform = 'none';
+                    dropdownMenuRef.current.style.zIndex = '1001'; // 确保高于工具栏
                   }
                 }, 0);
               }
