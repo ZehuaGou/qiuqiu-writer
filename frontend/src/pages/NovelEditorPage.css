@@ -375,15 +375,15 @@
 
 /* 第二行工具栏 - 编辑器工具 */
 .editor-toolbar-row {
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-light, #e0e0e0);
-  padding: 12px 24px;
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   flex-shrink: 0;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  box-shadow: none;
   min-height: 48px;
   overflow: visible;
   position: relative;
@@ -403,30 +403,35 @@
 /* 侧边栏包装器 */
 .sidebar-wrapper {
   position: relative;
-  transition: width 0.3s ease;
+  transition: all 0.3s ease;
   flex-shrink: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden; /* 裁剪溢出，保证动画整洁，同时因为有padding，阴影不会被裁剪 */
+  box-sizing: border-box;
 }
 
 .left-sidebar-wrapper {
-  width: 280px;
+  width: 304px; /* 280px + 24px padding */
+  padding: 24px 0 24px 24px;
 }
 
 .right-sidebar-wrapper {
-  width: 320px;
+  width: 344px; /* 320px + 24px padding */
+  padding: 24px 24px 24px 0;
 }
 
 /* 折叠状态 */
 .left-sidebar-wrapper.collapsed {
   width: 0;
+  padding: 0;
   overflow: visible;
 }
 
 .right-sidebar-wrapper.collapsed {
   width: 0;
+  padding: 0;
   overflow: visible;
 }
 
@@ -895,13 +900,33 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* 第二行工具栏中的编辑器工具栏样式 */
-.editor-toolbar-row .novel-editor-toolbar {
+/* 嵌入式工具栏容器 */
+.embedded-toolbar {
+  width: 100%;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light, #e0e0e0);
+  /* 只有工具栏有顶部圆角 */
+  border-radius: 12px 12px 0 0;
+}
+
+/* 嵌入式工具栏样式重置 */
+.embedded-toolbar .novel-editor-toolbar {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   flex-shrink: 0;
+  width: 100%;
+  padding: 12px 24px;
+  box-shadow: none;
+  background: transparent;
+  border: none;
+  margin: 0;
+  max-width: none;
+  border-radius: 0;
 }
 
 /* 顶部导航栏中的保存和设置按钮 */
@@ -1082,7 +1107,7 @@
   position: relative;
   flex: 1;
   overflow: visible;
-  padding: 60px 24px;
+  padding: 24px 24px;
   display: flex;
   justify-content: center;
   min-height: min-content;
@@ -1122,7 +1147,8 @@
   max-height: 100px;
   overflow: hidden;
   background: var(--bg-primary);
-  border-radius: 12px 12px 0 0;
+  /* 移除顶部圆角，因为上面现在有工具栏了 */
+  border-radius: 0;
 }
 
 .chapter-number {

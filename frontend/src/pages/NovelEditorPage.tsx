@@ -2134,18 +2134,8 @@ export default function NovelEditorPage(){
         {/* 分析进度已移除，改为后台运行，不显示弹窗 */}
       </header>
 
-      {/* 第二行工具栏 - 编辑器工具 */}
-      {selectedChapter !== null && (
-        <div className={`editor-toolbar-row ${isMobile ? 'mobile' : ''}`}>
-          <ChapterEditorToolbar
-            editor={editor}
-            onManualSave={handleManualSave}
-            onEditChapter={handleEditCurrentChapter}
-            headingMenuOpen={headingMenuOpen}
-            setHeadingMenuOpen={setHeadingMenuOpen}
-          />
-        </div>
-      )}
+      {/* 第二行工具栏 - 已移动到编辑器内部 */}
+
 
       <div className={`novel-editor-body ${leftSidebarCollapsed ? 'left-collapsed' : ''} ${rightSidebarCollapsed ? 'right-collapsed' : ''} ${isMobile ? 'mobile' : ''}`}>
         {/* 左侧边栏 - 桌面端 */}
@@ -2300,6 +2290,17 @@ export default function NovelEditorPage(){
                 <div className="chapter-content-wrapper" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
                   {/* 编辑器内容 - 包含章节头部 */}
                   <div className="editor-with-header">
+                    {/* 工具栏 - 嵌入在文档顶部 */}
+                    <div className="embedded-toolbar">
+                      <ChapterEditorToolbar
+                        editor={editor}
+                        onManualSave={handleManualSave}
+                        onEditChapter={handleEditCurrentChapter}
+                        headingMenuOpen={headingMenuOpen}
+                        setHeadingMenuOpen={setHeadingMenuOpen}
+                      />
+                    </div>
+                    
                     {/* 章节头部信息 - 作为编辑器的一部分 */}
                     {selectedChapter && chaptersData[selectedChapter] && (
                       <div className="chapter-header-info">

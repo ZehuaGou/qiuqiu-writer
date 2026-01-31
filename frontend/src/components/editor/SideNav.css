@@ -1,11 +1,13 @@
 .side-nav {
-  width: 280px;
+  width: 100%;
   background: var(--bg-primary);
-  border-right: 1px solid var(--border-light);
+  /* border-right: 1px solid var(--border-light); */
   display: flex;
   flex-direction: column;
   padding: 20px 0;
   overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
 
 .nav-section {
