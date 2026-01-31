@@ -596,9 +596,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px;
-  background: var(--bg-secondary, #f8f8f8);
-  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .toolbar-btn {
@@ -891,13 +891,11 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden; /* 防止外层滚动 */
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   position: relative;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* 嵌入式工具栏容器 */
@@ -916,7 +914,7 @@
 .embedded-toolbar .novel-editor-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
   flex-shrink: 0;
   width: 100%;
@@ -1106,11 +1104,11 @@
 .novel-editor-wrapper {
   position: relative;
   flex: 1;
-  overflow: visible;
-  padding: 24px 24px;
+  overflow: hidden; /* 防止溢出 */
+  padding: 24px;
   display: flex;
   justify-content: center;
-  min-height: min-content;
+  height: 100%; /* 占满容器高度 */
   background: var(--bg-secondary, #f8f8f8);
   box-sizing: border-box;
 }
@@ -1124,7 +1122,7 @@
   box-sizing: border-box;
   overflow: visible;
   margin: 0 auto;
-  /* 让内容自然增长，不限制高度 */
+  height: 100%; /* 占满可用高度 */
 }
 
 .editor-with-header {
@@ -1134,9 +1132,8 @@
   background: var(--bg-primary);
   border-radius: 12px;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  overflow: visible;
-  /* 确保内容可以超出容器高度 */
-  min-height: min-content;
+  overflow-y: auto; /* 在这里滚动 */
+  height: 100%; /* 占满父容器高度 */
 }
 
 /* 章节头部信息 - 作为编辑器的一部分 */
