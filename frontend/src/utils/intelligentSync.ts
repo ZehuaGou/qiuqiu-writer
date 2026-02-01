@@ -240,9 +240,9 @@ export function useIntelligentSync(
       // 关键修复：从 documentId 中提取章节ID，用于验证
       let expectedChapterId: number | null = null;
       if (currentDocumentId.startsWith('work_') && currentDocumentId.includes('_chapter_')) {
-        const match = currentDocumentId.match(/work_\d+_chapter_(\d+)/);
+        const match = currentDocumentId.match(/work_[a-zA-Z0-9_-]+_chapter_(\d+)/);
         if (match) {
-          expectedChapterId = parseInt(match[1]);
+          expectedChapterId = parseInt(match[1], 10);
         }
       } else if (currentDocumentId.startsWith('chapter_')) {
         expectedChapterId = parseInt(currentDocumentId.replace('chapter_', ''));

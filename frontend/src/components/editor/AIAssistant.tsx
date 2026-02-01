@@ -208,14 +208,16 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
       // 检查 @ 后面是否已经有完整的提及格式
       const hasCompleteMention = /^(章节|角色):/.test(textAfterAt);
       
-      // 检查 @ 后面是否有空格、换行或已完成的提及，如果有则关闭菜单
       // 检查是否已经有完整的提及格式（@chapter:123 或 @character:角色名称）
       const hasCompleteMentionId = /^(chapter:\d+|character:[^@\s]+)/.test(textAfterAt);
       
-      if (textAfterAt.includes(' ') || 
-          textAfterAt.includes('\n') ||
+      // 「command + 空格」视为刚选择指令，继续显示列表，不关闭（如 @chapter 后跟空格）
+      const isCommandWordWithTrailingSpace = /^(chapter|chap|章节|zj|character|cha|角色|js)\s+$/.test(textAfterAt);
+      
+      if ((textAfterAt.includes('\n') ||
           hasCompleteMention ||
-          hasCompleteMentionId) {
+          hasCompleteMentionId) ||
+          (textAfterAt.includes(' ') && !isCommandWordWithTrailingSpace)) {
         setShowMentionMenu(false);
       } else {
         const query = textAfterAt.toLowerCase();

@@ -4,7 +4,7 @@ import './HomeSideNav.css';
 
 const navItems = [
   { id: 'home', label: '首页', icon: Home, path: '/home' },
-  { id: 'works', label: '小说写作', icon: BookOpen, path: '/works' },
+  { id: 'works', label: '个人主页', icon: BookOpen, path: '/works' },
 ];
 
 export default function HomeSideNav() {

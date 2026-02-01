@@ -288,8 +288,8 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
         
         // 1.2 如果本地存储缓存没有，尝试从旧格式迁移
         if (!cachedDoc && documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-          const match = documentId.match(/work_(\d+)_chapter_(\d+)/);
-          if (match) {
+          const match = documentId.match(/work_([a-zA-Z0-9_-]+)_chapter_(\d+)/);
+            if (match) {
             const [, , chapterIdStr] = match;
             const oldFormatKey = `chapter_${chapterIdStr}`;
             const oldCached = await localCacheManager.get<ShareDBDocument>(oldFormatKey);

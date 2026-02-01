@@ -59,7 +59,7 @@ class WorkTemplateResponse(BaseModel):
     work_type: str
     is_system: Optional[bool] = False
     is_public: Optional[bool] = False
-    creator_id: Optional[int] = None
+    creator_id: Optional[str] = None
     category: Optional[str] = None
     tags: Optional[List[str]] = None
     template_config: Optional[Dict[str, Any]] = None  # 模板配置，包含 modules（组件配置，包括 dataKey 和 dataDependencies）
@@ -91,7 +91,7 @@ class WorkInfoExtendedUpdate(BaseModel):
 
 class WorkInfoExtendedResponse(BaseModel):
     id: int
-    work_id: int
+    work_id: str
     template_id: int
     field_values: Dict[str, Any]
 
@@ -104,7 +104,7 @@ async def create_template(
     template_data: WorkTemplateCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     创建作品模板
@@ -174,7 +174,7 @@ async def list_templates(
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
     include_fields: bool = Query(False, description="是否包含字段信息"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> List[Dict[str, Any]]:
     """
     获取模板列表
@@ -252,7 +252,7 @@ async def get_template(
     template_id: int,
     include_fields: bool = Query(True, description="是否包含字段信息"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取模板详情
@@ -285,7 +285,7 @@ async def update_template(
     template_update: WorkTemplateUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     更新模板信息
@@ -335,7 +335,7 @@ async def delete_template(
     template_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     删除模板
@@ -381,7 +381,7 @@ async def add_template_field(
     field_data: TemplateFieldCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     添加模板字段
@@ -429,7 +429,7 @@ async def update_template_field(
     field_update: TemplateFieldUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     更新模板字段
@@ -478,7 +478,7 @@ async def delete_template_field(
     field_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     删除模板字段
@@ -525,7 +525,7 @@ async def create_work_extended_info(
     extended_data: WorkInfoExtendedCreate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     创建作品扩展信息
@@ -569,7 +569,7 @@ async def create_work_extended_info(
 async def get_work_extended_info(
     work_id: int,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     获取作品扩展信息
@@ -602,7 +602,7 @@ async def update_work_extended_info(
     extended_update: WorkInfoExtendedUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     更新作品扩展信息
@@ -651,7 +651,7 @@ async def apply_template_to_work(
     template_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
     将模板应用到作品

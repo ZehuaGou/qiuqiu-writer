@@ -71,6 +71,8 @@ export default function MainLayout() {
     setUserInfo(user);
     setIsAuthenticated(true);
     setLoginModalOpen(false);
+    const from = (location.state as { from?: string })?.from;
+    navigate(from || `/users/${user.id}`, { replace: true });
   };
 
   const handleLogout = async () => {
@@ -82,6 +84,7 @@ export default function MainLayout() {
       setUserInfo(null);
       setIsAuthenticated(false);
       setUserMenuOpen(false);
+      navigate('/');
     }
   };
 
@@ -116,11 +119,19 @@ export default function MainLayout() {
   };
 
   const isHomePage = location.pathname === '/';
-  const isWorksPage = location.pathname === '/works';
-  const isUserPage = location.pathname.startsWith('/users/');
+  const isMyProfilePage = userInfo && location.pathname === `/users/${userInfo.id}`;
+  const needLoginPrompt = !isAuthenticated && (location.state as { needLogin?: boolean })?.needLogin;
 
   return (
     <div className="github-layout">
+      {needLoginPrompt && (
+        <div className="login-prompt-banner">
+          <span>请先登录以继续访问</span>
+          <button type="button" className="login-prompt-btn" onClick={() => setLoginModalOpen(true)}>
+            登录
+          </button>
+        </div>
+      )}
       {/* GitHub风格的顶部导航栏 */}
       <header className="github-header">
         <div className="header-container">
@@ -140,10 +151,10 @@ export default function MainLayout() {
                 </Link>
                 {isAuthenticated && (
                   <Link 
-                    to="/works"
-                    className={`nav-link ${isWorksPage ? 'active' : ''}`}
+                    to={userInfo ? `/users/${userInfo.id}` : '/'}
+                    className={`nav-link ${isMyProfilePage ? 'active' : ''}`}
                   >
-                    我的作品
+                    个人主页
                   </Link>
                 )}
               </nav>
@@ -206,11 +217,11 @@ export default function MainLayout() {
                       </div>
                       <div className="menu-divider"></div>
                       <Link
-                        to="/works"
+                        to={userInfo ? `/users/${userInfo.id}` : '/'}
                         className="menu-item"
                         onClick={() => setUserMenuOpen(false)}
                       >
-                        我的作品
+                        个人主页
                       </Link>
                       <a href="#" className="menu-item">个人设置</a>
                       <div className="menu-divider"></div>
@@ -262,11 +273,11 @@ export default function MainLayout() {
             {isAuthenticated && (
               <>
             <Link
-              to="/works"
+              to={userInfo ? `/users/${userInfo.id}` : '/'}
               className="mobile-menu-item"
               onClick={() => setMobileMenuOpen(false)}
             >
-              我的作品
+              个人主页
             </Link>
             <div className="menu-divider"></div>
                 <div className="mobile-menu-user">

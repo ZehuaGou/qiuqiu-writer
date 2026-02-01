@@ -211,9 +211,9 @@ export function useChapterAutoSave({
                   return false;
                 }
                 // 从 documentId 中提取章节ID
-                const match = docId.match(/work_\d+_chapter_(\d+)/);
+                const match = docId.match(/work_[a-zA-Z0-9_-]+_chapter_(\d+)/);
                 if (match) {
-                  const docChapterId = parseInt(match[1]);
+                  const docChapterId = parseInt(match[1], 10);
                   return docChapterId === chapterId;
                 }
                 return false;

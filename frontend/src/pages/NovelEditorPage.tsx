@@ -414,12 +414,8 @@ export default function NovelEditorPage(){
     try {
       await worksApi.deleteWork(workId!);
       alert('作品删除成功');
-      // 导航到当前用户的作品页面
-      if (authApi.isAuthenticated()) {
-        navigate('/works');
-      } else {
-        navigate('/');
-      }
+      const uid = authApi.getUserInfo()?.id;
+      navigate(uid ? `/users/${uid}` : '/');
     } catch (err) {
       console.error('删除作品失败:', err);
       alert(err instanceof Error ? err.message : '删除作品失败');
@@ -1167,9 +1163,9 @@ export default function NovelEditorPage(){
             return false;
           }
           // 从 documentId 中提取章节ID
-          const match = docId.match(/work_\d+_chapter_(\d+)/);
+          const match = docId.match(/work_[a-zA-Z0-9_-]+_chapter_(\d+)/);
           if (match) {
-            const docChapterId = parseInt(match[1]);
+            const docChapterId = parseInt(match[1], 10);
             return docChapterId === chapterId;
           }
           return false;
@@ -2164,11 +2160,8 @@ export default function NovelEditorPage(){
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--error, #666666)' }}>
           {error || '作品不存在'}
           <button onClick={() => {
-            if (authApi.isAuthenticated()) {
-              navigate('/works');
-            } else {
-              navigate('/');
-            }
+            const uid = authApi.getUserInfo()?.id;
+            navigate(uid ? `/users/${uid}` : '/');
           }} style={{ marginTop: '16px', padding: '8px 16px' }}>
             返回作品列表
           </button>
@@ -2186,7 +2179,7 @@ export default function NovelEditorPage(){
             if (work?.owner_id) {
               const currentUser = authApi.getUserInfo();
               if (currentUser?.id && work.owner_id === currentUser.id) {
-                navigate('/works');
+                navigate(`/users/${currentUser.id}`);
               } else {
                 navigate(`/users/${work.owner_id}`);
               }

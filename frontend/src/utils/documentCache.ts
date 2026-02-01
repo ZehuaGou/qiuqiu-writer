@@ -43,7 +43,7 @@ export const documentCache = {
       
       // 关键修复：如果新格式缓存不存在，尝试从旧格式迁移
       if (!cached && documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-        const match = documentId.match(/work_(\d+)_chapter_(\d+)/);
+        const match = documentId.match(/work_([a-zA-Z0-9_-]+)_chapter_(\d+)/);
         if (match) {
           const [, , chapterId] = match;
           const oldFormatKey = `chapter_${chapterId}`;
@@ -94,7 +94,7 @@ export const documentCache = {
     
     // 2. 缓存没有，从服务器获取
     const requestKey = documentId.includes('_chapter_') 
-      ? `chapter_doc_${documentId.match(/work_\d+_chapter_(\d+)/)?.[1] || ''}`
+      ? `chapter_doc_${documentId.match(/work_[a-zA-Z0-9_-]+_chapter_(\d+)/)?.[1] || ''}`
       : `chapter_doc_${documentId.replace('chapter_', '')}`;
     
     // 如果已经有相同章节的请求正在进行，等待该请求完成
@@ -284,7 +284,7 @@ export const documentCache = {
       
       // 关键修复：如果新格式缓存不存在，尝试从旧格式迁移
       if (!cached && documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-        const match = documentId.match(/work_(\d+)_chapter_(\d+)/);
+        const match = documentId.match(/work_([a-zA-Z0-9_-]+)_chapter_(\d+)/);
         if (match) {
           const [, , chapterId] = match;
           const oldFormatKey = `chapter_${chapterId}`;
@@ -710,9 +710,9 @@ export const documentCache = {
     if (documentId.startsWith('chapter_')) {
       chapterId = parseInt(documentId.replace('chapter_', ''));
     } else if (documentId.startsWith('work_') && documentId.includes('_chapter_')) {
-      const match = documentId.match(/work_\d+_chapter_(\d+)/);
+      const match = documentId.match(/work_[a-zA-Z0-9_-]+_chapter_(\d+)/);
       if (match) {
-        chapterId = parseInt(match[1]);
+        chapterId = parseInt(match[1], 10);
       }
     }
     

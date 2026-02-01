@@ -19,7 +19,7 @@ class TemplateService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_template(self, creator_id: int, **kwargs) -> WorkTemplate:
+    async def create_template(self, creator_id: str, **kwargs) -> WorkTemplate:
         """创建作品模板"""
         # 确保 template_config 有默认值
         if "template_config" not in kwargs or kwargs["template_config"] is None:

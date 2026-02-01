@@ -21,9 +21,9 @@ async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSessi
 @router.post("/", response_model=VolumeSchema)
 async def create_volume(
     volume: VolumeCreate,
-    work_id: int = Query(..., description="作品ID"),
+    work_id: str = Query(..., description="作品ID"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ):
     # Check if work exists and user is owner
     result = await db.execute(select(Work).where(Work.id == work_id))
@@ -54,9 +54,9 @@ async def create_volume(
 
 @router.get("/", response_model=List[VolumeSchema])
 async def list_volumes(
-    work_id: int = Query(..., description="作品ID"),
+    work_id: str = Query(..., description="作品ID"),
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ):
     # Check permissions
     result = await db.execute(select(Work).where(Work.id == work_id))
@@ -78,7 +78,7 @@ async def update_volume(
     volume_id: int,
     volume_update: VolumeUpdate,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ):
     result = await db.execute(select(Volume).where(Volume.id == volume_id))
     volume = result.scalars().first()
@@ -115,7 +115,7 @@ async def update_volume(
 async def delete_volume(
     volume_id: int,
     db: AsyncSession = Depends(get_db_session),
-    current_user_id: int = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id)
 ):
     result = await db.execute(select(Volume).where(Volume.id == volume_id))
     volume = result.scalars().first()

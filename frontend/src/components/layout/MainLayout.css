@@ -5,6 +5,32 @@
   background: #ffffff;
 }
 
+/* 需要登录提示条 */
+.login-prompt-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  font-size: 14px;
+  border-bottom: 1px solid #fcd34d;
+}
+.login-prompt-btn {
+  padding: 6px 14px;
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.login-prompt-btn:hover {
+  background: #d97706;
+}
+
 /* GitHub风格顶部导航栏 */
 .github-header {
   position: sticky;
