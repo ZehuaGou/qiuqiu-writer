@@ -93,6 +93,13 @@ class TemplatesApiClient extends BaseApiClient {
   }
 
   /**
+   * 确保用户有默认小说模板：有则返回，没有则由后端基于系统小说标准模板创建一份并返回。
+   */
+  async ensureDefaultNovelTemplate(): Promise<WorkTemplate> {
+    return this.get<WorkTemplate>('/api/v1/templates/ensure-default-novel');
+  }
+
+  /**
    * 获取模板列表
    */
   async listTemplates(params?: {

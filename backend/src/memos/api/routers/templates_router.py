@@ -228,6 +228,25 @@ async def list_templates(
     ]
 
 
+@router.get("/ensure-default-novel", response_model=WorkTemplateResponse)
+async def ensure_default_novel_template(
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: str = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    确保当前用户有默认小说模板：有则返回，没有则用系统小说标准模板创建一份并返回。
+    """
+    template_service = TemplateService(db)
+    try:
+        template = await template_service.ensure_user_default_novel_template(current_user_id)
+        return template.to_dict(include_fields=True, include_stats=True)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
+
+
 @router.get("/public", response_model=List[WorkTemplateResponse])
 async def get_public_templates(
     page: int = Query(1, ge=1, description="页码"),

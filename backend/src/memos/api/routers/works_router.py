@@ -56,43 +56,54 @@ async def create_work(
         owner_id=current_user_id,
         **work_data.dict()
     )
+    work_id = work.id
+    work_title = work.title
+    work_type = work.work_type
 
-    # 记录审计日志
-    await work_service.create_audit_log(
-        user_id=current_user_id,
-        action="create",
-        target_type="work",
-        target_id=work.id,
-        details={"title": work.title, "work_type": work.work_type},
-        ip_address=get_client_ip(request),
-        user_agent=get_user_agent(request)
-    )
-
-    # 小说类型：确保用户有默认模板（没有则用小说标准模板创建），并为该作品绑定默认模板并复制 prompt
-    if work.work_type == "novel":
+    # 小说类型：确保用户有默认模板（没有则用小说标准模板创建），并为该作品绑定默认模板、复制 prompt，并写入 metadata.template_config.templateId
+    if work_type == "novel":
         try:
             template_service = TemplateService(db)
             user_template = await template_service.ensure_user_default_novel_template(current_user_id)
             await template_service.create_work_extended_info(
-                work_id=work.id,
+                work_id=work_id,
                 template_id=user_template.id,
                 field_values={},
             )
             await template_service.copy_prompts_from_template_to_work(
                 template_id=user_template.id,
-                work_id=work.id,
+                work_id=work_id,
                 creator_id=current_user_id,
+            )
+            # 创建时直接绑定 work.work_metadata.template_config.templateId（纯 id，不再使用 db- 前缀）
+            work = await work_service.update_work(
+                work_id,
+                metadata={"template_config": {"templateId": f"{user_template.id}"}},
             )
             logger.info(
                 "创建作品已绑定用户默认模板: work_id=%s, template_id=%s",
-                work.id,
+                work_id,
                 user_template.id,
             )
         except ValueError as e:
             logger.warning("创建作品时绑定默认模板失败（无小说标准模板）: %s", e)
+            await db.rollback()
+            work = await work_service.get_work_by_id(work_id)
         except Exception as e:
             logger.warning("创建作品时绑定默认模板失败（不影响作品创建）: %s", e)
+            await db.rollback()
+            work = await work_service.get_work_by_id(work_id)
 
+    # 记录审计日志（使用已保存的 work_id/work_title/work_type，避免 rollback 后访问过期 ORM 对象）
+    await work_service.create_audit_log(
+        user_id=current_user_id,
+        action="create",
+        target_type="work",
+        target_id=work_id,
+        details={"title": work_title, "work_type": work_type},
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
+    )
     return work.to_dict()
 
 

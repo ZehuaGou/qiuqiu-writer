@@ -16,6 +16,10 @@ const loadPromptsForComponents = async (modules: ModuleConfig[]): Promise<Module
   return modules;
 };
 
+/** 传给后端的 templateId：去掉 db- 前缀，只传纯 id（如 "8"） */
+const templateIdForBackend = (id: string): string =>
+  id.startsWith('db-') ? id.slice(3) : id;
+
 export const useWorkInfoData = (
   workId: string | null,
   workData: WorkData | null,
@@ -27,25 +31,30 @@ export const useWorkInfoData = (
   const [isSaving, setIsSaving] = useState(false);
   
   const initializedRef = useRef(false);
-  // const lastLoadedTemplateTimeRef = useRef<number>(0);
-  // const isInternalUpdateRef = useRef(false);
+  /** 为 true 时跳过下一次「template 变化」触发的自动保存，避免进入作品时用当前模板覆盖后端 metadata */
+  const skipNextBackendSaveRef = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 加载默认模板
+  // 加载默认模板（兜底：作品无 template_config 时优先用用户第一个，没有则由后端确保并返回用户默认小说模板）
   const loadDefaultTemplate = useCallback(async (templates: WorkTemplate[] = []): Promise<TemplateConfig | null> => {
     try {
       let defaultTemplate: WorkTemplate | undefined;
-      
-      // 优先查找模板ID为8的小说标准模板，如果没有则查找第一个系统模板
+
+      const pickUserFirst = (list: WorkTemplate[]) =>
+        list.find(t => !t.is_system) || list[0];
+
       if (templates.length > 0) {
-        defaultTemplate = templates.find(t => t.id === 8) || templates.find(t => t.is_system) || templates[0];
+        defaultTemplate = pickUserFirst(templates);
       } else {
-        // 如果没有传入 templates，尝试从 API 获取
         const fetchedTemplates = await templatesApi.listTemplates({
           work_type: 'novel',
           include_fields: true
         });
-        defaultTemplate = fetchedTemplates.find(t => t.id === 8) || fetchedTemplates.find(t => t.is_system) || fetchedTemplates[0];
+        defaultTemplate = pickUserFirst(fetchedTemplates);
+      }
+
+      if (!defaultTemplate) {
+        defaultTemplate = await templatesApi.ensureDefaultNovelTemplate();
       }
 
       if (defaultTemplate) {
@@ -57,11 +66,10 @@ export const useWorkInfoData = (
             modules = (defaultTemplate.template_config as any).modules as ModuleConfig[]; // eslint-disable-line @typescript-eslint/no-explicit-any
           }
         }
-        
         if (modules.length > 0) {
           return {
-            id: `db-${defaultTemplate.id}`,
-            templateId: `db-${defaultTemplate.id}`, // Explicitly set templateId
+            id: defaultTemplate.id.toString(),
+            templateId: defaultTemplate.id.toString(),
             name: defaultTemplate.name,
             description: defaultTemplate.description || '',
             modules: modules
@@ -98,10 +106,10 @@ export const useWorkInfoData = (
         // 提取模板配置
         const templateConfig = metadata.template_config;
         if (templateConfig) {
-           // 检查是否有来自数据库的模板ID
-           if (templateConfig.templateId?.startsWith('db-')) {
-             // 尝试从 userTemplates 查找对应的结构
-             const dbId = parseInt(templateConfig.templateId.replace('db-', ''));
+            // 检查是否有来自数据库的模板ID（兼容旧数据 "db-8" 与纯 id "8"）
+            if (templateConfig.templateId) {
+             const rawIdStr = String(templateConfig.templateId).replace(/^db-/, '');
+             const dbId = parseInt(rawIdStr, 10);
              const dbTemplate = userTemplates.find(t => t.id === dbId);
              
              if (dbTemplate) {
@@ -117,8 +125,8 @@ export const useWorkInfoData = (
                 
                 if (dbModules.length > 0) {
                   baseTemplate = {
-                    id: `db-${dbTemplate.id}`,
-                    templateId: `db-${dbTemplate.id}`, // Explicitly set templateId
+                    id: dbTemplate.id.toString(),
+                    templateId: dbTemplate.id.toString(), // Explicitly set templateId
                     name: dbTemplate.name,
                     description: dbTemplate.description || '',
                     modules: await loadPromptsForComponents(dbModules)
@@ -127,11 +135,11 @@ export const useWorkInfoData = (
              }
            }
 
-           // 如果没有找到 db template，或者 templateId 不是 db- 开头，使用 metadata 中的 modules
+           // 如果没有找到 db template，使用 metadata 中的 modules
            if (!baseTemplate && templateConfig.modules && Array.isArray(templateConfig.modules)) {
              baseTemplate = {
-               id: templateConfig.templateId || '',
-               templateId: templateConfig.templateId || '', // Explicitly set templateId
+               id: templateConfig.templateId?.toString() || '',
+               templateId: templateConfig.templateId?.toString() || '', // Explicitly set templateId
                name: '作品模板',
                description: '',
                modules: await loadPromptsForComponents(templateConfig.modules)
@@ -155,9 +163,10 @@ export const useWorkInfoData = (
           }
           
           if (cached.modules && cached.modules.length > 0) {
+            const normalizedId = templateIdForBackend(cached.templateId);
             baseTemplate = {
-              id: cached.templateId,
-              templateId: cached.templateId, // Explicitly set templateId
+              id: normalizedId,
+              templateId: normalizedId,
               name: '缓存模板',
               description: '',
               modules: cached.modules,
@@ -185,6 +194,7 @@ export const useWorkInfoData = (
           modules: finalModules
         };
 
+        skipNextBackendSaveRef.current = true;
         setTemplate(finalTemplate);
         initializedRef.current = true;
         
@@ -196,7 +206,8 @@ export const useWorkInfoData = (
         }, workId, finalTemplate.id);
       } else {
         // 兜底：空模板
-         setTemplate({
+        skipNextBackendSaveRef.current = true;
+        setTemplate({
             id: '',
             name: '无模板',
             description: '无法加载模板',
@@ -290,8 +301,7 @@ export const useWorkInfoData = (
       
       const metadataToSave = {
         template_config: {
-          templateId: template.id,
-          modules: template.modules
+          templateId: templateIdForBackend(template.id),
         },
         component_data: componentData,
         ...componentData
@@ -310,47 +320,47 @@ export const useWorkInfoData = (
     }
   }, [workId, template]);
 
-  // 监听模板变化并自动保存到缓存和后端
+  // 监听模板变化并自动保存到缓存和后端（仅在实际用户编辑后保存，进入作品时由 loadData 设置的 template 不触发后端保存）
   useEffect(() => {
-    if (workId && template) {
-      // 1. 保存到本地缓存 (立即执行)
-      saveToCache({
-        templateId: template.id,
-        modules: template.modules,
-        lastModified: Date.now()
-      }, workId, template.id);
+    if (!workId || !template) return;
 
-      // 2. 延迟保存到后端 (Debounce 2秒)
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          // 提取组件数据
-          const componentData = extractComponentDataFromTemplate(template.modules);
-          
-          // 构建要保存的 metadata
-          const metadataToSave = {
-            template_config: {
-              templateId: template.id,
-              modules: template.modules // 这里保存完整的 modules 结构，包含 config 等
-            },
-            component_data: componentData,
-            // 也可以把一些关键字段提出来放在顶层，方便索引
-            ...componentData
-          };
-
-          console.log('正在保存作品信息到后端:', workId);
-          await worksApi.updateWork(workId, {
-            metadata: metadataToSave
-          });
-          console.log('作品信息保存成功');
-        } catch (err) {
-          console.error('保存作品信息失败:', err);
-        }
-      }, 2000);
+    if (skipNextBackendSaveRef.current) {
+      skipNextBackendSaveRef.current = false;
+      return;
     }
+
+    // 1. 保存到本地缓存 (立即执行)
+    saveToCache({
+      templateId: template.id,
+      modules: template.modules,
+      lastModified: Date.now()
+    }, workId, template.id);
+
+    // 2. 延迟保存到后端 (Debounce 2秒)
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const componentData = extractComponentDataFromTemplate(template.modules);
+        const metadataToSave = {
+          template_config: {
+            templateId: templateIdForBackend(template.id),
+          },
+          component_data: componentData,
+          ...componentData
+        };
+
+        console.log('正在保存作品信息到后端:', workId);
+        await worksApi.updateWork(workId, {
+          metadata: metadataToSave
+        });
+        console.log('作品信息保存成功');
+      } catch (err) {
+        console.error('保存作品信息失败:', err);
+      }
+    }, 2000);
 
     return () => {
       if (saveTimeoutRef.current) {
