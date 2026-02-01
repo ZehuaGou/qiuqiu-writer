@@ -27,7 +27,7 @@ import { volumesApi, type Volume } from '../utils/volumesApi';
 import { authApi } from '../utils/authApi';
 import { syncManager } from '../utils/syncManager';
 import { useIntelligentSync } from '../utils/intelligentSync';
-import { analyzeChapter } from '../utils/bookAnalysisApi';
+import { analyzeChapter, generateChapterContent } from '../utils/bookAnalysisApi';
 import { documentCache } from '../utils/documentCache';
 import { loadChapterContent } from '../utils/loadCapture';
 import type { ChapterFullData } from '../types/document';
@@ -2046,6 +2046,79 @@ export default function NovelEditorPage(){
     return results;
   };
 
+  /** 根据当前章节的大纲和细纲生成章节内容（供聊天命令 /gen_chapter 调用） */
+  const handleGenerateChapterFromOutline = async (): Promise<void> => {
+    if (!selectedChapter || !chaptersData[selectedChapter]) {
+      throw new Error('请先选择章节');
+    }
+    const chapterIdNum = parseInt(selectedChapter, 10);
+    if (isNaN(chapterIdNum)) {
+      throw new Error('无效的章节');
+    }
+    let chapterData = chaptersData[selectedChapter];
+    let outline = (chapterData.outline ?? '').trim();
+    let detailOutline = (chapterData.detailOutline ?? '').trim();
+    const title = chapterData.title ?? '';
+    // 列表接口可能未返回 metadata，从章节文档接口补拉大纲/细纲（与章节设置弹窗一致）
+    if (!outline || !detailOutline) {
+      try {
+        const docResult = await chaptersApi.getChapterDocument(chapterIdNum);
+        const meta = docResult?.chapter_info?.metadata;
+        if (meta) {
+          if (!outline && meta.outline != null) {
+            outline = formatOutlineText(meta.outline).trim();
+          }
+          if (!detailOutline && meta.detailed_outline != null) {
+            detailOutline = formatDetailedOutlineText(meta.detailed_outline).trim();
+          }
+        }
+      } catch (e) {
+        console.warn('[handleGenerateChapterFromOutline] 拉取章节文档失败', e);
+      }
+    }
+    if (!outline || !detailOutline) {
+      throw new Error('当前章节未填写大纲或细纲，请先在章节设置中填写');
+    }
+    if (!editor) {
+      throw new Error('编辑器未就绪');
+    }
+    const meta = work?.metadata as { characters?: Array<{ name?: string }>; component_data?: { characters?: Array<{ name?: string }> } } | undefined;
+    const chars1 = meta?.characters ?? [];
+    const chars2 = meta?.component_data?.characters ?? [];
+    const characterNames = [...chars1, ...chars2]
+      .map((c: { name?: string }) => c?.name)
+      .filter((n): n is string => Boolean(n));
+    let fullContent = '';
+    await generateChapterContent(
+      outline,
+      detailOutline,
+      title || undefined,
+      characterNames.length > 0 ? characterNames : undefined,
+      [],
+      (progress) => {
+        if (progress.text) {
+          fullContent += progress.text;
+          const htmlContent = fullContent
+            .split('\n\n')
+            .map((para: string) => para.trim())
+            .filter((para: string) => para.length > 0)
+            .map((para: string) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+            .join('');
+          editor.commands.setContent(htmlContent || '<p></p>');
+        }
+        if (progress.status === 'done') {
+          const htmlContent = fullContent
+            .split('\n\n')
+            .map((para: string) => para.trim())
+            .filter((para: string) => para.length > 0)
+            .map((para: string) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+            .join('');
+          editor.commands.setContent(htmlContent || '<p></p>');
+        }
+      },
+    );
+  };
+
   const handleDeleteChapter = async (chapterId: string) => {
     if (!workId) return;
 
@@ -2596,6 +2669,7 @@ export default function NovelEditorPage(){
               workId={workId} 
               onAnalyzeChapterCommand={handleAnalyzeChaptersCommand}
               onAnalyzeWorkCommand={() => handleAnalyzeWork({ quiet: true })}
+              onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
             />
           </div>
         )}
@@ -2615,6 +2689,7 @@ export default function NovelEditorPage(){
                   workId={workId} 
                   onAnalyzeChapterCommand={handleAnalyzeChaptersCommand}
                   onAnalyzeWorkCommand={() => handleAnalyzeWork({ quiet: true })}
+                  onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
                 />
               </div>
             </div>

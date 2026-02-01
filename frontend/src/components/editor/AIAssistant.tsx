@@ -31,6 +31,8 @@ interface AIAssistantProps {
     chapters: Array<{ id: number; chapter_number?: number; title?: string }>
   ) => Promise<ChapterAnalysisCommandResult[]>;
   onAnalyzeWorkCommand?: () => Promise<WorkAnalysisCommandResult | undefined>;
+  /** 根据当前章节的大纲和细纲生成章节内容（对应章节设置中的「根据大纲和细纲生成」按钮），可用 /gen_chapter 触发 */
+  onGenerateChapterFromOutline?: () => Promise<void>;
 }
 
 const md = new MarkdownIt({
@@ -67,7 +69,12 @@ interface CharacterFromMetadata {
   [key: string]: unknown;
 }
 
-export default function AIAssistant({ workId }: AIAssistantProps) {
+export default function AIAssistant({
+  workId,
+  onAnalyzeChapterCommand,
+  onAnalyzeWorkCommand,
+  onGenerateChapterFromOutline,
+}: AIAssistantProps) {
   const [message, setMessage] = useState('');
   const [charCount, setCharCount] = useState(0);
   const [messages, setMessages] = useState<MessageWithTime[]>([]);
@@ -159,6 +166,7 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
     
     // Slash 命令补全
     const commandOptions: MentionOption[] = [
+      { type: 'command', id: 'gen_chapter', name: '/gen_chapter', subtitle: '根据大纲和细纲生成章节内容', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'analysis-chapter', name: '/analysis-chapter', subtitle: '分析指定章节', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'analysis-chapter-info', name: '/analysis-chapter-info', subtitle: '分析章节组件信息', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'verification-chapter-info', name: '/verification-chapter-info', subtitle: '校验章节信息', isCommand: true, commandKind: 'slash' },
@@ -776,6 +784,28 @@ export default function AIAssistant({ workId }: AIAssistantProps) {
     setMessages(prev => [...prev, userMsg]);
     setMessage('');
     setCharCount(0);
+
+    // 斜杠命令：根据大纲和细纲生成章节内容（/gen_chapter）
+    const isGenChapter = /^\/gen_chapter\s*$/i.test(content.trim());
+    if (isGenChapter && onGenerateChapterFromOutline) {
+      try {
+        setIsSending(true);
+        await onGenerateChapterFromOutline();
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: '已根据当前章节的大纲和细纲生成内容并填入编辑器。', timestamp: new Date() },
+        ]);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : '生成失败';
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: `生成失败：${errMsg}`, timestamp: new Date() },
+        ]);
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
 
     try {
       setIsSending(true);
