@@ -10,6 +10,7 @@ from sqlalchemy import and_, or_
 from memos.api.core.database import get_async_db
 from memos.api.core.security import get_current_user_id
 from memos.api.services.work_service import WorkService
+from memos.api.services.template_service import TemplateService
 from memos.api.schemas.work import (
     WorkCreate, WorkUpdate, WorkResponse, WorkListResponse,
     WorkCollaboratorCreate, WorkCollaboratorUpdate, WorkCollaboratorResponse
@@ -66,6 +67,31 @@ async def create_work(
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request)
     )
+
+    # 小说类型：确保用户有默认模板（没有则用小说标准模板创建），并为该作品绑定默认模板并复制 prompt
+    if work.work_type == "novel":
+        try:
+            template_service = TemplateService(db)
+            user_template = await template_service.ensure_user_default_novel_template(current_user_id)
+            await template_service.create_work_extended_info(
+                work_id=work.id,
+                template_id=user_template.id,
+                field_values={},
+            )
+            await template_service.copy_prompts_from_template_to_work(
+                template_id=user_template.id,
+                work_id=work.id,
+                creator_id=current_user_id,
+            )
+            logger.info(
+                "创建作品已绑定用户默认模板: work_id=%s, template_id=%s",
+                work.id,
+                user_template.id,
+            )
+        except ValueError as e:
+            logger.warning("创建作品时绑定默认模板失败（无小说标准模板）: %s", e)
+        except Exception as e:
+            logger.warning("创建作品时绑定默认模板失败（不影响作品创建）: %s", e)
 
     return work.to_dict()
 

@@ -78,6 +78,7 @@ export default function TemplateMarketModal({
   }, [isOpen, fetchTemplates]);
 
   const [targetTemplateConfig, setTargetTemplateConfig] = useState<TemplateConfig | undefined>(undefined);
+  const [sourceTemplateId, setSourceTemplateId] = useState<number | undefined>(undefined);
   const [editingTemplate, setEditingTemplate] = useState<WorkTemplate | null>(null);
 
   const handleSaveTemplate = async () => {
@@ -110,15 +111,17 @@ export default function TemplateMarketModal({
       await templatesApi.createTemplate({
         name: saveForm.name,
         description: saveForm.description,
-        work_type: 'novel', // 默认类型
+        work_type: 'novel',
         template_config: configToSave,
-        is_public: saveForm.is_public
+        is_public: saveForm.is_public,
+        source_template_id: sourceTemplateId
       });
       
       alert('模板保存成功！');
       setShowSaveForm(false);
       setSaveForm({ name: '', description: '', is_public: false });
-      setTargetTemplateConfig(undefined); // Reset
+      setTargetTemplateConfig(undefined);
+      setSourceTemplateId(undefined);
       if (activeTab === 'mine') {
         fetchTemplates();
       }
@@ -128,8 +131,9 @@ export default function TemplateMarketModal({
     }
   };
 
-  const openSaveForm = (config?: TemplateConfig) => {
+  const openSaveForm = (config?: TemplateConfig, fromTemplateId?: number) => {
     setTargetTemplateConfig(config);
+    setSourceTemplateId(fromTemplateId);
     setEditingTemplate(null);
     setSaveForm({ name: '', description: '', is_public: false });
     setShowSaveForm(true);
@@ -358,7 +362,7 @@ export default function TemplateMarketModal({
                           }
                         }
                         if (config) {
-                           openSaveForm(config);
+                           openSaveForm(config, tpl.id);
                         } else {
                            alert('无法读取该模板配置');
                         }

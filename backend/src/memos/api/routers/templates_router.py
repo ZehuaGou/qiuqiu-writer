@@ -42,6 +42,7 @@ class WorkTemplateCreate(BaseModel):
     settings: Optional[Dict[str, Any]] = None
     is_public: Optional[bool] = False
     tags: Optional[List[str]] = None
+    source_template_id: Optional[int] = None  # 另存为时传入被另存的模板 id，后端会同步复制其 prompt
 
 class WorkTemplateUpdate(BaseModel):
     name: Optional[str] = None
@@ -138,10 +139,29 @@ async def create_template(
     
     template_service = TemplateService(db)
 
+    create_kwargs = template_data.dict()
+    source_template_id = create_kwargs.pop("source_template_id", None)
+
     template = await template_service.create_template(
         creator_id=current_user_id,
-        **template_data.dict()
+        **create_kwargs
     )
+    
+    # 另存为：同步复制源模板关联的 prompt 到新模板
+    if source_template_id is not None:
+        try:
+            await template_service.copy_prompts_from_template_to_template(
+                source_template_id=source_template_id,
+                new_template_id=template.id,
+                creator_id=current_user_id,
+            )
+            logger.info(
+                "另存为时已复制 prompt: source_template_id=%s, new_template_id=%s",
+                source_template_id,
+                template.id,
+            )
+        except Exception as e:
+            logger.warning("另存为时复制 prompt 失败（不影响模板创建）: %s", e)
     
     # 验证保存后的数据
     if template.template_config and "modules" in template.template_config:

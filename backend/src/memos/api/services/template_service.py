@@ -11,6 +11,7 @@ from sqlalchemy.future import select
 from memos.api.models.template import WorkTemplate, TemplateField, WorkInfoExtended
 from memos.api.models.work import Work
 from memos.api.models.system import AuditLog
+from memos.api.models.prompt_template import PromptTemplate
 
 
 class TemplateService:
@@ -243,7 +244,7 @@ class TemplateService:
 
         return True
 
-    async def create_work_extended_info(self, work_id: int, **kwargs) -> WorkInfoExtended:
+    async def create_work_extended_info(self, work_id: str, **kwargs) -> WorkInfoExtended:
         """创建作品扩展信息"""
         extended_info = WorkInfoExtended(
             work_id=work_id,
@@ -256,7 +257,64 @@ class TemplateService:
 
         return extended_info
 
-    async def get_work_extended_info(self, work_id: int) -> Optional[WorkInfoExtended]:
+    async def get_novel_default_template(self) -> Optional[WorkTemplate]:
+        """获取小说标准模板（系统模板、work_type=novel，取第一个）。"""
+        stmt = (
+            select(WorkTemplate)
+            .options(selectinload(WorkTemplate.fields))
+            .where(
+                WorkTemplate.work_type == "novel",
+                WorkTemplate.is_system == True,
+            )
+            .order_by(WorkTemplate.id.asc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_user_default_novel_template(self, user_id: str) -> Optional[WorkTemplate]:
+        """获取用户的默认小说模板（该用户创建的第一个 novel 类型模板）。"""
+        stmt = (
+            select(WorkTemplate)
+            .options(selectinload(WorkTemplate.fields))
+            .where(
+                WorkTemplate.creator_id == user_id,
+                WorkTemplate.work_type == "novel",
+            )
+            .order_by(WorkTemplate.id.asc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def ensure_user_default_novel_template(self, user_id: str) -> WorkTemplate:
+        """
+        确保用户有默认小说模板：有则返回，没有则用小说标准模板创建一份并返回。
+        """
+        user_template = await self.get_user_default_novel_template(user_id)
+        if user_template:
+            return user_template
+        novel_standard = await self.get_novel_default_template()
+        if not novel_standard:
+            raise ValueError("系统中暂无小说标准模板，无法创建用户默认模板")
+        new_template = await self.create_template(
+            creator_id=user_id,
+            name=novel_standard.name or "我的小说模板",
+            description=novel_standard.description,
+            work_type=novel_standard.work_type,
+            template_config=novel_standard.template_config or {},
+            settings=novel_standard.settings or {},
+            is_public=False,
+            is_system=False,
+        )
+        await self.copy_prompts_from_template_to_template(
+            source_template_id=novel_standard.id,
+            new_template_id=new_template.id,
+            creator_id=user_id,
+        )
+        return new_template
+
+    async def get_work_extended_info(self, work_id: str) -> Optional[WorkInfoExtended]:
         """获取作品扩展信息"""
         stmt = select(WorkInfoExtended).options(
             selectinload(WorkInfoExtended.template)
@@ -265,7 +323,7 @@ class TemplateService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def update_work_extended_info(self, work_id: int, **kwargs) -> Optional[WorkInfoExtended]:
+    async def update_work_extended_info(self, work_id: str, **kwargs) -> Optional[WorkInfoExtended]:
         """更新作品扩展信息"""
         stmt = select(WorkInfoExtended).options(
             selectinload(WorkInfoExtended.template)
@@ -287,7 +345,7 @@ class TemplateService:
 
         return extended_info
 
-    async def apply_template_to_work(self, work_id: int, template_id: int) -> WorkInfoExtended:
+    async def apply_template_to_work(self, work_id: str, template_id: int) -> WorkInfoExtended:
         """将模板应用到作品"""
         # 检查模板是否存在
         template_stmt = select(WorkTemplate).options(
@@ -331,6 +389,91 @@ class TemplateService:
         await self.db.commit()
 
         return extended_info
+
+    async def copy_prompts_from_template_to_work(
+        self, template_id: int, work_id: str, creator_id: str
+    ) -> List[PromptTemplate]:
+        """
+        将模板关联的 PromptTemplate 复制到作品下（新建一份，关联到 work_id）。
+        """
+        stmt = select(PromptTemplate).where(
+            PromptTemplate.work_template_id == template_id,
+            PromptTemplate.is_active == True,
+        )
+        result = await self.db.execute(stmt)
+        source_prompts = result.scalars().all()
+        created = []
+        for src in source_prompts:
+            new_prompt = PromptTemplate(
+                name=src.name,
+                description=src.description,
+                template_type=src.template_type,
+                prompt_content=src.prompt_content,
+                version=src.version,
+                is_default=False,
+                is_active=src.is_active,
+                variables=src.variables or {},
+                template_metadata=src.template_metadata or {},
+                usage_count=0,
+                creator_id=creator_id,
+                component_id=src.component_id,
+                component_type=src.component_type,
+                prompt_category=src.prompt_category,
+                data_key=src.data_key,
+                work_id=work_id,
+                work_template_id=None,
+                chapter_id=None,
+            )
+            self.db.add(new_prompt)
+            created.append(new_prompt)
+        if created:
+            await self.db.commit()
+            for p in created:
+                await self.db.refresh(p)
+        return created
+
+    async def copy_prompts_from_template_to_template(
+        self, source_template_id: int, new_template_id: int, creator_id: str
+    ) -> List[PromptTemplate]:
+        """
+        将源模板关联的 PromptTemplate 复制到新模板下（新建一份，关联到 new_template_id）。
+        用于模板另存为时同步复制 prompt。
+        """
+        stmt = select(PromptTemplate).where(
+            PromptTemplate.work_template_id == source_template_id,
+            PromptTemplate.is_active == True,
+        )
+        result = await self.db.execute(stmt)
+        source_prompts = result.scalars().all()
+        created = []
+        for src in source_prompts:
+            new_prompt = PromptTemplate(
+                name=src.name,
+                description=src.description,
+                template_type=src.template_type,
+                prompt_content=src.prompt_content,
+                version=src.version,
+                is_default=False,
+                is_active=src.is_active,
+                variables=src.variables or {},
+                template_metadata=src.template_metadata or {},
+                usage_count=0,
+                creator_id=creator_id,
+                component_id=src.component_id,
+                component_type=src.component_type,
+                prompt_category=src.prompt_category,
+                data_key=src.data_key,
+                work_id=None,
+                work_template_id=new_template_id,
+                chapter_id=None,
+            )
+            self.db.add(new_prompt)
+            created.append(new_prompt)
+        if created:
+            await self.db.commit()
+            for p in created:
+                await self.db.refresh(p)
+        return created
 
     # 权限检查方法
     async def can_access_template(self, user_id: int, template_id: int) -> bool:

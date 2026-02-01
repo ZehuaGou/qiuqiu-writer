@@ -51,6 +51,7 @@ class TemplatesApiClient extends BaseApiClient {
 
   /**
    * 创建新模板
+   * @param source_template_id 另存为时传入被另存的模板 id，后端会同步复制其 prompt
    */
   async createTemplate(templateData: {
     name: string;
@@ -61,6 +62,7 @@ class TemplatesApiClient extends BaseApiClient {
     is_public?: boolean;
     settings?: Record<string, unknown>;
     tags?: string[];
+    source_template_id?: number;
   }): Promise<WorkTemplate> {
     return this.post<WorkTemplate>('/api/v1/templates/', templateData);
   }
