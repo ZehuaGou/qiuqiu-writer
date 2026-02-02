@@ -682,12 +682,17 @@ export default function ChapterSettingsModal({
                     章节大纲
                   </label>
                   <button 
-                    className={`ai-generate-btn ${isGeneratingOutline ? 'loading' : ''}`}
+                    className="icon-btn"
                     onClick={handleGenerateOutline}
                     disabled={isGeneratingOutline}
+                    title="AI生成大纲"
+                    style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
                   >
-                    <Sparkles size={14} />
-                    {isGeneratingOutline ? '生成中...' : 'AI 生成大纲'}
+                    {isGeneratingOutline ? (
+                      <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
                   </button>
                 </div>
                 <textarea
@@ -706,12 +711,17 @@ export default function ChapterSettingsModal({
                     详细细纲
                   </label>
                   <button 
-                    className={`ai-generate-btn ${isGeneratingDetail ? 'loading' : ''}`}
+                    className="icon-btn"
                     onClick={handleGenerateDetailOutline}
                     disabled={isGeneratingDetail}
+                    title="AI生成细纲"
+                    style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
                   >
-                    <Sparkles size={14} />
-                    {isGeneratingDetail ? '生成中...' : 'AI 生成细纲'}
+                    {isGeneratingDetail ? (
+                      <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
                   </button>
                 </div>
                 <textarea

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { Settings, Sparkles } from 'lucide-react';
 import type { ComponentConfig } from './types';
 
 export interface TabsComponentProps {
@@ -83,15 +83,16 @@ export function TabsComponent({
                     <div className="comp-header-actions">
                       {showGenerateBtn && onGenerateComponent && (
                         <button 
-                          className="comp-generate-btn" 
+                          className="icon-btn" 
                           onClick={() => onGenerateComponent(subComp, moduleId, tabsComponentId, activeTabData.id)}
                           disabled={generatingComponents[subComp.id]}
                           title="AI生成内容"
+                          style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
                         >
                           {generatingComponents[subComp.id] ? (
-                            <span className="loading-spinner small"></span>
+                            <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
                           ) : (
-                            <span className="sparkle-icon">✨</span>
+                            <Sparkles size={16} />
                           )}
                         </button>
                       )}

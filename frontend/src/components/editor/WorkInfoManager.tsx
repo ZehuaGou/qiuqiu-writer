@@ -759,17 +759,19 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
            <h2>{activeModule?.name}</h2>
            <div className="header-actions">
              <button 
-               className="icon-btn"
+               className="btn-secondary"
                onClick={saveData}
                disabled={isSaving}
                title="保存数据"
+               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
              >
                <Save size={16} /> {isSaving ? '保存中...' : '保存'}
              </button>
              <button 
-               className="icon-btn"
+               className="btn-secondary"
                onClick={() => setShowTemplateMarket(true)}
                title="模板市场"
+               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
              >
                <LayoutGrid size={16} /> 模板市场
              </button>
