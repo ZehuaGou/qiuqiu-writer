@@ -1239,24 +1239,46 @@ export default function NovelEditorPage(){
     } catch (err) {
       console.error('❌ [手动保存] 保存失败:', err);
       
-      // 关键修复：即使保存失败，也尝试保存到本地缓存（作为最后的备份）
-      try {
-        await documentCache.updateDocument(documentId, editorContent, {
-          work_id: workId!,
-          chapter_id: chapterId,
-          updated_at: new Date().toISOString(),
-        });
-        console.log('✅ [手动保存] 已保存到本地缓存（作为备份）');
-        
-        // 显示提示：已保存到缓存，但服务器同步失败
-        if (isOffline) {
-          showMessage('已保存到本地缓存（离线模式）', 'info');
-        } else {
-          showMessage('已保存到本地缓存，但服务器同步失败。网络恢复后将自动同步。', 'warning');
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      let shouldBackup = true;
+
+      // 关键修复：在尝试备份保存前，必须再次验证章节一致性
+      // 防止在章节切换过程中，将新章节的内容保存到旧章节的缓存中
+      if (currentChapterIdRef.current !== chapterId) {
+        console.warn('⚠️ [手动保存] 章节已切换，取消备份保存');
+        shouldBackup = false;
+      }
+      
+      // 检查错误类型，如果是校验失败，不显示通用错误
+      if (errorMessage.includes('不是当前章节') || errorMessage.includes('内容为空')) {
+        console.warn('⚠️ [手动保存] 保存被跳过:', errorMessage);
+        shouldBackup = false;
+        if (!errorMessage.includes('内容为空')) {
+             showMessage('保存被取消：章节状态不一致', 'info');
         }
-      } catch (cacheErr) {
-        console.error('❌ [手动保存] 保存到缓存也失败:', cacheErr);
-        showMessage('保存失败: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
+
+      if (shouldBackup) {
+        // 关键修复：即使保存失败，也尝试保存到本地缓存（作为最后的备份）
+        try {
+          await documentCache.updateDocument(documentId, editorContent, {
+            work_id: workId!,
+            chapter_id: chapterId,
+            updated_at: new Date().toISOString(),
+          });
+          console.log('✅ [手动保存] 已保存到本地缓存（作为备份）');
+          
+          // 显示提示：已保存到缓存，但服务器同步失败
+          if (isOffline) {
+            showMessage('已保存到本地缓存（离线模式）', 'info');
+          } else {
+            // 如果是网络错误导致的，提示更友好一点
+            showMessage('网络连接不稳定，已保存到本地缓存。', 'warning');
+          }
+        } catch (cacheErr) {
+          console.error('❌ [手动保存] 保存到缓存也失败:', cacheErr);
+          showMessage('保存失败: ' + errorMessage, 'error');
+        }
       }
       
       // 恢复按钮状态

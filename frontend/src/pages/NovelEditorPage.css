@@ -410,7 +410,7 @@
 
 .left-sidebar-wrapper {
   width: clamp(200px, 20%, 320px);
-  padding: 24px 0 0 24px;
+  padding: 24px 0 24px 24px;
 }
 
 .right-sidebar-wrapper {
@@ -1691,10 +1691,11 @@
     background: var(--bg-secondary, #f8f8f8);
   }
 
-  .mobile-menu-content {
-    flex: 1;
-    overflow-y: auto;
-    padding-bottom: 16px;
+  /* 移动端菜单内容 */
+  .mobile-menu-content .side-nav {
+    border-radius: 0;
+    box-shadow: none;
+    padding-top: 0;
   }
 
   .mobile-menu-actions {
