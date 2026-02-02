@@ -275,6 +275,13 @@ export default function ChapterSettingsModal({
     return String(val);
   };
 
+  // 每次打开模态框时重置标签页
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('basic');
+    }
+  }, [isOpen]);
+
   // 初始化数据
   useEffect(() => {
     if (isOpen) {
@@ -391,7 +398,7 @@ export default function ChapterSettingsModal({
         setOutline('');
         setDetailOutline('');
       }
-      setActiveTab('basic');
+      // setActiveTab('basic'); // Moved to separate useEffect to prevent flickering on data update
     }
   }, [isOpen, initialData, volumeId, mode, availableCharacters]);
 

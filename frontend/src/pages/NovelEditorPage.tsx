@@ -1471,6 +1471,38 @@ export default function NovelEditorPage(){
     wordCountSaveTimeoutRef,
   });
 
+  // 使用 useMemo 缓存可用角色列表，避免每次渲染都生成新数组导致子组件重复渲染
+  const availableCharacters = React.useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const meta = work?.metadata as any;
+    // 合并多个来源的角色数据，防止遗漏
+    const source1 = meta?.characters || [];
+    const source2 = meta?.component_data?.characters || [];
+    
+    // 合并数组
+    const allChars = [...source1, ...source2];
+    
+    // 去重（优先根据 ID，其次根据 Name）
+    const uniqueCharsMap = new Map();
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    allChars.forEach((c: any, index: number) => {
+      // 确保有临时 ID
+      const tempId = c.id ? String(c.id) : (c.name || `char-index-${index}`);
+      const charObj = { ...c, id: tempId };
+      
+      // 使用 Name 作为去重键（如果 ID 不存在或不稳定，Name 通常是唯一的）
+      // 或者如果 ID 存在，使用 ID
+      const uniqueKey = c.id ? String(c.id) : (c.name || tempId);
+      
+      if (!uniqueCharsMap.has(uniqueKey)) {
+        uniqueCharsMap.set(uniqueKey, charObj);
+      }
+    });
+    
+    return Array.from(uniqueCharsMap.values());
+  }, [work]);
+
   // 打开章节弹框
   const handleOpenChapterModal = (
     mode: 'create' | 'edit',
@@ -2831,36 +2863,7 @@ export default function NovelEditorPage(){
         volumeId={currentVolumeId}
         volumeTitle={currentVolumeTitle}
         initialData={currentChapterData}
-        availableCharacters={(() => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const meta = work?.metadata as any;
-          // 合并多个来源的角色数据，防止遗漏
-          const source1 = meta?.characters || [];
-          const source2 = meta?.component_data?.characters || [];
-          
-          // 合并数组
-          const allChars = [...source1, ...source2];
-          
-          // 去重（优先根据 ID，其次根据 Name）
-          const uniqueCharsMap = new Map();
-          
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          allChars.forEach((c: any, index: number) => {
-            // 确保有临时 ID
-            const tempId = c.id ? String(c.id) : (c.name || `char-index-${index}`);
-            const charObj = { ...c, id: tempId };
-            
-            // 使用 Name 作为去重键（如果 ID 不存在或不稳定，Name 通常是唯一的）
-            // 或者如果 ID 存在，使用 ID
-            const uniqueKey = c.id ? String(c.id) : (c.name || tempId);
-            
-            if (!uniqueCharsMap.has(uniqueKey)) {
-              uniqueCharsMap.set(uniqueKey, charObj);
-            }
-          });
-          
-          return Array.from(uniqueCharsMap.values());
-        })()}
+        availableCharacters={availableCharacters}
         availableLocations={[]}
         availableVolumes={volumes.map(vol => ({ id: vol.id, title: vol.title }))}
         onClose={() => setIsChapterModalOpen(false)}
