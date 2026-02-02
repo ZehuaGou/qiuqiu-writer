@@ -4,10 +4,10 @@
   /* border-right: 1px solid var(--border-light); */
   display: flex;
   flex-direction: column;
-  padding: 12px 0;
+  padding: 12px 0 0 0;
   overflow-y: auto;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  border-radius: 12px 12px 0 0;
+  box-shadow: none;
 }
 
 .nav-section {

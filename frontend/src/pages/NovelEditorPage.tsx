@@ -2519,49 +2519,9 @@ export default function NovelEditorPage(){
                   <X size={24} />
                 </button>
               </div>
-              <div className="mobile-menu-content">
-                <SideNav
-                  activeNav={activeNav}
-                  onNavChange={(nav) => {
-                    setActiveNav(nav);
-                    setMobileMenuOpen(false);
-                  }}
-                  selectedChapter={selectedChapter}
-                  onChapterSelect={(chapterId) => {
-                    setSelectedChapter(chapterId);
-                    setSearchParams(prev => {
-                      const newParams = new URLSearchParams(prev);
-                      if (chapterId) {
-                        newParams.set('chapterId', chapterId);
-                      } else {
-                        newParams.delete('chapterId');
-                      }
-                      return newParams;
-                    });
-                    setActiveNav('work-info');
-                    setMobileMenuOpen(false);
-                  }}
-                  onOpenChapterModal={handleOpenChapterModal}
-                  onOpenVolumeModal={handleOpenVolumeModal}
-                  onChapterDelete={handleDeleteChapter}
-                  volumes={volumes}
-                  onVolumesChange={setVolumes}
-                  workType="long"
-                />
-                <div className="mobile-menu-actions">
+              <div className="mobile-menu-actions">
                   <div className="mobile-menu-section">
                     <h3>操作</h3>
-                    <button 
-                      className="mobile-menu-item" 
-                      onClick={() => {
-                        handleAnalyzeWork();
-                        setMobileMenuOpen(false);
-                      }}
-                      disabled={isAnalyzing || !workId}
-                    >
-                      <Sparkles size={20} />
-                      <span>分析本书</span>
-                    </button>
                     <button 
                       className="mobile-menu-item" 
                       onClick={() => {
@@ -2598,6 +2558,35 @@ export default function NovelEditorPage(){
                     </div>
                   </div>
                 </div>
+              <div className="mobile-menu-content">
+                <SideNav
+                  activeNav={activeNav}
+                  onNavChange={(nav) => {
+                    setActiveNav(nav);
+                    setMobileMenuOpen(false);
+                  }}
+                  selectedChapter={selectedChapter}
+                  onChapterSelect={(chapterId) => {
+                    setSelectedChapter(chapterId);
+                    setSearchParams(prev => {
+                      const newParams = new URLSearchParams(prev);
+                      if (chapterId) {
+                        newParams.set('chapterId', chapterId);
+                      } else {
+                        newParams.delete('chapterId');
+                      }
+                      return newParams;
+                    });
+                    setActiveNav('work-info');
+                    setMobileMenuOpen(false);
+                  }}
+                  onOpenChapterModal={handleOpenChapterModal}
+                  onOpenVolumeModal={handleOpenVolumeModal}
+                  onChapterDelete={handleDeleteChapter}
+                  volumes={volumes}
+                  onVolumesChange={setVolumes}
+                  workType="long"
+                />
               </div>
             </div>
           </div>
