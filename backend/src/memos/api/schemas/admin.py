@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
+from typing import Any
 
 class AdminLoginRequest(BaseModel):
     username: str
@@ -106,6 +107,44 @@ class PromptTemplateCreate(BaseModel):
     component_type: str | None = None
     prompt_category: str | None = None
     data_key: str | None = None
+
+class SystemSettingResponse(BaseModel):
+    id: int
+    key: str
+    value: Any
+    description: str | None = None
+    category: str | None = None
+    is_public: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+class SystemSettingUpdate(BaseModel):
+    value: Any
+    description: str | None = None
+    is_public: bool | None = None
+
+class AuditLogResponse(BaseModel):
+    id: int
+    user_id: str | None = None
+    action: str
+    target_type: str | None = None
+    target_id: str | None = None
+    details: dict | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    created_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+class AuditLogListResponse(BaseModel):
+    total: int
+    items: list[AuditLogResponse]
+    page: int
+    size: int
 
 class PromptTemplateUpdate(BaseModel):
     name: str | None = None

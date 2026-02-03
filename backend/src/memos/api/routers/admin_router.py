@@ -7,7 +7,8 @@ from memos.api.core.security import verify_token
 from memos.api.schemas.admin import (
     AdminLoginRequest, TokenResponse, AdminCreateRequest, AdminUserResponse,
     UserListResponse, WorkListResponse, StatusUpdateRequest,
-    PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate
+    PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate,
+    SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse
 )
 from memos.api.services.admin_service import AdminService
 
@@ -24,6 +25,39 @@ async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return payload.get("sub")
+
+@router.get("/system-settings", response_model=list[SystemSettingResponse])
+async def get_system_settings(
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    return await service.get_system_settings()
+
+@router.put("/system-settings/{setting_id}", response_model=SystemSettingResponse)
+async def update_system_setting(
+    setting_id: int,
+    data: SystemSettingUpdate,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    result = await service.update_system_setting(setting_id, data, admin_id=admin_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="System setting not found")
+    return result
+
+@router.get("/audit-logs", response_model=AuditLogListResponse)
+async def get_audit_logs(
+    page: int = 1,
+    size: int = 20,
+    user_id: str = None,
+    action: str = None,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    return await service.get_audit_logs(page, size, user_id, action)
 
 @router.get("/prompt-templates", response_model=PromptTemplateListResponse)
 async def get_prompt_templates(
@@ -44,7 +78,7 @@ async def create_prompt_template(
     admin_id: str = Depends(get_current_admin)
 ):
     service = AdminService(db)
-    return await service.create_prompt_template(data)
+    return await service.create_prompt_template(data, admin_id=admin_id)
 
 @router.put("/prompt-templates/{template_id}", response_model=PromptTemplateResponse)
 async def update_prompt_template(
@@ -54,7 +88,7 @@ async def update_prompt_template(
     admin_id: str = Depends(get_current_admin)
 ):
     service = AdminService(db)
-    result = await service.update_prompt_template(template_id, data)
+    result = await service.update_prompt_template(template_id, data, admin_id=admin_id)
     if not result:
         raise HTTPException(status_code=404, detail="Prompt template not found")
     return result
@@ -66,7 +100,7 @@ async def delete_prompt_template(
     admin_id: str = Depends(get_current_admin)
 ):
     service = AdminService(db)
-    success = await service.delete_prompt_template(template_id)
+    success = await service.delete_prompt_template(template_id, admin_id=admin_id)
     if not success:
         raise HTTPException(status_code=404, detail="Prompt template not found")
     return {"success": True}
@@ -114,7 +148,7 @@ async def update_user_status(
     admin_id: str = Depends(get_current_admin)
 ):
     service = AdminService(db)
-    success = await service.update_user_status(user_id, data.status)
+    success = await service.update_user_status(user_id, data.status, admin_id=admin_id)
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
     return {"success": True}
@@ -138,7 +172,7 @@ async def update_work_status(
     admin_id: str = Depends(get_current_admin)
 ):
     service = AdminService(db)
-    success = await service.update_work_status(work_id, data.status)
+    success = await service.update_work_status(work_id, data.status, admin_id=admin_id)
     if not success:
         raise HTTPException(status_code=404, detail="Work not found")
     return {"success": True}

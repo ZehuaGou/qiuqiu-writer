@@ -53,7 +53,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(40), ForeignKey("users.id"), nullable=True, index=True)
+    user_id = Column(String(40), nullable=True, index=True)  # Admin user ID or regular user ID. No FK constraint to allow flexibility.
     action = Column(String(50), nullable=False, index=True)  # create/update/delete/login/logout
     target_type = Column(String(50), index=True)  # work/chapter/user
     target_id = Column(String(50), index=True)  # work_id(40) 或 chapter_id 等字符串形式
@@ -63,7 +63,7 @@ class AuditLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     # 关系
-    user = relationship("User", back_populates="audit_logs")
+    # user = relationship("User", back_populates="audit_logs")
 
     def __repr__(self):
         return f"<AuditLog(id={self.id}, user_id={self.user_id}, action='{self.action}')>"
