@@ -10,7 +10,7 @@
   padding: 6px 12px;
   border: none;
   background: transparent;
-  color: #666666;
+  color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
   border-radius: 6px;
@@ -18,8 +18,8 @@
 }
 
 .theme-selector-trigger:hover {
-  background: #f3f4f6;
-  color: #222222;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .theme-selector-dropdown {

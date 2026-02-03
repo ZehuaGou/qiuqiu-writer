@@ -6,6 +6,7 @@ export interface ThemeConfig {
     // 背景色
     bgPrimary: string;
     bgSecondary: string;
+    bgTertiary: string;
     bgSidebar: string;
     bgGradientStart: string;
     bgGradientEnd: string;
@@ -33,6 +34,7 @@ export const themes: ThemeConfig[] = [
     colors: {
       bgPrimary: '#ffffff',
       bgSecondary: '#f8f8f8',
+      bgTertiary: '#f4f4f4',
       bgSidebar: '#ffffff',
       bgGradientStart: '#f0f0f0',
       bgGradientEnd: '#e8e8e8',
@@ -52,21 +54,22 @@ export const themes: ThemeConfig[] = [
     id: 'dark',
     name: '深色模式',
     colors: {
-      bgPrimary: '#111111',
-      bgSecondary: '#222222',
-      bgSidebar: '#111111',
-      bgGradientStart: '#333333',
-      bgGradientEnd: '#111111',
-      textPrimary: '#ffffff',
-      textSecondary: '#dddadaff',
-      textTertiary: '#999999',
+      bgPrimary: '#1b1b1b',
+      bgSecondary: '#242424',
+      bgTertiary: '#2a2a2a',
+      bgSidebar: '#1b1b1b',
+      bgGradientStart: '#2f2f2f',
+      bgGradientEnd: '#1b1b1b',
+      textPrimary: '#e6e6e6',
+      textSecondary: '#bdbdbd',
+      textTertiary: '#8f8f8f',
       textInverse: '#ffffff',
-      borderColor: '#333333',
-      borderLight: '#222222',
-      accentPrimary: '#f0f0f0',
-      accentSecondary: '#cccccc',
-      accentTertiary: '#999999',
-      accentHover: '#cccccc',
+      borderColor: '#2f2f2f',
+      borderLight: '#262626',
+      accentPrimary: '#3a3a3a',
+      accentSecondary: '#4a4a4a',
+      accentTertiary: '#6b6b6b',
+      accentHover: '#4f4f4f',
     },
   },
 ];
@@ -95,6 +98,7 @@ export function applyTheme(themeId: string): void {
   // 应用CSS变量
   root.style.setProperty('--bg-primary', theme.colors.bgPrimary);
   root.style.setProperty('--bg-secondary', theme.colors.bgSecondary);
+  root.style.setProperty('--bg-tertiary', theme.colors.bgTertiary);
   root.style.setProperty('--bg-sidebar', theme.colors.bgSidebar);
   root.style.setProperty('--bg-gradient-start', theme.colors.bgGradientStart);
   root.style.setProperty('--bg-gradient-end', theme.colors.bgGradientEnd);

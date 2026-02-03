@@ -525,6 +525,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
               <CharacterRelations 
                 key={`relation-graph-${comp.id}`}
                 data={graphData}
+                dependencyKeys={comp.dataDependencies || []}
                 onChange={(newData) => {
                   updateValue({
                     characters: [], 

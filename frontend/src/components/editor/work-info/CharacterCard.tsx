@@ -114,8 +114,8 @@ function SingleCharacterCard({
 
   return (
     <div className="character-card-item" style={{ 
-      background: '#fff', 
-      border: '1px solid #e2e8f0', 
+      background: 'var(--bg-primary)', 
+      border: '1px solid var(--border-light)', 
       borderRadius: '8px', 
       marginBottom: '12px',
       overflow: 'hidden',
@@ -131,11 +131,11 @@ function SingleCharacterCard({
           alignItems: 'center',
           justifyContent: 'space-between',
           cursor: 'pointer',
-          background: isExpanded ? '#f8fafc' : '#fff',
-          borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none'
+          background: isExpanded ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+          borderBottom: isExpanded ? '1px solid var(--border-light)' : 'none'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, color: '#334155' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, color: 'var(--text-primary)' }}>
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           <span>{nameValue}</span>
         </div>
@@ -153,7 +153,7 @@ function SingleCharacterCard({
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#94a3b8',
+                color: 'var(--text-tertiary)',
                 cursor: 'pointer',
                 padding: '4px',
                 display: 'flex',
@@ -209,7 +209,7 @@ function SingleCharacterCard({
           {/* Custom Fields - Collapsible Section */}
           <div className="character-others-section" style={{ 
             marginTop: '12px',
-            border: '1px solid #f1f5f9',
+            border: '1px solid var(--border-light)',
             borderRadius: '6px',
             overflow: 'hidden'
           }}>
@@ -217,9 +217,9 @@ function SingleCharacterCard({
               onClick={() => setIsOthersExpanded(!isOthersExpanded)}
               style={{
                 padding: '8px 12px',
-                background: '#f8fafc',
+                background: 'var(--bg-secondary)',
                 fontSize: '13px',
-                color: '#64748b',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -247,7 +247,7 @@ function SingleCharacterCard({
                     fontSize: '12px',
                     resize: 'vertical',
                     outline: 'none',
-                    background: isEditMode ? '#fff' : '#f8fafc'
+                    background: isEditMode ? 'var(--bg-primary)' : 'var(--bg-secondary)'
                   }}
                 />
               </div>

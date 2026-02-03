@@ -533,14 +533,14 @@
 .modal-btn.save {
   background: var(--accent-primary);
   border: 1px solid transparent;
-  color: white;
-  box-shadow: 0 2px 4px rgba(var(--accent-primary-rgb), 0.2);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
 }
 
 .modal-btn.save:hover {
-  background: var(--accent-secondary);
+  background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--accent-primary-rgb), 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .modal-btn:active {

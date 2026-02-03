@@ -136,10 +136,18 @@
 .status-tag {
   padding: 4px 10px;
   border-radius: 4px;
-  background: #ecfdf5;
-  color: #444444;
   font-size: 12px;
   font-weight: 500;
+}
+
+.status-tag.online {
+  background: color-mix(in srgb, var(--success) 18%, var(--bg-primary));
+  color: var(--text-primary);
+}
+
+.status-tag.offline {
+  background: color-mix(in srgb, var(--error) 14%, var(--bg-primary));
+  color: var(--text-secondary);
 }
 
 /* 顶部导航栏中的同步状态标签 */
@@ -156,13 +164,13 @@
 }
 
 .status-tag-header.online {
-  background: #ecfdf5;
-  color: #444444;
+  background: color-mix(in srgb, var(--success) 18%, var(--bg-primary));
+  color: var(--text-primary);
 }
 
 .status-tag-header.offline {
-  background: #fef2f2;
-  color: #666666;
+  background: color-mix(in srgb, var(--error) 14%, var(--bg-primary));
+  color: var(--text-secondary);
 }
 
 .header-center {
@@ -1650,12 +1658,13 @@
     width: 280px;
     max-width: 85vw;
     height: 100vh;
-    background: var(--bg-primary, #ffffff);
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-lg);
     z-index: 2001;
     display: flex;
     flex-direction: column;
     animation: slideInLeft 0.3s ease;
+    overflow: visible; /* 皮肤下拉用 Portal 前首帧不裁剪 */
   }
 
   .mobile-menu-header {
@@ -1663,14 +1672,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px;
-    border-bottom: 1px solid var(--border-light, #e0e0e0);
+    border-bottom: 1px solid var(--border-light);
   }
 
   .mobile-menu-header h2 {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
-    color: var(--text-primary, #000000);
+    color: var(--text-primary);
   }
 
   .mobile-menu-close {
@@ -1681,14 +1690,15 @@
     justify-content: center;
     border: none;
     background: transparent;
-    color: var(--text-secondary, #666666);
+    color: var(--text-secondary);
     cursor: pointer;
     border-radius: 6px;
     transition: all 0.2s ease;
   }
 
   .mobile-menu-close:hover {
-    background: var(--bg-secondary, #f8f8f8);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 
   /* 移动端菜单内容 */
@@ -1700,9 +1710,10 @@
 
   .mobile-menu-actions {
     padding: 16px;
-    border-bottom: 1px solid var(--border-light, #e0e0e0);
-    background: var(--bg-secondary, #f8f8f8);
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-secondary);
     flex-shrink: 0;
+    overflow: visible; /* 皮肤下拉弹框不被裁剪 */
   }
 
   .mobile-menu-section {
@@ -1721,7 +1732,7 @@
     margin: 0 0 8px 0;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-secondary, #666666);
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -1733,9 +1744,9 @@
     justify-content: center;
     gap: 8px;
     padding: 10px;
-    border: 1px solid var(--border-light, #e0e0e0);
-    background: white;
-    color: var(--text-primary, #000000);
+    border: 1px solid var(--border-light);
+    background: var(--bg-primary);
+    color: var(--text-primary);
     font-size: 14px;
     text-align: center;
     cursor: pointer;
@@ -1745,8 +1756,9 @@
   }
 
   .mobile-menu-item:hover:not(:disabled) {
-    background: var(--bg-primary, #ffffff);
-    border-color: var(--primary-color, #444444);
+    background: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
   }
 
   .mobile-menu-item:active:not(:disabled) {
@@ -1759,11 +1771,13 @@
   }
 
   .mobile-menu-item.delete {
-    color: var(--error, #666666);
+    color: var(--error);
   }
 
   .mobile-menu-item.delete:hover:not(:disabled) {
-    background: rgba(102, 102, 102, 0.1);
+    background: color-mix(in srgb, var(--error) 14%, var(--bg-primary));
+    border-color: color-mix(in srgb, var(--error) 40%, var(--border-light));
+    color: var(--error);
   }
 
   /* 移动端对话抽屉 */
