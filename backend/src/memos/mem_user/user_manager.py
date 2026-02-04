@@ -64,6 +64,10 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.now, nullable=False)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    email = Column(String, nullable=True)
+    display_name = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
 
     # Relationship with cubes
     cubes = relationship("Cube", secondary=user_cube_association, back_populates="users")
@@ -147,7 +151,14 @@ class UserManager:
             session.close()
 
     def create_user(
-        self, user_name: str, role: UserRole = UserRole.USER, user_id: str | None = None
+        self, 
+        user_name: str, 
+        role: UserRole = UserRole.USER, 
+        user_id: str | None = None,
+        email: str | None = None,
+        display_name: str | None = None,
+        phone: str | None = None,
+        avatar_url: str | None = None
     ) -> str:
         """Create a new user.
 
@@ -155,6 +166,10 @@ class UserManager:
             user_name (str): Name of the user.
             role (UserRole): Role of the user.
             user_id (str, optional): Custom user ID. If None, generates UUID.
+            email (str, optional): User email.
+            display_name (str, optional): Display name.
+            phone (str, optional): Phone number.
+            avatar_url (str, optional): Avatar URL.
 
         Returns:
             str: The created user ID.
@@ -169,7 +184,16 @@ class UserManager:
             if existing_user:
                 logger.info(f"User with name '{user_name}' already exists")
                 return existing_user.user_id
-            user = User(user_name=user_name, role=role, user_id=user_id or str(uuid.uuid4()))
+            
+            user = User(
+                user_name=user_name, 
+                role=role, 
+                user_id=user_id or str(uuid.uuid4()),
+                email=email,
+                display_name=display_name,
+                phone=phone,
+                avatar_url=avatar_url
+            )
             session.add(user)
             session.commit()
             logger.info(f"User '{user_name}' created with ID: {user.user_id}")
@@ -211,6 +235,51 @@ class UserManager:
         session = self._get_session()
         try:
             return session.query(User).filter(User.user_name == user_name).first()
+        finally:
+            session.close()
+
+    def update_user_info(
+        self,
+        user_id: str,
+        email: str | None = None,
+        display_name: str | None = None,
+        phone: str | None = None,
+        avatar_url: str | None = None
+    ) -> bool:
+        """Update user profile information.
+
+        Args:
+            user_id (str): The user ID.
+            email (str, optional): User email.
+            display_name (str, optional): Display name.
+            phone (str, optional): Phone number.
+            avatar_url (str, optional): Avatar URL.
+
+        Returns:
+            bool: True if successful, False if user not found.
+        """
+        session = self._get_session()
+        try:
+            user = session.query(User).filter(User.user_id == user_id).first()
+            if not user:
+                return False
+            
+            if email is not None:
+                user.email = email
+            if display_name is not None:
+                user.display_name = display_name
+            if phone is not None:
+                user.phone = phone
+            if avatar_url is not None:
+                user.avatar_url = avatar_url
+                
+            session.commit()
+            logger.info(f"Updated info for user '{user_id}'")
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating user info: {e}")
+            return False
         finally:
             session.close()
 

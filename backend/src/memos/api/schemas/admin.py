@@ -46,10 +46,18 @@ class UserResponse(BaseModel):
     username: str
     email: str | None = None
     display_name: str | None = None
+    phone: str | None = None
+    avatar_url: str | None = None
     status: str
     created_at: str | None = None
     last_login_at: str | None = None
     role: str = "user"
+
+class UserUpdateRequest(BaseModel):
+    email: str | None = None
+    display_name: str | None = None
+    phone: str | None = None
+    avatar_url: str | None = None
 
 class UserListResponse(BaseModel):
     total: int

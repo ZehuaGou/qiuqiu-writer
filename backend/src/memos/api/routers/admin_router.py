@@ -6,7 +6,7 @@ from memos.api.core.database import get_async_db
 from memos.api.core.security import verify_token
 from memos.api.schemas.admin import (
     AdminLoginRequest, TokenResponse, AdminCreateRequest, AdminUserResponse,
-    UserListResponse, WorkListResponse, StatusUpdateRequest,
+    UserListResponse, WorkListResponse, StatusUpdateRequest, UserUpdateRequest,
     PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate,
     SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse,
     SystemMonitorResponse, CubeListResponse, CubeResponse
@@ -222,6 +222,24 @@ async def get_users(
     service = AdminService(db)
     return await service.get_users(page, size, keyword)
 
+@router.put("/users/{user_id}")
+async def update_user_info(
+    user_id: str,
+    data: UserUpdateRequest,
+    admin_id: str = Depends(get_current_admin)
+):
+    user_manager = get_user_manager()
+    success = user_manager.update_user_info(
+        user_id=user_id,
+        email=data.email,
+        display_name=data.display_name,
+        phone=data.phone,
+        avatar_url=data.avatar_url
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True}
+
 @router.put("/users/{user_id}/status")
 async def update_user_status(
     user_id: str,
@@ -284,4 +302,34 @@ async def delete_cube(
     if not success:
         raise HTTPException(status_code=404, detail="Cube not found")
     return {"success": True}
+
+@router.post("/maintenance/clear-cache")
+async def clear_cache(
+    admin_id: str = Depends(get_current_admin)
+):
+    from memos.api.core.redis import get_redis
+    try:
+        redis = await get_redis()
+        await redis.flushdb()
+        return {"success": True, "message": "Cache cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+@router.post("/maintenance/reload-config")
+async def reload_config(
+    admin_id: str = Depends(get_current_admin)
+):
+    try:
+        from memos.api.config import NacosConfigManager
+        from dotenv import load_dotenv
+        
+        # Reload from .env
+        load_dotenv(override=True)
+        
+        # Reload from Nacos if enabled
+        NacosConfigManager.init()
+        
+        return {"success": True, "message": "Configuration reloaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reload config: {str(e)}")
 
