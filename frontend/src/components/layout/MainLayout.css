@@ -86,14 +86,11 @@
 
 /* GitHub风格顶部导航栏 */
 .github-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 1000;
   background: var(--bg-primary, #ffffff);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-light, rgba(0, 0, 0, 0.1));
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .header-container {

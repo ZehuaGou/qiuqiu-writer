@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Grid, List, BookOpen, User, Calendar, FileText, Plus, Upload } from 'lucide-react';
+import { Grid, List, BookOpen, User, Calendar, FileText, Plus, Upload, ArrowUpDown } from 'lucide-react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi, type UserInfo } from '../utils/authApi';
 import { getUserAvatarUrl } from '../utils/avatarUtils';
@@ -20,6 +20,7 @@ export default function UserWorksPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'updated_desc' | 'updated_asc' | 'words_desc' | 'words_asc' | 'title_asc'>('updated_desc');
   const [editFormData, setEditFormData] = useState({
@@ -357,19 +358,68 @@ export default function UserWorksPage() {
                 />
               </div>
               <div className="works-sort">
-                <select
-                  className="works-sort-select"
-                  value={sortBy}
-                  onChange={(event) =>
-                    setSortBy(event.target.value as typeof sortBy)
-                  }
+                <button
+                  type="button"
+                  className="header-btn icon-only works-sort-trigger"
+                  title="排序"
+                  onClick={() => setShowSortMenu((prev) => !prev)}
                 >
-                  <option value="updated_desc">更新时间（新 → 旧）</option>
-                  <option value="updated_asc">更新时间（旧 → 新）</option>
-                  <option value="words_desc">字数（多 → 少）</option>
-                  <option value="words_asc">字数（少 → 多）</option>
-                  <option value="title_asc">标题（A → Z）</option>
-                </select>
+                  <ArrowUpDown size={18} />
+                </button>
+                {showSortMenu && (
+                  <div className="works-sort-dropdown">
+                    <button
+                      type="button"
+                      className={`works-sort-item ${sortBy === 'updated_desc' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSortBy('updated_desc');
+                        setShowSortMenu(false);
+                      }}
+                    >
+                      更新时间（新 → 旧）
+                    </button>
+                    <button
+                      type="button"
+                      className={`works-sort-item ${sortBy === 'updated_asc' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSortBy('updated_asc');
+                        setShowSortMenu(false);
+                      }}
+                    >
+                      更新时间（旧 → 新）
+                    </button>
+                    <button
+                      type="button"
+                      className={`works-sort-item ${sortBy === 'words_desc' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSortBy('words_desc');
+                        setShowSortMenu(false);
+                      }}
+                    >
+                      字数（多 → 少）
+                    </button>
+                    <button
+                      type="button"
+                      className={`works-sort-item ${sortBy === 'words_asc' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSortBy('words_asc');
+                        setShowSortMenu(false);
+                      }}
+                    >
+                      字数（少 → 多）
+                    </button>
+                    <button
+                      type="button"
+                      className={`works-sort-item ${sortBy === 'title_asc' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSortBy('title_asc');
+                        setShowSortMenu(false);
+                      }}
+                    >
+                      标题（A → Z）
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="works-header-right">
