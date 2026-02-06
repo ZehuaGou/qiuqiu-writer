@@ -14,14 +14,20 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import UnderlineExtension from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
-import { IndexeddbPersistence } from 'y-indexeddb';
 import { WebsocketProvider } from 'y-websocket';
 import { authApi } from '../utils/authApi';
+import { yjsConnectionManager } from '../utils/yjsConnectionManager';
+
+/** 从 documentId 解析 workId 和 chapterId */
+function parseDocumentId(documentId: string): { workId: string; chapterId: string } | null {
+  const match = documentId.match(/^work_(.+?)_chapter_(.+)$/);
+  if (!match) return null;
+  return { workId: match[1], chapterId: match[2] };
+}
 
 // 随机颜色池，用于区分不同用户的光标
 const CURSOR_COLORS = [
@@ -47,10 +53,12 @@ function getWebSocketUrl(): string {
 interface CollabState {
   ydoc: Y.Doc;
   wsProvider: WebsocketProvider;
+  /** 当前章节的 fragment 名称，用于 Collaboration 的 field 选项 */
+  field: string;
 }
 
 export interface UseYjsEditorOptions {
-  /** 文档ID（同时作为 y-websocket room name） */
+  /** 文档ID（格式：work_{workId}_chapter_{chapterId}） */
   documentId: string;
   /** 初始内容（HTML） */
   initialContent?: string;
@@ -112,9 +120,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
   const wsProviderRef = useRef<WebsocketProvider | null>(null);
   const isInitialized = useRef(false);
 
-  // ===== 初始化 Y.Doc 和 Providers =====
-  // 注意：cleanup 函数负责重置 collabState 和 connectionStatus，
-  // 无需在 effect 开头重复设置（首次运行时已是初始值 null/'disconnected'）
+  // ===== 初始化：同一作品共用一个 WebSocket，按章节使用不同 field =====
   useEffect(() => {
     isInitialized.current = false;
 
@@ -123,29 +129,24 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       return;
     }
 
-    console.log('📄 [useYjsEditor] 创建 Yjs 文档:', documentId);
+    const parsed = parseDocumentId(documentId);
+    if (!parsed) {
+      console.warn('⚠️ [useYjsEditor] 无效的 documentId 格式:', documentId);
+      return;
+    }
 
-    // 1. 创建 Y.Doc
-    const ydoc = new Y.Doc();
+    const { workId, chapterId } = parsed;
+    const field = `chapter_${chapterId}`;
+    console.log('📄 [useYjsEditor] 章节:', chapterId, '作品:', workId, 'field:', field);
 
-    // 2. 创建 IndexedDB 持久化（离线支持）
-    const idbProvider = new IndexeddbPersistence(documentId, ydoc);
-
-    // 3. 创建 WebSocket Provider（连接后端）
+    // 1. 获取或创建作品的共享连接（一个 work 一个 WebSocket）
     const wsUrl = getWebSocketUrl();
-    console.log('🔌 [useYjsEditor] 连接 WebSocket:', wsUrl, '房间:', documentId);
-
-    const wsProvider = new WebsocketProvider(
-      wsUrl,
-      documentId,
-      ydoc,
-      { connect: true }
-    );
+    const workConn = yjsConnectionManager.getWorkConnection(workId, wsUrl);
+    const { ydoc, wsProvider } = workConn;
     wsProviderRef.current = wsProvider;
 
-    // 4. 监听连接状态
-    wsProvider.on('status', (event: { status: string }) => {
-      console.log('🔗 [useYjsEditor] WebSocket 状态:', event.status);
+    // 2. 监听连接状态
+    const statusHandler = (event: { status: string }) => {
       if (event.status === 'connected') {
         setConnectionStatus('connected');
       } else if (event.status === 'disconnected') {
@@ -153,48 +154,46 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       } else {
         setConnectionStatus('connecting');
       }
-    });
+    };
+    wsProvider.on('status', statusHandler);
 
-    // 5. 等待同步完成后设置 collabState（触发编辑器创建）
+    // 3. 等待同步完成后设置 collabState（Collaboration 使用 document + field）
+    // 优先等待 IndexedDB 加载完成，这样重启后能立即显示本地持久化的章节内容
     let readyMarked = false;
     const markReady = () => {
       if (!readyMarked) {
         readyMarked = true;
         console.log('✅ [useYjsEditor] 协作就绪:', documentId);
-        setCollabState({ ydoc, wsProvider });
+        setCollabState({ ydoc, wsProvider, field });
       }
     };
 
-    idbProvider.on('synced', () => {
-      console.log('💾 [useYjsEditor] IndexedDB 已同步:', documentId);
+    // 重启后先等 IndexedDB 把 ydoc 灌满，再显示编辑器，避免看到空内容
+    workConn.idbProvider.whenSynced.then(() => {
       markReady();
+    }).catch(() => {
+      if (!readyMarked) markReady();
     });
 
     wsProvider.on('sync', (isSynced: boolean) => {
       if (isSynced) {
-        console.log('🌐 [useYjsEditor] WebSocket 已同步:', documentId);
         markReady();
         onSyncSuccess?.(Date.now());
       }
     });
 
-    // 超时兜底
     const timeout = setTimeout(() => {
       if (!readyMarked) {
-        console.log('⏰ [useYjsEditor] 初始化超时，强制就绪');
         markReady();
       }
     }, 5000);
 
-    // 6. 清理
     return () => {
       clearTimeout(timeout);
-      console.log('🧹 [useYjsEditor] 清理资源:', documentId);
       setCollabState(null);
       setConnectionStatus('disconnected');
-      wsProvider.destroy();
-      idbProvider.destroy();
-      ydoc.destroy();
+      wsProvider.off('status', statusHandler);
+      yjsConnectionManager.releaseConnection(workId);
       wsProviderRef.current = null;
       isInitialized.current = false;
     };
@@ -207,16 +206,18 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       StarterKit.configure({
         // 由 Collaboration 扩展提供撤销重做
         undoRedo: false,
+        // StarterKit 默认包含 underline，如果不需要可以禁用
+        // underline: false, // 保持默认启用 underline
       }),
-      UnderlineExtension,
       Placeholder.configure({
         placeholder,
       }),
-      // 仅在 collabState 就绪后添加协作扩展
+      // 仅在 collabState 就绪后添加协作扩展（同一 Y.Doc，不同 field 区分章节）
       ...(collabState
         ? [
             Collaboration.configure({
               document: collabState.ydoc,
+              field: collabState.field,
             }),
             CollaborationCursor.configure({
               provider: collabState.wsProvider,
@@ -234,9 +235,9 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
     onCreate: ({ editor: ed }) => {
       console.log('✨ [useYjsEditor] 编辑器已创建');
 
-      // 如果有初始内容且 Yjs 文档为空，设置初始内容
+      // 如果有初始内容且当前章节 fragment 为空，设置初始内容
       if (initialContent && !isInitialized.current && collabState) {
-        const xmlFragment = collabState.ydoc.getXmlFragment('default');
+        const xmlFragment = collabState.ydoc.getXmlFragment(collabState.field);
         if (xmlFragment.length === 0) {
           console.log('📝 [useYjsEditor] 设置初始内容');
           ed.commands.setContent(initialContent);

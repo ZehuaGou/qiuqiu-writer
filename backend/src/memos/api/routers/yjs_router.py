@@ -30,7 +30,7 @@ async def yjs_websocket(
     """
     Y-WebSocket endpoint for real-time collaboration.
 
-    Room name format: "work_{id}_chapter_{id}"
+    Room name format: "work_{workId}" (one WebSocket per work; chapters use Y.Doc fragments "chapter_{chapterId}")
     Optional query param: ?token=xxx for authentication
 
     The endpoint speaks the standard y-websocket binary protocol:

@@ -810,8 +810,8 @@ export default function NovelEditorPage() {
                       </div>
                     )}
                     
-                    {/* 编辑器内容 */}
-                    <div className="editor-content-area">
+                    {/* 编辑器内容：key 随章节变化强制挂载，确保切换章节时显示对应 fragment */}
+                    <div className="editor-content-area" key={documentId ?? 'no-chapter'}>
                       <EditorContent editor={editor} />
                     </div>
                   </div>
