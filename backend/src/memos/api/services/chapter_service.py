@@ -83,6 +83,10 @@ class ChapterService:
             conditions.append(Chapter.status == filters["status"])
         elif not filters.get("include_deleted", False):
             conditions.append(Chapter.status != "deleted")
+        if "chapter_number_lt" in filters:
+            conditions.append(Chapter.chapter_number < filters["chapter_number_lt"])
+        if "chapter_number_lte" in filters:
+            conditions.append(Chapter.chapter_number <= filters["chapter_number_lte"])
 
         # 获取总数
         count_stmt = select(func.count(Chapter.id)).where(and_(*conditions))

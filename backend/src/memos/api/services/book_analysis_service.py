@@ -12,7 +12,7 @@ from sqlalchemy.future import select
 
 from memos.api.models.work import Work
 from memos.api.models.chapter import Chapter
-from memos.api.models.prompt_template import PromptTemplate
+from memos.api.models.prompt_template import PromptTemplate, render_prompt
 from memos.api.models.template import WorkInfoExtended
 from memos.api.services.chapter_service import ChapterService
 from memos.api.services.sharedb_service import ShareDBService
@@ -446,17 +446,14 @@ class BookAnalysisService:
                         context_info.append(f"主要地点：{', '.join(locs_summary)}")
                 
                 if context_info:
-                    # 使用模板的 format_prompt 方法，支持 @chapter.content 格式
-                    from memos.api.models.prompt_template import PromptTemplate
-                    temp_template = PromptTemplate()
-                    temp_template.prompt_content = prompt_template
-                    # 提供 chapter 对象和 content
-                    base_prompt = temp_template.format_prompt(
-                        chapter=chapter,
-                        content=chapter_content,
-                        **({"章节内容": chapter_content} if chapter_content else {})
+                    # 统一由 render_prompt 按占位符加载上下文并生成 prompt
+                    base_prompt = await render_prompt(
+                        prompt_template,
+                        self.db,
+                        self.sharedb_service,
+                        work_id=str(work_id),
+                        chapter_id=chapter_id,
                     )
-                    
                     enhanced_prompt = f"""{base_prompt}
 
 # 上下文信息
@@ -465,24 +462,20 @@ class BookAnalysisService:
 # 开始分析
 请严格按照上述JSON格式输出分析结果："""
                 else:
-                    # 使用模板的 format_prompt 方法
-                    from memos.api.models.prompt_template import PromptTemplate
-                    temp_template = PromptTemplate()
-                    temp_template.prompt_content = prompt_template
-                    enhanced_prompt = temp_template.format_prompt(
-                        chapter=chapter,
-                        content=chapter_content,
-                        **({"章节内容": chapter_content} if chapter_content else {})
+                    enhanced_prompt = await render_prompt(
+                        prompt_template,
+                        self.db,
+                        self.sharedb_service,
+                        work_id=str(work_id),
+                        chapter_id=chapter_id,
                     )
             else:
-                # 使用模板的 format_prompt 方法
-                from memos.api.models.prompt_template import PromptTemplate
-                temp_template = PromptTemplate()
-                temp_template.prompt_content = prompt_template
-                enhanced_prompt = temp_template.format_prompt(
-                    chapter=chapter,
-                    content=chapter_content,
-                    **({"章节内容": chapter_content} if chapter_content else {})
+                enhanced_prompt = await render_prompt(
+                    prompt_template,
+                    self.db,
+                    self.sharedb_service,
+                    work_id=str(work_id),
+                    chapter_id=chapter_id,
                 )
             
             # 调用AI服务进行分析
@@ -661,6 +654,68 @@ class BookAnalysisService:
             lines.append("")
         return "\n".join(lines)
 
+    def _get_builtin_continue_chapter_prompt(self) -> str:
+        """续写章节：内置 prompt 模板，使用 @ 变量由 format_prompt 格式化。"""
+        return """# 角色
+你是一位经验丰富的小说编辑和剧情策划，擅长在已有情节基础上延续并设计新章节。
+
+# 任务
+根据以下材料，为**下一章**设计 3 个不同风格的推荐方案，每个方案包含：章节标题、大纲（outline）、细纲（detailed_outline）。要求与**下一章的前三章**的风格和设定一致，并与**下一章的前一章**结尾自然衔接。（例如下一章为第10章时，前三章指第7、8、9章，前一章指第9章。）
+
+# 输入材料
+
+## 下一章的前三章大纲
+@pre_chapter[3].metadata.outline
+
+## 下一章的前三章细纲（@pre_chapter[3]）
+@pre_chapter[3].metadata.detailed_outline
+
+## 下一章的前一章正文（即 @pre_chapter[1]）
+@previous_chapter_content
+
+# 输出格式
+**必须严格按照以下 JSON 格式输出，不要添加任何其他文字：**
+
+```json
+{
+  "recommendations": [
+    {
+      "title": "推荐方案一标题",
+      "outline": {
+        "core_function": "本章核心功能/目的",
+        "key_points": ["关键情节点1", "关键情节点2"],
+        "visual_scenes": ["画面1", "画面2"],
+        "atmosphere": ["氛围1", "氛围2"],
+        "hook": "结尾钩子"
+      },
+      "detailed_outline": {
+        "sections": [
+          { "section_number": 1, "title": "小节标题", "content": "小节内容概要" }
+        ]
+      }
+    },
+    {
+      "title": "推荐方案二标题",
+      "outline": { ... },
+      "detailed_outline": { ... }
+    },
+    {
+      "title": "推荐方案三标题",
+      "outline": { ... },
+      "detailed_outline": { ... }
+    }
+  ]
+}
+```
+
+# 重要提示
+1. 必须输出有效的 JSON，且仅包含上述结构。
+2. recommendations 数组长度必须为 3。
+3. 每个 outline 需包含 core_function、key_points、visual_scenes、atmosphere、hook。
+4. 每个 detailed_outline 需包含 sections 数组，每项含 section_number、title、content。
+
+请直接输出 JSON："""
+
     async def generate_continue_chapter_outlines(
         self,
         work_id: str,
@@ -669,7 +724,8 @@ class BookAnalysisService:
         settings: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        续写章节：根据前三章的大纲和细纲、以及前一章的章节内容，生成下一章的 3 个推荐大纲和细纲。
+        续写章节：根据「当前（下一章）的前 3 章」的大纲和细纲、以及前一章的章节内容，生成下一章的 3 个推荐大纲和细纲。
+        例如续写第 10 章时，前 3 章指第 7、8、9 章。
 
         Args:
             work_id: 作品ID
@@ -685,111 +741,22 @@ class BookAnalysisService:
         temperature = settings.get("temperature", 0.7)
         max_tokens = settings.get("max_tokens", 8000)
 
-        # 1) 取作品前 3 章（按 chapter_number 升序）
-        first_chapters, _ = await self.chapter_service.get_chapters(
-            filters={"work_id": work_id},
-            page=1,
-            size=3,
-            sort_by="chapter_number",
-            sort_order="asc",
+        # 统一由 render_prompt 按占位符需求加载上下文并生成完整 prompt
+        template_obj = await self.get_default_prompt_template("continue_chapter")
+        prompt_content = template_obj.prompt_content if template_obj else self._get_builtin_continue_chapter_prompt()
+
+        user_prompt, ctx = await render_prompt(
+            prompt_content,
+            self.db,
+            self.sharedb_service,
+            work_id=str(work_id),
+            previous_chapter_id=previous_chapter_id,
+            content_max_len=12000,
+            return_ctx=True,
         )
-        if not first_chapters:
-            raise ValueError("作品中没有章节，无法续写")
-
-        first_outlines = []
-        first_detailed_outlines = []
-        for ch in first_chapters:
-            meta = ch.chapter_metadata or {}
-            first_outlines.append(meta.get("outline", {}))
-            first_detailed_outlines.append(meta.get("detailed_outline", {}))
-
-        # 2) 确定「前一章」并获取其正文
-        if previous_chapter_id is not None:
-            prev_chapter = await self.chapter_service.get_chapter_by_id(previous_chapter_id)
-            if not prev_chapter or str(prev_chapter.work_id) != str(work_id):
-                raise ValueError(f"章节 {previous_chapter_id} 不存在或不属于本作品")
-        else:
-            # 使用作品最后一章
-            all_chapters, _ = await self.chapter_service.get_chapters(
-                filters={"work_id": work_id},
-                page=1,
-                size=1,
-                sort_by="chapter_number",
-                sort_order="desc",
-            )
-            if not all_chapters:
-                raise ValueError("作品中没有章节，无法续写")
-            prev_chapter = all_chapters[0]
-
-        prev_content = await self.get_chapter_content(prev_chapter.id)
-        next_chapter_number = (prev_chapter.chapter_number or 0) + 1
-
-        # 3) 构建 prompt
-        outlines_text = self._format_outlines_for_prompt(first_outlines)
-        detailed_text = self._format_detailed_outlines_for_prompt(first_detailed_outlines)
-
-        user_prompt = f"""# 角色
-你是一位经验丰富的小说编辑和剧情策划，擅长在已有情节基础上延续并设计新章节。
-
-# 任务
-根据以下材料，为**下一章（第 {next_chapter_number} 章）**设计 3 个不同风格的推荐方案，每个方案包含：章节标题、大纲（outline）、细纲（detailed_outline）。要求与前三章的风格和设定一致，并与前一章结尾自然衔接。
-
-# 输入材料
-
-## 前三章大纲
-{outlines_text}
-
-## 前三章细纲
-{detailed_text}
-
-## 前一章（第 {prev_chapter.chapter_number or '?'} 章）正文
-{prev_content[:12000] if prev_content else "（无正文）"}
-
-# 输出格式
-**必须严格按照以下 JSON 格式输出，不要添加任何其他文字：**
-
-```json
-{{
-  "recommendations": [
-    {{
-      "title": "推荐方案一标题",
-      "outline": {{
-        "core_function": "本章核心功能/目的",
-        "key_points": ["关键情节点1", "关键情节点2"],
-        "visual_scenes": ["画面1", "画面2"],
-        "atmosphere": ["氛围1", "氛围2"],
-        "hook": "结尾钩子"
-      }},
-      "detailed_outline": {{
-        "sections": [
-          {{ "section_number": 1, "title": "小节标题", "content": "小节内容概要" }}
-        ]
-      }}
-    }},
-    {{
-      "title": "推荐方案二标题",
-      "outline": {{ ... }},
-      "detailed_outline": {{ ... }}
-    }},
-    {{
-      "title": "推荐方案三标题",
-      "outline": {{ ... }},
-      "detailed_outline": {{ ... }}
-    }}
-  ]
-}}
-```
-
-# 重要提示
-1. 必须输出有效的 JSON，且仅包含上述结构。
-2. recommendations 数组长度必须为 3。
-3. 每个 outline 需包含 core_function、key_points、visual_scenes、atmosphere、hook。
-4. 每个 detailed_outline 需包含 sections 数组，每项含 section_number、title、content。
-
-请直接输出 JSON："""
 
         full_response = await ai_service.analyze_chapter_stream(
-            content=prev_content or "",
+            content=ctx.get("previous_chapter_content") or "",
             prompt=user_prompt,
             system_prompt=None,
             model=model,
@@ -797,7 +764,7 @@ class BookAnalysisService:
             max_tokens=max_tokens,
         )
 
-        # 4) 解析 AI 返回的 3 个推荐（支持 ```json ... ``` 或裸 JSON）
+        # 5) 解析 AI 返回的 3 个推荐（支持 ```json ... ``` 或裸 JSON）
         json_str = ""
         code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", full_response)
         if code_block:
@@ -844,7 +811,7 @@ class BookAnalysisService:
             })
 
         return {
-            "next_chapter_number": next_chapter_number,
+            "next_chapter_number": ctx.get("next_chapter_number"),
             "recommendations": result_list,
             "raw_response": full_response,
         }
@@ -1134,13 +1101,13 @@ class BookAnalysisService:
                     "3. 若有新数据，按照示例结构生成完整信息\n"
                 )
 
-            # 构造 prompt
-            temp_tpl = PromptTemplate()
-            temp_tpl.prompt_content = analysis_prompt
-            user_prompt = temp_tpl.format_prompt(
-                chapter=chapter,
-                content=chapter_content,
-                chapter_content=chapter_content,
+            # 统一由 render_prompt 按占位符加载上下文并生成 prompt
+            user_prompt = await render_prompt(
+                analysis_prompt,
+                self.db,
+                self.sharedb_service,
+                work_id=str(work_id),
+                chapter_id=chapter_id,
             )
             if existing_data_context:
                 user_prompt = existing_data_context + "\n\n" + user_prompt
@@ -1348,15 +1315,15 @@ class BookAnalysisService:
                         f"```json\n{json.dumps(existing_data, ensure_ascii=False, indent=2)}\n```\n\n"
                     )
 
-            # 构造 prompt
-            temp_tpl = PromptTemplate()
-            temp_tpl.prompt_content = verification_prompt
-            user_prompt = temp_tpl.format_prompt(
-                chapter=chapter,
-                content=chapter_content,
-                chapter_content=chapter_content,
+            # 统一由 render_prompt 按占位符加载上下文并生成 prompt
+            user_prompt = await render_prompt(
+                verification_prompt,
+                self.db,
+                self.sharedb_service,
+                work_id=str(work_id),
+                chapter_id=chapter_id,
             )
-            
+
             # 拼装完整的 prompt：所有组件数据 + 当前组件详细数据 + 验证 prompt
             full_prompt_parts = []
             if all_component_data_context:
