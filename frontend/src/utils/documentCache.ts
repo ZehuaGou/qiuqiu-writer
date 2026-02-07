@@ -32,6 +32,10 @@ export const documentCache = {
   lastSyncedContent: new Map<string, string>(),
   // 请求去重：记录正在进行的请求，避免重复请求
   pendingRequests: new Map<string, Promise<ChapterDocumentResponse>>(),
+  // 按章节的最近一次 GET 时间，用于节流（编辑时避免频繁请求同一章节）
+  lastFetchTimeByChapter: new Map<string, number>(),
+  /** 同一章节 GET document 的最小间隔（毫秒），编辑时不再频繁请求 */
+  FETCH_COOLDOWN_MS: 15000,
   // 关键修复：防止重复同步的锁
   syncLocks: new Map<string, Promise<SyncResponse>>(),
   
@@ -720,8 +724,26 @@ export const documentCache = {
       return null;
     }
 
-    // 请求去重：如果已经有相同章节的请求正在进行，等待该请求完成
     const requestKey = `chapter_doc_${chapterId}`;
+    const now = Date.now();
+    const lastFetch = documentCache.lastFetchTimeByChapter.get(requestKey);
+    const cooldownMs = documentCache.FETCH_COOLDOWN_MS;
+
+    // 节流：编辑时同一章节在 cooldown 内不重复 GET，直接返回内存缓存（当前使用 Yjs 同步，内容以本地/WebSocket 为准）
+    if (lastFetch != null && now - lastFetch < cooldownMs) {
+      const cachedContent = documentCache.currentContent.get(documentId);
+      const cachedVersion = documentCache.currentVersion.get(documentId);
+      if (cachedContent !== undefined && cachedVersion !== undefined) {
+        return {
+          document_id: documentId,
+          content: cachedContent,
+          version: cachedVersion,
+          metadata: {},
+        };
+      }
+    }
+
+    // 请求去重：如果已经有相同章节的请求正在进行，等待该请求完成
     if (documentCache.pendingRequests.has(requestKey)) {
       
       try {
@@ -748,20 +770,12 @@ export const documentCache = {
     }
 
     try {
-      // 创建请求并记录
-      console.log('📡 [fetchFromServer] 发起 document 请求:', {
-        documentId,
-        chapterId,
-        requestKey,
-        timestamp: new Date().toISOString(),
-        stackTrace: new Error().stack?.split('\n').slice(0, 5).join('\n'),
-      });
       const requestPromise = chaptersApi.getChapterDocument(chapterId);
       documentCache.pendingRequests.set(requestKey, requestPromise);
       
       const result = await requestPromise;
-      // 请求完成后移除
       documentCache.pendingRequests.delete(requestKey);
+      documentCache.lastFetchTimeByChapter.set(requestKey, Date.now());
       
       // 关键修复：如果 MongoDB 没有数据（document_exists 为 false 或 content 为空），使用本地缓存
       // 修复判断逻辑：明确检查 document_exists 字段

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Sparkles, Plus, MapPin, Users, FileText, BookOpen, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { chaptersApi } from '../../utils/chaptersApi';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -275,6 +275,19 @@ export default function ChapterSettingsModal({
     return String(val);
   };
 
+  // 同一章节在同一打开周期内只请求一次 document，避免 initialData 等依赖变化导致重复请求
+  const lastFetchedChapterIdRef = useRef<string | null>(null);
+  // 打开弹窗时的大纲/细纲快照，接口返回空时用其回退，避免“先显示后消失”
+  const openOutlineRef = useRef<string>('');
+  const openDetailOutlineRef = useRef<string>('');
+
+  // 关闭弹窗时清空“已请求章节”，下次打开可重新拉取
+  useEffect(() => {
+    if (!isOpen) {
+      lastFetchedChapterIdRef.current = null;
+    }
+  }, [isOpen]);
+
   // 每次打开模态框时重置标签页
   useEffect(() => {
     if (isOpen) {
@@ -292,16 +305,35 @@ export default function ChapterSettingsModal({
           setSelectedVolumeId(initialData.volumeId || volumeId);
           setSelectedCharacters(normalizeSelectedCharacters(initialData.characters || [], availableCharacters || []));
           setLocations(initialData.locations || []);
-          setOutline(ensureString(initialData.outline));
-          setDetailOutline(ensureString(initialData.detailOutline));
+          // 只有 initialData 里大纲/细纲非空时才写 state，避免 effect 重跑时用空串覆盖已显示内容
+          const outlineVal = ensureString(initialData.outline);
+          const detailVal = ensureString(initialData.detailOutline);
+          if ((outlineVal || '').trim()) {
+            openOutlineRef.current = outlineVal.trim();
+            setOutline(outlineVal.trim());
+          }
+          if ((detailVal || '').trim()) {
+            openDetailOutlineRef.current = detailVal.trim();
+            setDetailOutline(detailVal.trim());
+          }
         };
 
         if (mode === 'edit' && initialData.id) {
+          const chapterIdStr = String(initialData.id);
+          const alreadyFetched = lastFetchedChapterIdRef.current === chapterIdStr;
+
+          // 先用人传进来的 initialData 填表，避免等接口时大纲区域先空再闪
+          initFromProps();
+
           const fetchChapterInfo = async () => {
             try {
-              setIsLoading(true);
               const chapterId = Number(initialData.id);
               if (!isNaN(chapterId)) {
+                if (alreadyFetched) {
+                  return;
+                }
+                setIsLoading(true);
+                lastFetchedChapterIdRef.current = chapterIdStr;
                 const response = await chaptersApi.getChapterDocument(chapterId);
                 console.log('📝 [ChapterSettingsModal] Fetched chapter info:', response);
                 const info = response.chapter_info;
@@ -349,13 +381,18 @@ export default function ChapterSettingsModal({
                   }
                 }
 
-                // 3. 如果 API 没有返回有效数据，回退到 initialData
-                if (!fetchedOutline) fetchedOutline = ensureString(initialData.outline);
-                if (!fetchedDetail) fetchedDetail = ensureString(initialData.detailOutline);
-                
-                setOutline(fetchedOutline);
-                setDetailOutline(fetchedDetail);
-                
+                // 3. 如果 API 没有返回有效数据，回退到 initialData，再回退到打开时的快照
+                if (!fetchedOutline) fetchedOutline = ensureString(initialData.outline) || openOutlineRef.current;
+                if (!fetchedDetail) fetchedDetail = ensureString(initialData.detailOutline) || openDetailOutlineRef.current;
+
+                // 4. 写回 state（优先接口，空则用打开时的快照，避免先显示后消失）
+                const finalOutline = (fetchedOutline || '').trim() || openOutlineRef.current;
+                const finalDetail = (fetchedDetail || '').trim() || openDetailOutlineRef.current;
+                setOutline(finalOutline);
+                setDetailOutline(finalDetail);
+                if (finalOutline) openOutlineRef.current = finalOutline;
+                if (finalDetail) openDetailOutlineRef.current = finalDetail;
+
                 // 从 metadata.component_data 获取角色列表
                 const componentData = meta.component_data || {};
                 console.log('📦 [ChapterSettingsModal] Metadata component_data:', componentData);
