@@ -1209,6 +1209,27 @@
   line-height: 1.4;
 }
 
+/* 章节号可编辑：与章节标题编辑框风格一致 */
+.editor-with-header .chapter-number-editable {
+  cursor: text;
+  outline: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: inline-block;
+  min-width: 80px;
+}
+.editor-with-header .chapter-number-editable:focus {
+  border: none;
+  box-shadow: none;
+  padding: 4px 8px;
+}
+.editor-with-header .chapter-number-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary, #999999);
+  font-style: italic;
+}
+
 /* 章节标题编辑框：与作品名编辑框样式一致 */
 .editor-with-header .chapter-title {
   font-size: 32px;

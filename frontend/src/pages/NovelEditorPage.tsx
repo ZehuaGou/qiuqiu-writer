@@ -101,6 +101,7 @@ export default function NovelEditorPage() {
     setSelectedChapter,
     setVolumes,
     updateChapterTitle,
+    updateChapterNumber,
   } = useChapterManagement({
     workId,
     updateTrigger,
@@ -163,10 +164,14 @@ export default function NovelEditorPage() {
   const {
     titleEditableRef,
     chapterNameInputRef,
+    chapterNumberInputRef,
     handleSaveTitle,
     handleTitleKeyDown,
     handleSaveChapterName,
     handleChapterNameKeyDown,
+    handleSaveChapterNumber,
+    handleChapterNumberKeyDown,
+    getChapterNumberDisplayText,
   } = useTitleEditing({
     work,
     workId,
@@ -174,6 +179,7 @@ export default function NovelEditorPage() {
     chaptersData,
     onWorkUpdate: setWork,
     onChapterTitleUpdate: updateChapterTitle,
+    onChapterNumberUpdate: updateChapterNumber,
     onError: (msg: string) => showMessage(msg, 'error'),
   });
   
@@ -783,10 +789,17 @@ export default function NovelEditorPage() {
                     {/* 章节头部 */}
                     {selectedChapter && chaptersData[selectedChapter] && (
                       <div className="chapter-header-info">
-                        <div className="chapter-number">
-                          {chaptersData[selectedChapter].chapter_number !== undefined 
-                            ? `第${chaptersData[selectedChapter].chapter_number}章`
-                            : chaptersData[selectedChapter].volumeTitle || ''}
+                        <div
+                          ref={chapterNumberInputRef}
+                          className="chapter-number chapter-number-editable"
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={handleSaveChapterNumber}
+                          onKeyDown={handleChapterNumberKeyDown}
+                          title="点击编辑章节号"
+                          data-placeholder={chaptersData[selectedChapter].volumeTitle || '第1章'}
+                        >
+                          {getChapterNumberDisplayText(chaptersData[selectedChapter])}
                         </div>
                         <h2
                           ref={chapterNameInputRef}

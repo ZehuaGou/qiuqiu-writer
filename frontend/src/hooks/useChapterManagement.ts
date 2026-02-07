@@ -39,6 +39,7 @@ export interface UseChapterManagementReturn {
   setSelectedChapter: (id: string | null) => void;
   setVolumes: React.Dispatch<React.SetStateAction<VolumeData[]>>;
   updateChapterTitle: (chapterId: string, newTitle: string) => void;
+  updateChapterNumber: (chapterId: string, newChapterNumber: number) => void;
 }
 
 /** 获取卷的中文数字 */
@@ -71,6 +72,20 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
       ...vol,
       chapters: vol.chapters.map(chap =>
         chap.id === chapterId ? { ...chap, title: newTitle } : chap
+      ),
+    })));
+  };
+
+  /** 更新本地某章节的章节号（同步 chaptersData + volumes） */
+  const updateChapterNumber = (chapterId: string, newChapterNumber: number) => {
+    setChaptersData(prev => ({
+      ...prev,
+      [chapterId]: { ...prev[chapterId], chapter_number: newChapterNumber },
+    }));
+    setVolumes(prev => prev.map(vol => ({
+      ...vol,
+      chapters: vol.chapters.map(chap =>
+        chap.id === chapterId ? { ...chap, chapter_number: newChapterNumber } : chap
       ),
     })));
   };
@@ -262,5 +277,6 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
     setSelectedChapter,
     setVolumes,
     updateChapterTitle,
+    updateChapterNumber,
   };
 }
