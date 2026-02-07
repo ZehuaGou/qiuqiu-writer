@@ -570,3 +570,44 @@
   color: var(--accent-primary);
 }
 
+/* 回收站 */
+.nav-recycle-badge {
+  margin-left: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-inverse);
+  background: var(--text-tertiary);
+  border-radius: 10px;
+}
+
+.nav-recycle-empty {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.nav-recycle-item .nav-chapter-item {
+  padding-right: 8px;
+}
+
+.nav-chapter-restore-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.nav-chapter-restore-btn:hover {
+  background: var(--accent-light);
+  color: var(--accent-primary);
+}
+

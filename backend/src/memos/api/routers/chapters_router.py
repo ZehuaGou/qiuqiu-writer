@@ -124,13 +124,14 @@ async def list_chapters(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
     status: Optional[str] = Query(None, description="章节状态"),
+    include_deleted: bool = Query(False, description="是否包含已软删除的章节（回收站）"),
     sort_by: str = Query("chapter_number", description="排序字段"),
     sort_order: str = Query("asc", regex="^(asc|desc)$", description="排序方向"),
     db: AsyncSession = Depends(get_db_session),
     current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
-    获取章节列表
+    获取章节列表（默认不包含已软删除的章节）
     """
     chapter_service = ChapterService(db)
 
@@ -144,7 +145,7 @@ async def list_chapters(
             detail="没有访问该作品的权限"
         )
 
-    filters = {"work_id": work_id}
+    filters = {"work_id": work_id, "include_deleted": include_deleted}
     if status:
         filters["status"] = status
 
@@ -417,18 +418,8 @@ async def delete_chapter(
             detail="没有删除该章节的权限"
         )
 
-    # 删除ShareDB文档
-    # 关键修复：同时删除新格式和旧格式的文档，确保完全删除
-    document_id = f"work_{chapter.work_id}_chapter_{chapter_id}"
-    
-    try:
-        # 先尝试删除新格式
-        await sharedb_service.delete_document(document_id)
-    except Exception as e:
-        logger.warning(f"删除新格式文档失败: {e}")
-
-    # 删除章节记录
-    await chapter_service.delete_chapter(chapter_id)
+    # 软删除：仅标记 status=deleted，不删 ShareDB 文档，便于恢复
+    await chapter_service.soft_delete_chapter(chapter_id)
 
     # 记录审计日志
     await chapter_service.create_audit_log(
@@ -436,12 +427,53 @@ async def delete_chapter(
         action="delete_chapter",
         target_type="chapter",
         target_id=chapter_id,
-        details={"title": chapter.title, "work_id": chapter.work_id},
+        details={"title": chapter.title, "work_id": chapter.work_id, "soft_delete": True},
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request)
     )
 
-    return {"message": "章节删除成功"}
+    return {"message": "章节已移至回收站，可恢复"}
+
+
+@router.post("/{chapter_id}/restore", response_model=ChapterResponse)
+async def restore_chapter(
+    chapter_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: str = Depends(get_current_user_id)
+) -> Dict[str, Any]:
+    """
+    恢复已软删除的章节（status 恢复为 draft）
+    """
+    chapter_service = ChapterService(db)
+    chapter = await chapter_service.get_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="章节不存在"
+        )
+    if chapter.status != "deleted":
+        return chapter.to_dict()
+    if not await chapter_service.can_edit_work(
+        user_id=current_user_id,
+        work_id=chapter.work_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="没有恢复该章节的权限"
+        )
+    await chapter_service.restore_chapter(chapter_id)
+    await chapter_service.create_audit_log(
+        user_id=current_user_id,
+        action="restore_chapter",
+        target_type="chapter",
+        target_id=chapter_id,
+        details={"title": chapter.title, "work_id": chapter.work_id},
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request)
+    )
+    restored = await chapter_service.get_chapter_by_id(chapter_id)
+    return restored.to_dict()
 
 
 # 版本管理

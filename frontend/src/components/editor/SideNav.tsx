@@ -1,5 +1,5 @@
-import { BookOpen, ChevronDown, ChevronRight, Plus, Settings, ArrowUpDown, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { BookOpen, ChevronDown, ChevronRight, Plus, Settings, ArrowUpDown, Trash2, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import './SideNav.css';
 
 export type NavItem = 'work-info' | 'tags' | 'outline' | 'characters' | 'settings' | 'map' | 'factions';
@@ -43,6 +43,12 @@ interface SideNavProps {
   onOpenChapterModal?: (mode: 'create' | 'edit', volumeId: string, volumeTitle: string, chapterData?: ChapterFullData) => void;
   onOpenVolumeModal?: (mode: 'create' | 'edit', volumeId?: string, currentTitle?: string, currentOutline?: string, currentDetailOutline?: string) => void;
   onChapterDelete?: (chapterId: string) => void;  // 删除章节回调
+  /** 已软删除的章节（回收站） */
+  deletedChapters?: Array<{ id: number; title: string; chapter_number?: number }>;
+  /** 加载回收站列表 */
+  loadDeletedChapters?: () => Promise<void>;
+  /** 恢复已删除章节 */
+  onRestoreChapter?: (chapterId: string) => void;
   volumes?: Volume[];
   onVolumesChange?: (volumes: Volume[]) => void;
   workType?: 'long' | 'short' | 'script' | 'video';  // 作品类型：长篇支持分卷，短篇不分卷
@@ -51,9 +57,10 @@ interface SideNavProps {
 // 导出 Chapter, Volume, SideNavProps 类型供外部使用
 export type { Chapter, Volume, SideNavProps };
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onOpenVolumeModal, onChapterDelete, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onOpenVolumeModal, onChapterDelete, deletedChapters = [], loadDeletedChapters, onRestoreChapter, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
+  const [recycleExpanded, setRecycleExpanded] = useState(false);
   
   // 卷和章节数据 - 使用外部传入的或内部状态
   const [internalVolumes, setInternalVolumes] = useState<Volume[]>([
@@ -129,12 +136,10 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     }
   };
 
-  // 删除章节
+  // 删除章节（确认由父组件用自定义弹框处理）
   const handleDeleteChapter = (chapter: Chapter, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`确定要删除章节"${chapter.title}"吗？此操作不可恢复。`)) {
-      onChapterDelete?.(chapter.id);
-    }
+    onChapterDelete?.(chapter.id);
   };
 
   // 获取卷的中文数字
@@ -151,6 +156,10 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     onChapterSelect?.(null); // 清除选中的章节，这样才能显示 WorkInfoManager
   };
 
+  // 展开回收站时加载已删除章节
+  useEffect(() => {
+    if (recycleExpanded && loadDeletedChapters) loadDeletedChapters();
+  }, [recycleExpanded, loadDeletedChapters]);
 
   return (
     <aside className="side-nav">
@@ -290,6 +299,56 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
           </div>
         )}
       </div>
+
+      {/* 回收站：已软删除的章节，可恢复 */}
+      {(loadDeletedChapters || deletedChapters.length > 0) && (
+        <div className="nav-section">
+          <div className="nav-volume-header">
+            <button
+              className="nav-section-header"
+              onClick={() => setRecycleExpanded(!recycleExpanded)}
+            >
+              {recycleExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              <span>回收站</span>
+              {deletedChapters.length > 0 && (
+                <span className="nav-recycle-badge">{deletedChapters.length}</span>
+              )}
+            </button>
+          </div>
+          {recycleExpanded && (
+            <div className="nav-submenu">
+              {deletedChapters.length === 0 ? (
+                <div className="nav-recycle-empty">暂无已删除章节</div>
+              ) : (
+                deletedChapters.map((ch) => (
+                  <div key={ch.id} className="nav-chapter-item-wrapper nav-recycle-item">
+                    <div className="nav-chapter-item">
+                      <span>
+                        {ch.chapter_number != null
+                          ? `第${ch.chapter_number}章 ${ch.title}`
+                          : ch.title}
+                      </span>
+                      {onRestoreChapter && (
+                        <button
+                          type="button"
+                          className="nav-chapter-restore-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRestoreChapter(String(ch.id));
+                          }}
+                          title="恢复章节"
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

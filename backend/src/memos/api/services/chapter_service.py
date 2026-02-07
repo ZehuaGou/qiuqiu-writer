@@ -22,13 +22,15 @@ class ChapterService:
     async def get_max_chapter_number(
         self,
         work_id: str,
-        volume_number: Optional[int] = None
+        volume_number: Optional[int] = None,
+        include_deleted: bool = False
     ) -> int:
         """获取指定作品（或卷）的最大章节号"""
         conditions = [Chapter.work_id == work_id]
         if volume_number is not None:
             conditions.append(Chapter.volume_number == volume_number)
-        
+        if not include_deleted:
+            conditions.append(Chapter.status != "deleted")
         stmt = select(func.max(Chapter.chapter_number)).where(and_(*conditions))
         result = await self.db.execute(stmt)
         max_number = result.scalar()
@@ -79,6 +81,8 @@ class ChapterService:
             conditions.append(Chapter.work_id == filters["work_id"])
         if "status" in filters:
             conditions.append(Chapter.status == filters["status"])
+        elif not filters.get("include_deleted", False):
+            conditions.append(Chapter.status != "deleted")
 
         # 获取总数
         count_stmt = select(func.count(Chapter.id)).where(and_(*conditions))
@@ -123,17 +127,40 @@ class ChapterService:
         return chapter
 
     async def delete_chapter(self, chapter_id: int) -> bool:
-        """删除章节"""
+        """硬删除章节（物理删除，慎用）"""
         stmt = select(Chapter).where(Chapter.id == chapter_id)
         result = await self.db.execute(stmt)
         chapter = result.scalar_one_or_none()
-
         if not chapter:
             return False
-
         await self.db.delete(chapter)
         await self.db.commit()
+        return True
 
+    async def soft_delete_chapter(self, chapter_id: int) -> bool:
+        """软删除章节：仅标记 status=deleted，不删 ShareDB 内容，可恢复"""
+        stmt = select(Chapter).where(Chapter.id == chapter_id)
+        result = await self.db.execute(stmt)
+        chapter = result.scalar_one_or_none()
+        if not chapter:
+            return False
+        chapter.status = "deleted"
+        await self.db.commit()
+        await self.db.refresh(chapter)
+        return True
+
+    async def restore_chapter(self, chapter_id: int) -> bool:
+        """恢复已软删除的章节"""
+        stmt = select(Chapter).where(Chapter.id == chapter_id)
+        result = await self.db.execute(stmt)
+        chapter = result.scalar_one_or_none()
+        if not chapter:
+            return False
+        if chapter.status != "deleted":
+            return True
+        chapter.status = "draft"
+        await self.db.commit()
+        await self.db.refresh(chapter)
         return True
 
     async def create_chapter_version(self, **kwargs) -> ChapterVersion:

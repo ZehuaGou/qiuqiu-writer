@@ -413,18 +413,13 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
               关闭
             </button>
           ) : (
-            <>
-              <button className="btn-secondary" onClick={handleClose} disabled={status !== 'idle'}>
-                取消
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleImport}
-                disabled={!file || status !== 'idle'}
-              >
-                {status === 'idle' ? '开始导入' : '导入中...'}
-              </button>
-            </>
+            <button
+              className="btn-primary"
+              onClick={handleImport}
+              disabled={!file || status !== 'idle'}
+            >
+              {status === 'idle' ? '开始导入' : '导入中...'}
+            </button>
           )}
         </div>
       </div>

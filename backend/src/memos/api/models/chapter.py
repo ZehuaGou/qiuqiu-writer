@@ -26,7 +26,7 @@ class Chapter(Base):
     title = Column(String(200), nullable=False)
     chapter_number = Column(Integer, nullable=False)
     volume_number = Column(Integer, default=1, index=True)
-    status = Column(String(20), default="draft", index=True)  # draft/published/archived
+    status = Column(String(20), default="draft", index=True)  # draft/published/archived/deleted
     word_count = Column(Integer, default=0)
     estimated_reading_time = Column(Integer, default=0)  # 预估阅读时间（分钟）
     content_hash = Column(String(32), index=True)  # 内容哈希，用于对比

@@ -104,25 +104,30 @@ class ChaptersApiClient extends BaseApiClient {
     page?: number;
     size?: number;
     status?: string;
+    include_deleted?: boolean;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
+    /** 为 true 时跳过缓存，直接请求服务端（如回收站列表需每次拉最新） */
+    skipCache?: boolean;
   }): Promise<ChapterListResponse> {
-    const cacheKey = `chapters_list_${params.work_id}_${params.page || 1}_${params.size || 100}_${params.sort_by || 'chapter_number'}_${params.sort_order || 'asc'}`;
-    
-    // 1. 优先从本地缓存获取（立即响应）
-    const cached = await localCacheManager.get<ChapterListResponse>(cacheKey);
-    if (cached) {
-      console.log('✅ [ChaptersApi] 从缓存加载章节列表（本地优先）:', cacheKey);
-      // 后台异步刷新（不阻塞用户）
-      this.listChaptersFromServer(params, cacheKey).catch(err => {
-        console.warn('⚠️ [ChaptersApi] 后台刷新章节列表失败:', err);
-      });
-      return cached;
+    const cacheKey = `chapters_list_${params.work_id}_${params.page || 1}_${params.size || 100}_${params.status || ''}_${params.include_deleted || false}_${params.sort_by || 'chapter_number'}_${params.sort_order || 'asc'}`;
+    const skipCache = params.skipCache === true;
+
+    // 1. 未要求跳过缓存时，优先从本地缓存获取
+    if (!skipCache) {
+      const cached = await localCacheManager.get<ChapterListResponse>(cacheKey);
+      if (cached) {
+        console.log('✅ [ChaptersApi] 从缓存加载章节列表（本地优先）:', cacheKey);
+        this.listChaptersFromServer(params, cacheKey).catch(err => {
+          console.warn('⚠️ [ChaptersApi] 后台刷新章节列表失败:', err);
+        });
+        return cached;
+      }
     }
-    
-    // 2. 缓存没有，从服务器获取
+
+    // 2. 从服务器获取（回收站等场景 skipCache 时不做缓存写入）
     try {
-      return await this.listChaptersFromServer(params, cacheKey);
+      return await this.listChaptersFromServer(params, cacheKey, skipCache);
     } catch (error) {
       // 服务器请求失败，尝试从缓存加载（降级）
       console.warn('⚠️ [ChaptersApi] 服务器请求失败，尝试从缓存加载:', {
@@ -153,23 +158,26 @@ class ChaptersApiClient extends BaseApiClient {
       page?: number;
       size?: number;
       status?: string;
+      include_deleted?: boolean;
       sort_by?: string;
       sort_order?: 'asc' | 'desc';
+      skipCache?: boolean;
     },
-    cacheKey: string
+    cacheKey: string,
+    skipCache?: boolean
   ): Promise<ChapterListResponse> {
-    const response = await this.get<ChapterListResponse>('/api/v1/chapters/', params);
-    
-    // 缓存响应数据
-    if (response && response.chapters) {
+    const { skipCache: _skip, ...queryParams } = params;
+    const response = await this.get<ChapterListResponse>('/api/v1/chapters/', queryParams);
+
+    // 非跳过缓存时才写入（回收站列表不缓存，避免删除后仍看到旧空列表）
+    if (!skipCache && response && response.chapters) {
       try {
         await localCacheManager.set(cacheKey, {
           ...response,
           cached_at: new Date().toISOString(),
         }, 1, { synced: true });
         console.log('✅ [ChaptersApi] 已缓存章节列表:', cacheKey);
-        
-        // 同时缓存每个章节的详情（用于快速访问）
+
         for (const chapter of response.chapters) {
           const chapterCacheKey = `chapter_info_${chapter.id}`;
           await localCacheManager.set(chapterCacheKey, {
@@ -182,7 +190,7 @@ class ChaptersApiClient extends BaseApiClient {
         console.warn('⚠️ [ChaptersApi] 缓存章节列表失败:', error);
       }
     }
-    
+
     return response;
   }
 
@@ -271,10 +279,17 @@ class ChaptersApiClient extends BaseApiClient {
   }
 
   /**
-   * 删除章节
+   * 删除章节（软删除，可恢复）
    */
   async deleteChapter(chapterId: number): Promise<void> {
     await this.delete(`/api/v1/chapters/${chapterId}`);
+  }
+
+  /**
+   * 恢复已软删除的章节
+   */
+  async restoreChapter(chapterId: number): Promise<Chapter> {
+    return this.post<Chapter>(`/api/v1/chapters/${chapterId}/restore`, {});
   }
 
   /**

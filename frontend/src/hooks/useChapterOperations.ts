@@ -29,7 +29,8 @@ export interface UseChapterOperationsOptions {
 
 export interface UseChapterOperationsReturn {
   saveChapterSettings: (data: ChapterSaveData) => Promise<void>;
-  deleteChapter: (chapterId: string) => Promise<void>;
+  deleteChapter: (chapterId: string, options?: { skipRefresh?: boolean }) => Promise<void>;
+  restoreChapter: (chapterId: string) => Promise<void>;
 }
 
 export function useChapterOperations(options: UseChapterOperationsOptions): UseChapterOperationsReturn {
@@ -112,8 +113,8 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
     }
   }, [workId, onSuccess, onError, onUpdateTrigger]);
 
-  /** 删除章节 */
-  const deleteChapter = useCallback(async (chapterId: string) => {
+  /** 删除章节；skipRefresh 为 true 时不触发 refetch，由调用方用乐观更新保持 UI */
+  const deleteChapter = useCallback(async (chapterId: string, options?: { skipRefresh?: boolean }) => {
     const chapterIdNum = parseInt(chapterId);
     if (isNaN(chapterIdNum)) {
       onError?.('无效的章节ID');
@@ -122,7 +123,9 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
 
     try {
       await chaptersApi.deleteChapter(chapterIdNum);
-      onUpdateTrigger?.();
+      if (!options?.skipRefresh) {
+        onUpdateTrigger?.();
+      }
       onSuccess?.('章节已删除');
     } catch (err) {
       console.error('删除章节失败:', err);
@@ -130,8 +133,26 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
     }
   }, [onSuccess, onError, onUpdateTrigger]);
 
+  /** 恢复已软删除的章节 */
+  const restoreChapter = useCallback(async (chapterId: string) => {
+    const chapterIdNum = parseInt(chapterId);
+    if (isNaN(chapterIdNum)) {
+      onError?.('无效的章节ID');
+      return;
+    }
+    try {
+      await chaptersApi.restoreChapter(chapterIdNum);
+      onUpdateTrigger?.();
+      onSuccess?.('章节已恢复');
+    } catch (err) {
+      console.error('恢复章节失败:', err);
+      onError?.(err instanceof Error ? err.message : '恢复章节失败');
+    }
+  }, [onSuccess, onError, onUpdateTrigger]);
+
   return {
     saveChapterSettings,
     deleteChapter,
+    restoreChapter,
   };
 }

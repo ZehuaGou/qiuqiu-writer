@@ -15,6 +15,7 @@ import TagsManager from '../components/editor/TagsManager';
 import ChapterOutline from '../components/editor/ChapterOutline';
 import ChapterSettingsModal from '../components/editor/ChapterSettingsModal';
 import VolumeSettingsModal from '../components/editor/VolumeSettingsModal';
+import ChapterHistoryModal from '../components/editor/ChapterHistoryModal';
 import MessageModal from '../components/common/MessageModal';
 import MapView from '../components/editor/MapView';
 import Characters from '../components/editor/Characters';
@@ -60,6 +61,7 @@ export default function NovelEditorPage() {
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [syncStatus, setSyncStatus] = useState(syncManager.getStatus());
   const [currentChapterWordCount, setCurrentChapterWordCount] = useState(0);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   
   // ===== UI状态管理 =====
   const {
@@ -102,6 +104,9 @@ export default function NovelEditorPage() {
     setVolumes,
     updateChapterTitle,
     updateChapterNumber,
+    removeChapterLocally,
+    deletedChapters,
+    loadDeletedChapters,
   } = useChapterManagement({
     workId,
     updateTrigger,
@@ -111,6 +116,7 @@ export default function NovelEditorPage() {
   const {
     saveChapterSettings,
     deleteChapter,
+    restoreChapter,
   } = useChapterOperations({
     workId,
     onSuccess: (msg: string) => showMessage(msg, 'success'),
@@ -354,9 +360,11 @@ export default function NovelEditorPage() {
       '删除章节',
       async () => {
         try {
-          await deleteChapter(chapterId);
+          removeChapterLocally(chapterId);
+          await deleteChapter(chapterId, { skipRefresh: true });
         } catch (err) {
           console.error('删除章节失败:', err);
+          setUpdateTrigger(prev => prev + 1);
         }
       }
     );
@@ -485,7 +493,8 @@ export default function NovelEditorPage() {
         try {
           await worksApi.deleteWork(workId);
           showMessage('作品已删除', 'success');
-          navigate('/user/works');
+          const uid = authApi.getUserInfo()?.id;
+          navigate(uid ? `/users/${uid}` : '/');
         } catch (err) {
           console.error('删除作品失败:', err);
           showMessage('删除作品失败', 'error');
@@ -669,6 +678,12 @@ export default function NovelEditorPage() {
               onOpenChapterModal={handleOpenChapterModal}
               onOpenVolumeModal={handleOpenVolumeModal}
               onChapterDelete={handleDeleteChapter}
+              deletedChapters={deletedChapters}
+              loadDeletedChapters={loadDeletedChapters}
+              onRestoreChapter={async (id) => {
+                await restoreChapter(id);
+                loadDeletedChapters();
+              }}
               volumes={volumes}
               onVolumesChange={setVolumes}
               workType="long"
@@ -737,6 +752,12 @@ export default function NovelEditorPage() {
                   onOpenChapterModal={handleOpenChapterModal}
                   onOpenVolumeModal={handleOpenVolumeModal}
                   onChapterDelete={handleDeleteChapter}
+                  deletedChapters={deletedChapters}
+                  loadDeletedChapters={loadDeletedChapters}
+                  onRestoreChapter={async (id) => {
+                    await restoreChapter(id);
+                    loadDeletedChapters();
+                  }}
                   volumes={volumes}
                   onVolumesChange={setVolumes}
                   workType="long"
@@ -809,28 +830,38 @@ export default function NovelEditorPage() {
                     {/* 章节头部 */}
                     {selectedChapter && chaptersData[selectedChapter] && (
                       <div className="chapter-header-info">
-                        <div
-                          ref={chapterNumberInputRef}
-                          className="chapter-number chapter-number-editable"
-                          contentEditable
-                          suppressContentEditableWarning
-                          onBlur={handleSaveChapterNumber}
-                          onKeyDown={handleChapterNumberKeyDown}
-                          title="点击编辑章节号"
-                          data-placeholder={chaptersData[selectedChapter].volumeTitle || '第1章'}
-                        >
-                          {getChapterNumberDisplayText(chaptersData[selectedChapter])}
+                        <div className="chapter-header-title-row">
+                          <div
+                            ref={chapterNumberInputRef}
+                            className="chapter-number chapter-number-editable"
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={handleSaveChapterNumber}
+                            onKeyDown={handleChapterNumberKeyDown}
+                            title="点击编辑章节号"
+                            data-placeholder={chaptersData[selectedChapter].volumeTitle || '第1章'}
+                          >
+                            {getChapterNumberDisplayText(chaptersData[selectedChapter])}
+                          </div>
+                          <h2
+                            ref={chapterNameInputRef}
+                            className="chapter-title"
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={handleSaveChapterName}
+                            onKeyDown={handleChapterNameKeyDown}
+                          >
+                            {chaptersData[selectedChapter].title || '未命名章节'}
+                          </h2>
+                          <button
+                            type="button"
+                            className="chapter-history-btn"
+                            onClick={() => setIsHistoryModalOpen(true)}
+                            title="历史记录"
+                          >
+                            历史
+                          </button>
                         </div>
-                        <h2
-                          ref={chapterNameInputRef}
-                          className="chapter-title"
-                          contentEditable
-                          suppressContentEditableWarning
-                          onBlur={handleSaveChapterName}
-                          onKeyDown={handleChapterNameKeyDown}
-                        >
-                          {chaptersData[selectedChapter].title || '未命名章节'}
-                        </h2>
                       </div>
                     )}
                     
@@ -1007,6 +1038,14 @@ export default function NovelEditorPage() {
         onClose={closeVolumePopup}
         onSave={handleSaveVolume}
         onDelete={handleDeleteVolume}
+      />
+
+      {/* 章节历史记录 */}
+      <ChapterHistoryModal
+        isOpen={isHistoryModalOpen}
+        chapterId={selectedChapter}
+        chapterTitle={selectedChapter && chaptersData[selectedChapter] ? chaptersData[selectedChapter].title : undefined}
+        onClose={() => setIsHistoryModalOpen(false)}
       />
       
       {/* 消息提示 */}

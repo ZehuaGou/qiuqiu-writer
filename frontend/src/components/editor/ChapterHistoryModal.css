@@ -1,0 +1,124 @@
+.chapter-history-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.chapter-history-modal {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  width: 90%;
+  max-width: 420px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.chapter-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.chapter-history-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chapter-history-sub {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.chapter-history-close {
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.chapter-history-close:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.chapter-history-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.chapter-history-loading {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.chapter-history-empty {
+  color: var(--text-tertiary);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.chapter-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chapter-history-item {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-primary);
+}
+
+.chapter-history-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chapter-history-version {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.chapter-history-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.chapter-history-desc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.chapter-history-meta {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
