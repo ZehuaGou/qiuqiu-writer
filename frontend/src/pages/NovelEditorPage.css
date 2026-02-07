@@ -1282,23 +1282,6 @@
   font-style: italic;
 }
 
-/* 字数位置：紧贴章节标题下方，弱化展示 */
-.editor-with-header .chapter-meta {
-  margin-top: 4px;
-}
-.editor-with-header .chapter-meta .word-count {
-  font-size: 13px;
-  color: var(--text-secondary, #666666);
-  gap: 0;
-}
-
-/* 移动端：字数已显示在 header，编辑器内章节头下方字数隐藏 */
-@media (max-width: 768px) {
-  .chapter-meta-word-count-hidden-on-mobile .word-count {
-    display: none;
-  }
-}
-
 .chapter-name {
   font-size: 20px;
   font-weight: 600;

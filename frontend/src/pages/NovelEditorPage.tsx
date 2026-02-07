@@ -815,11 +815,6 @@ export default function NovelEditorPage() {
                         >
                           {chaptersData[selectedChapter].title || '未命名章节'}
                         </h2>
-                        <div className="chapter-meta chapter-meta-word-count-hidden-on-mobile">
-                          <span className="word-count">
-                            {currentChapterWordCount} 字
-                          </span>
-                        </div>
                       </div>
                     )}
                     
