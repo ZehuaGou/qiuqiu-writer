@@ -157,6 +157,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
                 size: pageSize,
                 sort_by: 'chapter_number',
                 sort_order: 'asc',
+                skipCache: true,
               });
               chapters.push(...res.chapters);
               hasMore = res.chapters.length === pageSize;

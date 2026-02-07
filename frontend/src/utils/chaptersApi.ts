@@ -36,6 +36,8 @@ export interface ChapterCreate {
   volume_number?: number;
   volume_id?: number;
   content?: string;
+  /** 创建时一并写入的元数据（如大纲、细纲 JSON），可减少一次更新请求 */
+  chapter_metadata?: Record<string, unknown>;
 }
 
 export interface ChapterUpdate {

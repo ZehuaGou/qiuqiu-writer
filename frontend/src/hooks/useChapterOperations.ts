@@ -36,7 +36,7 @@ export interface UseChapterOperationsReturn {
 export function useChapterOperations(options: UseChapterOperationsOptions): UseChapterOperationsReturn {
   const { workId, onSuccess, onError, onUpdateTrigger } = options;
 
-  /** 保存章节设置（创建或更新） */
+  /** 保存章节设置（创建或更新）。大纲/细纲按表单原有格式（字符串）写入。 */
   const saveChapterSettings = useCallback(async (data: ChapterSaveData) => {
     if (!workId) {
       onError?.('作品ID缺失');
@@ -80,25 +80,28 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
         const volNum = data.volumeId === 'draft' ? 0 : parseInt(data.volumeId.replace('vol', '')) || 0;
         const dbVolumeId = isRealVolume ? Number(data.volumeId) : undefined;
 
-        const newChapter = await chaptersApi.createChapter({
+        const hasFormData = data.outline || data.detailOutline || data.characters?.length || data.locations?.length;
+        const metadata: Record<string, unknown> = {
+          outline: data.outline || '',
+          detailed_outline: data.detailOutline || '',
+        };
+        if (data.characters?.length || data.locations?.length) {
+          metadata.component_data = { characters: data.characters || [], locations: data.locations || [] };
+        }
+        const createPayload: Parameters<typeof chaptersApi.createChapter>[0] = {
           work_id: workId,
           title: data.title,
-          volume_number: volNum > 0 ? volNum : undefined,
+          chapter_number: data.chapter_number,
+          volume_number: volNum >= 0 ? volNum : undefined,
           volume_id: dbVolumeId,
-        });
+        };
+        if (hasFormData) {
+          createPayload.chapter_metadata = metadata;
+        }
 
-        // 如果有大纲/细纲/角色数据，立即更新
-        if (data.outline || data.detailOutline || data.characters?.length || data.locations?.length) {
-          const metadata: Record<string, unknown> = {
-            outline: data.outline || '',
-            detailed_outline: data.detailOutline || '',
-          };
-          if (data.characters?.length || data.locations?.length) {
-            metadata.component_data = {
-              characters: data.characters || [],
-              locations: data.locations || [],
-            };
-          }
+        const newChapter = await chaptersApi.createChapter(createPayload);
+
+        if (newChapter && !createPayload.chapter_metadata && (data.outline || data.detailOutline || data.characters?.length || data.locations?.length)) {
           await chaptersApi.updateChapter(newChapter.id, {
             chapter_metadata: metadata as ChapterUpdate['chapter_metadata'],
           });

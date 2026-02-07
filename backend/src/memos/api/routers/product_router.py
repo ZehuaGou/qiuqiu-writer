@@ -485,7 +485,7 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
         ensure_memos_user_exists(chat_req.user_id)
 
         # 如果是命令，需要先提取章节ID（在替换提及之前）
-        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info")
+        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info", "/continue-chapter")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
         
         # 处理提及替换
@@ -495,6 +495,59 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
 
         # 如果是命令或用户要求禁用记忆，则走无记忆流程
         disable_memory = not chat_req.use_memory or is_command
+
+        async def run_continue_chapter_stream():
+            """续写章节：根据前三章大纲细纲与前一章内容，流式返回 3 个推荐大纲细纲。"""
+            work_id = _parse_work_id_from_user_id(chat_req.user_id)
+            if not work_id:
+                yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行续写章节'})}\n\n"
+                return
+            chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+            previous_chapter_id = chapter_ids[0] if chapter_ids else None
+
+            async with AsyncSessionLocal() as stream_db:
+                try:
+                    yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'text', 'data': '正在根据前三章大纲、细纲与前一章内容生成续写推荐…'}, ensure_ascii=False)}\n\n"
+
+                    work_service = WorkService(stream_db)
+                    work = await work_service.get_work_by_id(work_id)
+                    if not work:
+                        yield f"data: {json.dumps({'type': 'error', 'content': f'作品 {work_id} 不存在'})}\n\n"
+                        return
+                    chapter_service = ChapterService(stream_db)
+                    if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
+                        yield f"data: {json.dumps({'type': 'error', 'content': '没有编辑该作品的权限'})}\n\n"
+                        return
+                    ai_service = get_ai_service()
+                    if not ai_service.is_healthy():
+                        yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
+                        return
+
+                    analysis_settings = AnalysisSettings()
+                    book_analysis_service = BookAnalysisService(stream_db)
+                    result = await book_analysis_service.generate_continue_chapter_outlines(
+                        work_id=work_id,
+                        ai_service=ai_service,
+                        previous_chapter_id=previous_chapter_id,
+                        settings={
+                            "model": analysis_settings.model,
+                            "temperature": analysis_settings.temperature,
+                            "max_tokens": analysis_settings.max_tokens,
+                        },
+                    )
+                    await stream_db.commit()
+
+                    payload = {
+                        "next_chapter_number": result.get("next_chapter_number"),
+                        "recommendations": result.get("recommendations", []),
+                    }
+                    yield f"data: {json.dumps({'type': 'continue_chapter_result', 'data': payload}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                except Exception as e:
+                    await stream_db.rollback()
+                    logger.error(f"Error in continue-chapter stream: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
 
         async def run_generate_outlines_stream():
             """调用章节大纲生成服务并流式返回结果文本。流内使用独立 session，避免请求 session 在流被取消时非法关闭。"""
@@ -782,7 +835,10 @@ async def chat(chat_req: ChatRequest, db: AsyncSession = Depends(get_db_session)
             """Generate chat response as SSE stream."""
             try:
                 query_lower = processed_query.strip().lower()
-                if disable_memory and query_lower.startswith("/verification-chapter-info"):
+                if disable_memory and query_lower.startswith("/continue-chapter"):
+                    async for chunk in run_continue_chapter_stream():
+                        yield chunk
+                elif disable_memory and query_lower.startswith("/verification-chapter-info"):
                     async for chunk in run_chapter_info_verification_stream():
                         yield chunk
                 elif disable_memory and query_lower.startswith("/analysis-chapter-info"):
@@ -842,7 +898,7 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
         ensure_memos_user_exists(chat_req.user_id)
 
         # 如果是命令，需要先提取章节ID（在替换提及之前）
-        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info")
+        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info", "/continue-chapter")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
         
         # 处理提及替换
@@ -853,6 +909,44 @@ async def chat_complete(chat_req: ChatCompleteRequest, db: AsyncSession = Depend
         disable_memory = not chat_req.use_memory or is_command
 
         query_lower = chat_req.query.strip().lower()
+        if disable_memory and query_lower.startswith("/continue-chapter"):
+            # 续写章节：返回 3 个推荐大纲细纲（非流式 complete 接口）
+            work_id = _parse_work_id_from_user_id(chat_req.user_id)
+            if not work_id:
+                raise HTTPException(status_code=400, detail="未能从 user_id 解析 work_id，无法执行续写章节")
+            chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+            previous_chapter_id = chapter_ids[0] if chapter_ids else None
+            work_service = WorkService(db)
+            work = await work_service.get_work_by_id(work_id)
+            if not work:
+                raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+            chapter_service = ChapterService(db)
+            if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
+                raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+            analysis_settings = AnalysisSettings()
+            book_analysis_service = BookAnalysisService(db)
+            try:
+                result = await book_analysis_service.generate_continue_chapter_outlines(
+                    work_id=work_id,
+                    ai_service=ai_service,
+                    previous_chapter_id=previous_chapter_id,
+                    settings={
+                        "model": analysis_settings.model,
+                        "temperature": analysis_settings.temperature,
+                        "max_tokens": analysis_settings.max_tokens,
+                    },
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            payload = {
+                "next_chapter_number": result.get("next_chapter_number"),
+                "recommendations": result.get("recommendations", []),
+            }
+            return {"code": 200, "message": "续写推荐生成完成", "data": payload}
+
         if disable_memory and query_lower.startswith("/verification-chapter-info"):
             # 处理章节信息校验命令
             work_id = _parse_work_id_from_user_id(chat_req.user_id)

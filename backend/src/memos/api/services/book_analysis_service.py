@@ -611,7 +611,244 @@ class BookAnalysisService:
         except Exception as e:
             logger.error(f"批量生成章节大纲和细纲失败: {e}")
             raise
-    
+
+    def _format_outlines_for_prompt(self, outlines: List[Any]) -> str:
+        """将大纲列表格式化为 prompt 可读文本。outline 可能是 dict（结构化）或 str（一段话）。"""
+        if not outlines:
+            return "无"
+        lines = []
+        for idx, outline in enumerate(outlines, 1):
+            if outline is None or outline == "":
+                continue
+            lines.append(f"## 第{idx}章大纲")
+            if isinstance(outline, str):
+                lines.append(outline.strip())
+            elif isinstance(outline, dict):
+                if outline.get("core_function"):
+                    lines.append(f"核心功能: {outline.get('core_function')}")
+                if outline.get("key_points"):
+                    lines.append(f"关键情节点: {', '.join(outline.get('key_points', []))}")
+                if outline.get("visual_scenes"):
+                    lines.append(f"画面感: {', '.join(outline.get('visual_scenes', []))}")
+                if outline.get("atmosphere"):
+                    lines.append(f"氛围: {', '.join(outline.get('atmosphere', []))}")
+                if outline.get("hook"):
+                    lines.append(f"结尾钩子: {outline.get('hook')}")
+            lines.append("")
+        return "\n".join(lines)
+
+    def _format_detailed_outlines_for_prompt(self, detailed_outlines: List[Any]) -> str:
+        """将细纲列表格式化为 prompt 可读文本。detailed_outline 可能是 dict（含 sections）或 str（一段话）。"""
+        if not detailed_outlines:
+            return "无"
+        lines = []
+        for idx, detailed_outline in enumerate(detailed_outlines, 1):
+            if detailed_outline is None or detailed_outline == "":
+                continue
+            lines.append(f"## 第{idx}章细纲")
+            if isinstance(detailed_outline, str):
+                lines.append(detailed_outline.strip())
+            elif isinstance(detailed_outline, dict):
+                sections = detailed_outline.get("sections", [])
+                for section in sections:
+                    if isinstance(section, dict):
+                        sn = section.get("section_number", "")
+                        title = section.get("title", "")
+                        content = section.get("content", "")
+                        lines.append(f"  {sn}. {title}: {content}")
+                    else:
+                        lines.append(f"  {section}")
+            lines.append("")
+        return "\n".join(lines)
+
+    async def generate_continue_chapter_outlines(
+        self,
+        work_id: str,
+        ai_service,
+        previous_chapter_id: Optional[int] = None,
+        settings: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        续写章节：根据前三章的大纲和细纲、以及前一章的章节内容，生成下一章的 3 个推荐大纲和细纲。
+
+        Args:
+            work_id: 作品ID
+            ai_service: AI 服务实例
+            previous_chapter_id: 前一章章节 ID（即要续写的「下一章」的上一章）。不传则使用作品最后一章。
+            settings: AI 设置（可选）
+
+        Returns:
+            包含 recommendations 列表的字典，每项为 {"title", "outline", "detailed_outline"}
+        """
+        settings = settings or {}
+        model = settings.get("model")
+        temperature = settings.get("temperature", 0.7)
+        max_tokens = settings.get("max_tokens", 8000)
+
+        # 1) 取作品前 3 章（按 chapter_number 升序）
+        first_chapters, _ = await self.chapter_service.get_chapters(
+            filters={"work_id": work_id},
+            page=1,
+            size=3,
+            sort_by="chapter_number",
+            sort_order="asc",
+        )
+        if not first_chapters:
+            raise ValueError("作品中没有章节，无法续写")
+
+        first_outlines = []
+        first_detailed_outlines = []
+        for ch in first_chapters:
+            meta = ch.chapter_metadata or {}
+            first_outlines.append(meta.get("outline", {}))
+            first_detailed_outlines.append(meta.get("detailed_outline", {}))
+
+        # 2) 确定「前一章」并获取其正文
+        if previous_chapter_id is not None:
+            prev_chapter = await self.chapter_service.get_chapter_by_id(previous_chapter_id)
+            if not prev_chapter or str(prev_chapter.work_id) != str(work_id):
+                raise ValueError(f"章节 {previous_chapter_id} 不存在或不属于本作品")
+        else:
+            # 使用作品最后一章
+            all_chapters, _ = await self.chapter_service.get_chapters(
+                filters={"work_id": work_id},
+                page=1,
+                size=1,
+                sort_by="chapter_number",
+                sort_order="desc",
+            )
+            if not all_chapters:
+                raise ValueError("作品中没有章节，无法续写")
+            prev_chapter = all_chapters[0]
+
+        prev_content = await self.get_chapter_content(prev_chapter.id)
+        next_chapter_number = (prev_chapter.chapter_number or 0) + 1
+
+        # 3) 构建 prompt
+        outlines_text = self._format_outlines_for_prompt(first_outlines)
+        detailed_text = self._format_detailed_outlines_for_prompt(first_detailed_outlines)
+
+        user_prompt = f"""# 角色
+你是一位经验丰富的小说编辑和剧情策划，擅长在已有情节基础上延续并设计新章节。
+
+# 任务
+根据以下材料，为**下一章（第 {next_chapter_number} 章）**设计 3 个不同风格的推荐方案，每个方案包含：章节标题、大纲（outline）、细纲（detailed_outline）。要求与前三章的风格和设定一致，并与前一章结尾自然衔接。
+
+# 输入材料
+
+## 前三章大纲
+{outlines_text}
+
+## 前三章细纲
+{detailed_text}
+
+## 前一章（第 {prev_chapter.chapter_number or '?'} 章）正文
+{prev_content[:12000] if prev_content else "（无正文）"}
+
+# 输出格式
+**必须严格按照以下 JSON 格式输出，不要添加任何其他文字：**
+
+```json
+{{
+  "recommendations": [
+    {{
+      "title": "推荐方案一标题",
+      "outline": {{
+        "core_function": "本章核心功能/目的",
+        "key_points": ["关键情节点1", "关键情节点2"],
+        "visual_scenes": ["画面1", "画面2"],
+        "atmosphere": ["氛围1", "氛围2"],
+        "hook": "结尾钩子"
+      }},
+      "detailed_outline": {{
+        "sections": [
+          {{ "section_number": 1, "title": "小节标题", "content": "小节内容概要" }}
+        ]
+      }}
+    }},
+    {{
+      "title": "推荐方案二标题",
+      "outline": {{ ... }},
+      "detailed_outline": {{ ... }}
+    }},
+    {{
+      "title": "推荐方案三标题",
+      "outline": {{ ... }},
+      "detailed_outline": {{ ... }}
+    }}
+  ]
+}}
+```
+
+# 重要提示
+1. 必须输出有效的 JSON，且仅包含上述结构。
+2. recommendations 数组长度必须为 3。
+3. 每个 outline 需包含 core_function、key_points、visual_scenes、atmosphere、hook。
+4. 每个 detailed_outline 需包含 sections 数组，每项含 section_number、title、content。
+
+请直接输出 JSON："""
+
+        full_response = await ai_service.analyze_chapter_stream(
+            content=prev_content or "",
+            prompt=user_prompt,
+            system_prompt=None,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        # 4) 解析 AI 返回的 3 个推荐（支持 ```json ... ``` 或裸 JSON）
+        json_str = ""
+        code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", full_response)
+        if code_block:
+            json_str = code_block.group(1).strip()
+        if not json_str:
+            # 尝试匹配最外层 { ... }
+            brace = full_response.find("{")
+            if brace >= 0:
+                depth = 0
+                end = -1
+                for i in range(brace, len(full_response)):
+                    if full_response[i] == "{":
+                        depth += 1
+                    elif full_response[i] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            end = i
+                            break
+                if end >= 0:
+                    json_str = full_response[brace : end + 1]
+
+        if not json_str:
+            raise ValueError("无法从 AI 响应中解析出 JSON")
+
+        data = json.loads(json_str)
+        recommendations = data.get("recommendations", [])
+        if not isinstance(recommendations, list):
+            recommendations = []
+        # 只取前 3 个，并保证结构
+        result_list = []
+        for i, rec in enumerate(recommendations[:3]):
+            if not isinstance(rec, dict):
+                continue
+            result_list.append({
+                "title": rec.get("title", f"推荐方案{i + 1}"),
+                "outline": rec.get("outline", {}),
+                "detailed_outline": rec.get("detailed_outline", {}),
+            })
+        while len(result_list) < 3:
+            result_list.append({
+                "title": f"推荐方案{len(result_list) + 1}",
+                "outline": {},
+                "detailed_outline": {},
+            })
+
+        return {
+            "next_chapter_number": next_chapter_number,
+            "recommendations": result_list,
+            "raw_response": full_response,
+        }
+
     async def incremental_insert_to_work(
         self,
         work_id: int,

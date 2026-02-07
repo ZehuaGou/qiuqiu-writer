@@ -11,6 +11,7 @@ import { EditorContent } from '@tiptap/react';
 // 组件
 import SideNav from '../components/editor/SideNav';
 import AIAssistant from '../components/editor/AIAssistant';
+import { formatOutlineForEditor, formatDetailedOutlineForEditor } from '../utils/outlineFormat';
 import TagsManager from '../components/editor/TagsManager';
 import ChapterOutline from '../components/editor/ChapterOutline';
 import ChapterSettingsModal from '../components/editor/ChapterSettingsModal';
@@ -124,7 +125,7 @@ export default function NovelEditorPage() {
     onError: (msg: string) => showMessage(msg, 'error'),
     onUpdateTrigger: () => setUpdateTrigger(prev => prev + 1),
   });
-  
+
   // ===== 卷管理 =====
   const {
     isVolumePopupOpen,
@@ -397,7 +398,31 @@ export default function NovelEditorPage() {
       openChapterModal('edit', chapter.volumeId, chapter.volumeTitle, chapter);
     }
   };
-  
+
+  /** 用户从续写推荐中选择方案后，用该方案的大纲和细纲打开「新建章节」弹窗并预填（卷取第一个真实卷或未分卷） */
+  const handleUseContinueRecommendation = (payload: {
+    title: string;
+    outline: Record<string, unknown> | string;
+    detailed_outline: Record<string, unknown> | string;
+    next_chapter_number: number;
+  }) => {
+    const defaultVolume = volumes?.[0];
+    const volumeId = defaultVolume?.id ?? 'draft';
+    const volumeTitle = defaultVolume?.title ?? '未分卷';
+    const chapterData: ChapterFullData = {
+      id: '',
+      volumeId,
+      volumeTitle,
+      title: payload.title,
+      chapter_number: payload.next_chapter_number,
+      characters: [],
+      locations: [],
+      outline: formatOutlineForEditor(payload.outline),
+      detailOutline: formatDetailedOutlineForEditor(payload.detailed_outline),
+    };
+    openChapterModal('create', volumeId, volumeTitle, chapterData);
+  };
+
   const handleSaveChapter = async (data: ChapterSaveData) => {
     await saveChapterSettings(data);
     closeChapterModal();
@@ -986,6 +1011,7 @@ export default function NovelEditorPage() {
             <AIAssistant 
               workId={workId}
               onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
+              onUseContinueRecommendation={handleUseContinueRecommendation}
             />
           </div>
         )}
@@ -1004,6 +1030,7 @@ export default function NovelEditorPage() {
                 <AIAssistant 
                   workId={workId}
                   onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
+                  onUseContinueRecommendation={handleUseContinueRecommendation}
                 />
               </div>
             </div>

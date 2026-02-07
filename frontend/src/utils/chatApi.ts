@@ -11,8 +11,21 @@ interface ChatCompleteResponse {
   data?: string | null;
 }
 
+/** 续写章节推荐一项 */
+export interface ContinueChapterRecommendation {
+  title: string;
+  outline: Record<string, unknown> | string;
+  detailed_outline: Record<string, unknown> | string;
+}
+
+/** 续写章节结果（后端返回的 JSON） */
+export interface ContinueChapterResult {
+  next_chapter_number: number;
+  recommendations: ContinueChapterRecommendation[];
+}
+
 export interface ChatStreamEvent {
-  type: 'status' | 'reference' | 'text' | 'time' | 'suggestion' | 'end' | 'error';
+  type: 'status' | 'reference' | 'text' | 'time' | 'suggestion' | 'end' | 'error' | 'continue_chapter_result';
   data?: unknown;
 }
 

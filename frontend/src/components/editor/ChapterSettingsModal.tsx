@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Sparkles, Plus, MapPin, Users, FileText, BookOpen, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { chaptersApi } from '../../utils/chaptersApi';
+import { formatOutlineForEditor, formatDetailedOutlineForEditor } from '../../utils/outlineFormat';
 import LoadingSpinner from '../common/LoadingSpinner';
 import MessageModal from '../common/MessageModal';
 import type { MessageType } from '../common/MessageModal';
@@ -275,6 +276,22 @@ export default function ChapterSettingsModal({
     return String(val);
   };
 
+  /** 大纲：字符串直接返回，对象用可读格式（与续写预填一致） */
+  const outlineForDisplay = (val: unknown): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val.trim();
+    if (typeof val === 'object') return formatOutlineForEditor(val as Record<string, unknown>);
+    return String(val);
+  };
+
+  /** 细纲：字符串直接返回，对象用可读格式（与续写预填一致） */
+  const detailedOutlineForDisplay = (val: unknown): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val.trim();
+    if (typeof val === 'object') return formatDetailedOutlineForEditor(val as Record<string, unknown>);
+    return String(val);
+  };
+
   // 同一章节在同一打开周期内只请求一次 document，避免 initialData 等依赖变化导致重复请求
   const lastFetchedChapterIdRef = useRef<string | null>(null);
   // 打开弹窗时的大纲/细纲快照，接口返回空时用其回退，避免“先显示后消失”
@@ -306,8 +323,8 @@ export default function ChapterSettingsModal({
           setSelectedCharacters(normalizeSelectedCharacters(initialData.characters || [], availableCharacters || []));
           setLocations(initialData.locations || []);
           // 只有 initialData 里大纲/细纲非空时才写 state，避免 effect 重跑时用空串覆盖已显示内容
-          const outlineVal = ensureString(initialData.outline);
-          const detailVal = ensureString(initialData.detailOutline);
+          const outlineVal = outlineForDisplay(initialData.outline);
+          const detailVal = detailedOutlineForDisplay(initialData.detailOutline);
           if ((outlineVal || '').trim()) {
             openOutlineRef.current = outlineVal.trim();
             setOutline(outlineVal.trim());
@@ -356,34 +373,25 @@ export default function ChapterSettingsModal({
                 let fetchedOutline = '';
                 let fetchedDetail = '';
 
-                // 1. 优先从 metadata 获取
-                if (meta.outline) {
-                  fetchedOutline = ensureString(meta.outline);
+                // 1. 优先从 metadata 获取（对象时用可读格式，与续写预填一致）
+                if (meta.outline !== undefined && meta.outline !== null) {
+                  fetchedOutline = outlineForDisplay(meta.outline);
                 }
-                
-                if (meta.detailed_outline) {
-                  fetchedDetail = ensureString(meta.detailed_outline);
+                if (meta.detailed_outline !== undefined && meta.detailed_outline !== null) {
+                  fetchedDetail = detailedOutlineForDisplay(meta.detailed_outline);
                 }
 
                 // 2. 如果 metadata 中没有，尝试从 info 顶层字段获取
-                // 注意：虽然类型定义为 Record，但后端可能返回字符串，或者我们在运行时应该兼容处理
                 if (!fetchedOutline && (info as any).outline) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                  const rawOutline = (info as any).outline; // eslint-disable-line @typescript-eslint/no-explicit-any
-                  if (typeof rawOutline === 'string') {
-                    fetchedOutline = rawOutline;
-                  }
+                  fetchedOutline = outlineForDisplay((info as any).outline); // eslint-disable-line @typescript-eslint/no-explicit-any
                 }
-
                 if (!fetchedDetail && (info as any).detailed_outline) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                  const rawDetail = (info as any).detailed_outline; // eslint-disable-line @typescript-eslint/no-explicit-any
-                  if (typeof rawDetail === 'string') {
-                    fetchedDetail = rawDetail;
-                  }
+                  fetchedDetail = detailedOutlineForDisplay((info as any).detailed_outline); // eslint-disable-line @typescript-eslint/no-explicit-any
                 }
 
                 // 3. 如果 API 没有返回有效数据，回退到 initialData，再回退到打开时的快照
-                if (!fetchedOutline) fetchedOutline = ensureString(initialData.outline) || openOutlineRef.current;
-                if (!fetchedDetail) fetchedDetail = ensureString(initialData.detailOutline) || openDetailOutlineRef.current;
+                if (!fetchedOutline) fetchedOutline = outlineForDisplay(initialData.outline) || openOutlineRef.current;
+                if (!fetchedDetail) fetchedDetail = detailedOutlineForDisplay(initialData.detailOutline) || openDetailOutlineRef.current;
 
                 // 4. 写回 state（优先接口，空则用打开时的快照，避免先显示后消失）
                 const finalOutline = (fetchedOutline || '').trim() || openOutlineRef.current;

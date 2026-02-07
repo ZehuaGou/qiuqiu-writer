@@ -1,7 +1,8 @@
 import { Send, Copy, Check, Loader2, Trash2, BookOpen, User, FileText } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { streamChatMessage } from '../../utils/chatApi';
-import type { ChatMessage } from '../../utils/chatApi';
+import type { ChatMessage, ContinueChapterResult } from '../../utils/chatApi';
+import { formatOutlineSummary } from '../../utils/outlineFormat';
 import { authApi } from '../../utils/authApi';
 import { chaptersApi, type Chapter } from '../../utils/chaptersApi';
 import { worksApi } from '../../utils/worksApi';
@@ -33,6 +34,13 @@ interface AIAssistantProps {
   onAnalyzeWorkCommand?: () => Promise<WorkAnalysisCommandResult | undefined>;
   /** 根据当前章节的大纲和细纲生成章节内容（对应章节设置中的「根据大纲和细纲生成」按钮），可用 /gen_chapter 触发 */
   onGenerateChapterFromOutline?: () => Promise<void>;
+  /** 用户选择续写推荐方案后，用该方案的大纲和细纲创建新章节（打开章节设置弹窗并预填） */
+  onUseContinueRecommendation?: (payload: {
+    title: string;
+    outline: Record<string, unknown> | string;
+    detailed_outline: Record<string, unknown> | string;
+    next_chapter_number: number;
+  }) => void;
 }
 
 const md = new MarkdownIt({
@@ -45,6 +53,8 @@ const md = new MarkdownIt({
 interface MessageWithTime extends ChatMessage {
   timestamp?: Date;
   mentions?: Mention[];
+  /** 续写章节命令返回的 3 个推荐方案，用于渲染卡片并选择创建章节 */
+  continueChapterResult?: ContinueChapterResult;
 }
 
 interface Mention {
@@ -74,6 +84,7 @@ export default function AIAssistant({
   // onAnalyzeChapterCommand,
   // onAnalyzeWorkCommand,
   onGenerateChapterFromOutline,
+  onUseContinueRecommendation,
 }: AIAssistantProps) {
   const [message, setMessage] = useState('');
   const [charCount, setCharCount] = useState(0);
@@ -169,6 +180,7 @@ export default function AIAssistant({
       { type: 'command', id: 'gen_chapter', name: '/gen_chapter', subtitle: '根据大纲和细纲生成章节内容', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'analysis-chapter', name: '/analysis-chapter', subtitle: '分析指定章节', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'analysis-chapter-info', name: '/analysis-chapter-info', subtitle: '分析章节组件信息', isCommand: true, commandKind: 'slash' },
+      { type: 'command', id: 'continue-chapter', name: '/continue-chapter', subtitle: '续写章节：根据前三章大纲细纲与前一章内容生成3个推荐大纲细纲', isCommand: true, commandKind: 'slash' },
       { type: 'command', id: 'verification-chapter-info', name: '/verification-chapter-info', subtitle: '校验章节信息', isCommand: true, commandKind: 'slash' },
     ];
     const textBeforeCursor = value.substring(0, cursorPos);
@@ -818,6 +830,26 @@ export default function AIAssistant({
         content,
         [...messages, userMsg],
         (event) => {
+          if (event.type === 'continue_chapter_result' && event.data) {
+            const result = event.data as ContinueChapterResult;
+            setMessages(prev => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              const newMsg: MessageWithTime = {
+                role: 'assistant',
+                content: `已生成第 ${result.next_chapter_number} 章的 3 个续写方案，请选择其一创建章节。`,
+                timestamp: new Date(),
+                continueChapterResult: result,
+              };
+              if (last?.role === 'assistant') {
+                next[next.length - 1] = newMsg;
+              } else {
+                next.push(newMsg);
+              }
+              return next;
+            });
+            return;
+          }
           if (event.type === 'text' && typeof event.data === 'string') {
             assistantBuffer += event.data;
             setMessages(prev => {
@@ -911,10 +943,41 @@ export default function AIAssistant({
                   <div className="chat-message-content">
                     <div className={`chat-message-bubble ${msg.role === 'user' ? 'user-bubble' : 'assistant-bubble'}`}>
                       {msg.role === 'assistant' ? (
-                        <div 
-                          className="markdown-content"
-                          dangerouslySetInnerHTML={{ __html: md.render(msg.content) }}
-                        />
+                        (msg as MessageWithTime).continueChapterResult ? (
+                          <div className="continue-chapter-cards">
+                            <p className="continue-chapter-hint">{msg.content}</p>
+                            <div className="continue-chapter-card-list">
+                              {(msg as MessageWithTime).continueChapterResult!.recommendations.map((rec, recIdx) => (
+                                <div key={recIdx} className="continue-chapter-card">
+                                  <div className="continue-chapter-card-title">{rec.title}</div>
+                                  <div className="continue-chapter-card-outline">
+                                    {formatOutlineSummary(rec.outline)}
+                                  </div>
+                                  <div className="continue-chapter-card-detail">
+                                    {formatOutlineSummary(rec.detailed_outline, 80)}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="continue-chapter-card-action"
+                                    onClick={() => onUseContinueRecommendation?.({
+                                      title: rec.title,
+                                      outline: rec.outline,
+                                      detailed_outline: rec.detailed_outline,
+                                      next_chapter_number: (msg as MessageWithTime).continueChapterResult!.next_chapter_number,
+                                    })}
+                                  >
+                                    使用此方案创建章节
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div 
+                            className="markdown-content"
+                            dangerouslySetInnerHTML={{ __html: md.render(msg.content) }}
+                          />
+                        )
                       ) : (
                         <div className="text-content">
                           {renderMessageWithMentions(msg.content, msg.mentions)}
