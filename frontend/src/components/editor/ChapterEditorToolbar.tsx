@@ -4,6 +4,8 @@ import { Undo2, Redo2, Save, Heading, Bold, Underline, ChevronDown, Settings, Hi
 
 interface ChapterEditorToolbarProps {
   editor: Editor | null;
+  /** 点击保存图标时触发：创建版本（若提供则优先，否则走 onManualSave） */
+  onCreateVersion?: () => void | Promise<void>;
   onManualSave: () => void;
   onEditChapter?: () => void;
   onOpenHistory?: () => void;
@@ -13,6 +15,7 @@ interface ChapterEditorToolbarProps {
 
 export default function ChapterEditorToolbar({
   editor,
+  onCreateVersion,
   onManualSave,
   onEditChapter,
   onOpenHistory,
@@ -267,7 +270,7 @@ export default function ChapterEditorToolbar({
       <div className="toolbar-group toolbar-group-end">
         <button
           className="toolbar-btn"
-          onClick={onManualSave}
+          onClick={() => (onCreateVersion ? void onCreateVersion() : onManualSave())}
           title="保存当前章节"
         >
           <Save size={16} />

@@ -821,6 +821,13 @@ export default function NovelEditorPage() {
                     <div className="embedded-toolbar">
                       <ChapterEditorToolbar
                         editor={editor}
+                        onCreateVersion={editor && selectedChapter ? async () => {
+                          const chapterIdNum = parseInt(selectedChapter!, 10);
+                          if (Number.isNaN(chapterIdNum)) return;
+                          const base64 = createYjsSnapshotFromEditor(editor!);
+                          await chaptersApi.createYjsSnapshot(chapterIdNum, base64);
+                          showMessage('版本已创建', 'success');
+                        } : undefined}
                         onManualSave={handleManualSave}
                         onEditChapter={handleEditCurrentChapter}
                         onOpenHistory={() => setIsHistoryModalOpen(true)}

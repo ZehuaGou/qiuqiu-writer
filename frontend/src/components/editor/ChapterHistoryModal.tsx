@@ -1,10 +1,10 @@
 /**
- * 章节历史记录弹窗（Yjs 原生快照，Git 式版本历史）
- * 支持「创建版本」「恢复到此版本」与「预览对比」当前内容与历史版本
+ * 章节历史记录弹窗 - 参考文档历史风格
+ * 左侧：主内容区（对比/更改）；右侧：历史记录列表（按月分组）；顶部：返回、还原、编辑记录 N/M、上一项/下一项
  */
 
-import { useState, useEffect } from 'react';
-import { X, History, Plus, RotateCcw, FileDiff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, History, Plus, RotateCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { chaptersApi, type YjsSnapshotMeta } from '../../utils/chaptersApi';
 import { getContentJSONFromYjsSnapshotBase64, getTextFromProsemirrorJSON } from '../../utils/yjsSnapshot';
 import { diffLines, type DiffLine } from '../../utils/simpleDiff';
@@ -16,27 +16,35 @@ interface ChapterHistoryModalProps {
   chapterId: string | null;
   chapterTitle?: string;
   onClose: () => void;
-  /** 获取当前编辑器纯文本（用于对比预览） */
   getCurrentContent?: () => string;
-  /** 创建版本 */
   onCreateVersion?: () => Promise<void>;
-  /** 恢复到此快照 */
   onRestore?: (snapshotId: number) => Promise<void>;
 }
 
-function formatDate(iso: string | undefined): string {
+/** 格式：1月7日 19:45 */
+function formatDateShort(iso: string | undefined): string {
   if (!iso) return '—';
   try {
     const d = new Date(iso);
     return d.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      month: 'numeric',
+      day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
   } catch {
     return iso;
+  }
+}
+
+/** 分组用：1月 */
+function formatMonth(iso: string | undefined): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('zh-CN', { month: 'numeric' }) + '月';
+  } catch {
+    return '';
   }
 }
 
@@ -68,9 +76,15 @@ export default function ChapterHistoryModal({
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [restoringId, setRestoringId] = useState<number | null>(null);
-  const [previewSnapshotId, setPreviewSnapshotId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [diffLinesState, setDiffLinesState] = useState<DiffLine[] | null>(null);
+  const [versionTextState, setVersionTextState] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
+  const [showChanges, setShowChanges] = useState(true);
+
+  const getCurrentContentRef = useRef(getCurrentContent);
+  getCurrentContentRef.current = getCurrentContent;
+  const loadingSnapshotIdRef = useRef<number | null>(null);
 
   const loadSnapshots = () => {
     if (!chapterId) return;
@@ -87,12 +101,54 @@ export default function ChapterHistoryModal({
   useEffect(() => {
     if (!isOpen || !chapterId) {
       setSnapshots([]);
-      setPreviewSnapshotId(null);
+      setSelectedId(null);
       setDiffLinesState(null);
       return;
     }
     loadSnapshots();
   }, [isOpen, chapterId]);
+
+  const selectedIndex = selectedId != null ? snapshots.findIndex((s) => s.id === selectedId) : -1;
+  const currentPosition = selectedIndex >= 0 ? selectedIndex + 1 : 0;
+  const totalCount = snapshots.length;
+
+  const loadDiffFor = async (snapshotId: number) => {
+    const id = chapterId ? parseInt(chapterId, 10) : NaN;
+    if (!chapterId || Number.isNaN(id)) return;
+    const getCurrent = getCurrentContentRef.current;
+    if (!getCurrent) return;
+    loadingSnapshotIdRef.current = snapshotId;
+    setDiffLoading(true);
+    setDiffLinesState(null);
+    setVersionTextState(null);
+    try {
+      const data = await chaptersApi.getYjsSnapshot(id, snapshotId);
+      if (loadingSnapshotIdRef.current !== snapshotId) return;
+      const versionJson = getContentJSONFromYjsSnapshotBase64(data.snapshot);
+      const versionText = getTextFromProsemirrorJSON(versionJson);
+      setVersionTextState(versionText);
+      const currentText = getCurrent();
+      setDiffLinesState(diffLines(versionText, currentText));
+    } catch {
+      if (loadingSnapshotIdRef.current !== snapshotId) return;
+      setDiffLinesState([]);
+      setVersionTextState(null);
+    } finally {
+      if (loadingSnapshotIdRef.current === snapshotId) {
+        loadingSnapshotIdRef.current = null;
+        setDiffLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (selectedId != null) loadDiffFor(selectedId);
+    else {
+      setDiffLinesState(null);
+      setVersionTextState(null);
+      loadingSnapshotIdRef.current = null;
+    }
+  }, [selectedId, chapterId]);
 
   const handleCreateVersion = async () => {
     if (!onCreateVersion) return;
@@ -105,147 +161,201 @@ export default function ChapterHistoryModal({
     }
   };
 
-  const handleRestore = async (snapshotId: number) => {
-    if (!onRestore) return;
-    setRestoringId(snapshotId);
+  const handleRestore = async () => {
+    if (selectedId == null || !onRestore) return;
+    setRestoringId(selectedId);
     try {
-      await onRestore(snapshotId);
+      await onRestore(selectedId);
       onClose();
     } finally {
       setRestoringId(null);
     }
   };
 
-  const handlePreview = async (snapshotId: number) => {
-    if (!chapterId || !getCurrentContent) return;
-    const id = parseInt(chapterId, 10);
-    if (Number.isNaN(id)) return;
-    setDiffLoading(true);
-    setPreviewSnapshotId(snapshotId);
-    setDiffLinesState(null);
-    try {
-      const data = await chaptersApi.getYjsSnapshot(id, snapshotId);
-      const versionJson = getContentJSONFromYjsSnapshotBase64(data.snapshot);
-      const versionText = getTextFromProsemirrorJSON(versionJson);
-      const currentText = getCurrentContent();
-      const lines = diffLines(versionText, currentText);
-      setDiffLinesState(lines);
-    } catch {
-      setDiffLinesState([]);
-    } finally {
-      setDiffLoading(false);
-    }
+  const goPrev = () => {
+    if (selectedIndex <= 0) return;
+    setSelectedId(snapshots[selectedIndex - 1].id);
   };
 
-  const closePreview = () => {
-    setPreviewSnapshotId(null);
-    setDiffLinesState(null);
+  const goNext = () => {
+    if (selectedIndex < 0 || selectedIndex >= snapshots.length - 1) return;
+    setSelectedId(snapshots[selectedIndex + 1].id);
   };
+
+  const groupedByMonth = (() => {
+    const map = new Map<string, YjsSnapshotMeta[]>();
+    snapshots.forEach((s) => {
+      const key = formatMonth(s.created_at) || '—';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    });
+    return Array.from(map.entries());
+  })();
 
   if (!isOpen) return null;
 
-  const showingDiff = previewSnapshotId !== null;
-
   return (
     <div className="chapter-history-overlay" onClick={onClose}>
-      <div className="chapter-history-modal chapter-history-modal--wide" onClick={(e) => e.stopPropagation()}>
-        <div className="chapter-history-header">
-          <span className="chapter-history-title">
-            <History size={18} />
-            {showingDiff ? '对比预览' : '历史记录（Yjs 版本）'}
-            {chapterTitle && <span className="chapter-history-sub"> · {chapterTitle}</span>}
-          </span>
-          <button type="button" className="chapter-history-close" onClick={onClose} aria-label="关闭">
-            <X size={20} />
+      <div className="chapter-history-modal chapter-history-modal--doc-style" onClick={(e) => e.stopPropagation()}>
+        {/* 顶部栏 */}
+        <div className="chapter-history-topbar">
+          <button type="button" className="chapter-history-back-doc" onClick={onClose}>
+            <ArrowLeft size={18} />
+            返回文档
           </button>
-        </div>
-        <div className="chapter-history-body">
-          {showingDiff ? (
-            <>
-              <div className="chapter-history-diff-toolbar">
-                <span className="chapter-history-diff-legend">
-                  <span className="diff-remove">− 该版本删除</span>
-                  <span className="diff-add">+ 当前新增</span>
-                </span>
-                <button type="button" className="chapter-history-back-btn" onClick={closePreview}>
-                  返回列表
+          <div className="chapter-history-topbar-center">
+            {selectedId != null && onRestore && (
+              <button
+                type="button"
+                className="chapter-history-restore-primary"
+                onClick={handleRestore}
+                disabled={restoringId !== null}
+              >
+                还原此历史记录
+              </button>
+            )}
+            {totalCount > 0 && selectedId != null && (
+              <span className="chapter-history-edit-record">
+                编辑记录 {currentPosition}/{totalCount}
+              </span>
+            )}
+            {totalCount > 0 && selectedId != null && (
+              <div className="chapter-history-nav">
+                <button
+                  type="button"
+                  className="chapter-history-nav-btn"
+                  onClick={goPrev}
+                  disabled={selectedIndex <= 0}
+                  aria-label="上一项"
+                >
+                  <ChevronLeft size={18} />
+                  上一项
+                </button>
+                <button
+                  type="button"
+                  className="chapter-history-nav-btn"
+                  onClick={goNext}
+                  disabled={selectedIndex < 0 || selectedIndex >= totalCount - 1}
+                  aria-label="下一项"
+                >
+                  下一项
+                  <ChevronRight size={18} />
                 </button>
               </div>
-              {diffLoading ? (
-                <div className="chapter-history-loading">
-                  <LoadingSpinner />
-                </div>
-              ) : diffLinesState && diffLinesState.length > 0 ? (
-                <div className="chapter-history-diff-wrap">
-                  <DiffView lines={diffLinesState} />
-                </div>
-              ) : diffLinesState ? (
-                <p className="chapter-history-empty">当前内容与该版本一致，无差异。</p>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {onCreateVersion && (
-                <div className="chapter-history-actions">
-                  <button
-                    type="button"
-                    className="chapter-history-create-btn"
-                    onClick={handleCreateVersion}
-                    disabled={creating}
-                  >
-                    <Plus size={16} />
-                    {creating ? '创建中…' : '创建版本'}
-                  </button>
-                </div>
-              )}
-              {loading ? (
-                <div className="chapter-history-loading">
-                  <LoadingSpinner />
-                </div>
-              ) : snapshots.length === 0 ? (
-                <p className="chapter-history-empty">
-                  暂无历史版本。点击「创建版本」保存当前内容为快照，可随时恢复。
-                </p>
-              ) : (
-                <ul className="chapter-history-list">
-                  {snapshots.map((s) => (
-                    <li key={s.id} className="chapter-history-item">
-                      <div className="chapter-history-item-head">
-                        <span className="chapter-history-version">
-                          {s.label || `版本 ${s.id}`}
-                        </span>
-                        <span className="chapter-history-date">{formatDate(s.created_at)}</span>
-                      </div>
-                      <div className="chapter-history-item-actions">
-                        {getCurrentContent && (
-                          <button
-                            type="button"
-                            className="chapter-history-preview-btn"
-                            onClick={() => handlePreview(s.id)}
-                          >
-                            <FileDiff size={14} />
-                            预览对比
-                          </button>
-                        )}
-                        {onRestore && (
-                          <button
-                            type="button"
-                            className="chapter-history-restore-btn"
-                            onClick={() => handleRestore(s.id)}
-                            disabled={restoringId !== null}
-                          >
-                            <RotateCcw size={14} />
-                            {restoringId === s.id ? '恢复中…' : '恢复到此版本'}
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
+            )}
+          </div>
+          <div className="chapter-history-topbar-right">
+            <span className="chapter-history-topbar-title">历史记录</span>
+            <Info size={14} className="chapter-history-info-icon" aria-hidden />
+          </div>
         </div>
+
+        {/* 主体：左侧内容 + 右侧列表 */}
+        <div className="chapter-history-main">
+          <div className="chapter-history-content">
+            {selectedId == null ? (
+              <p className="chapter-history-placeholder">
+                在右侧选择一条历史记录可查看与当前内容的差异。
+              </p>
+            ) : diffLoading ? (
+              <div className="chapter-history-loading">
+                <LoadingSpinner />
+              </div>
+            ) : !showChanges ? (
+              versionTextState != null ? (
+                <div className="chapter-history-version-content">
+                  {versionTextState || <span className="chapter-history-empty-inline">（该版本无正文）</span>}
+                </div>
+              ) : (
+                <p className="chapter-history-placeholder">加载中…</p>
+              )
+            ) : diffLinesState && diffLinesState.length > 0 ? (
+              <div className="chapter-history-diff-wrap">
+                <DiffView lines={diffLinesState} />
+              </div>
+            ) : diffLinesState ? (
+              <p className="chapter-history-empty">当前内容与该版本一致，无差异。</p>
+            ) : null}
+          </div>
+
+          <aside className="chapter-history-sidebar">
+            <div className="chapter-history-sidebar-header">
+              <h3 className="chapter-history-sidebar-title">历史记录</h3>
+              {onCreateVersion && (
+                <button
+                  type="button"
+                  className="chapter-history-create-btn"
+                  onClick={handleCreateVersion}
+                  disabled={creating}
+                >
+                  <Plus size={14} />
+                  {creating ? '创建中…' : '创建版本'}
+                </button>
+              )}
+            </div>
+            {loading ? (
+              <div className="chapter-history-loading">
+                <LoadingSpinner />
+              </div>
+            ) : groupedByMonth.length === 0 ? (
+              <p className="chapter-history-empty">暂无历史版本。</p>
+            ) : (
+              <div className="chapter-history-groups">
+                {groupedByMonth.map(([monthLabel, items]) => (
+                  <div key={monthLabel} className="chapter-history-group">
+                    <div className="chapter-history-group-label">{monthLabel}</div>
+                    <ul className="chapter-history-list">
+                      {items.map((s, idxInGroup) => {
+                        const globalIndex = snapshots.findIndex((x) => x.id === s.id);
+                        const isFirst = globalIndex === 0;
+                        const isLast = globalIndex === snapshots.length - 1;
+                        const desc = s.label || (isFirst ? '最近更新' : isLast ? '创建了文档' : '');
+                        const isSelected = s.id === selectedId;
+                        return (
+                          <li
+                            key={s.id}
+                            className={`chapter-history-item ${isSelected ? 'selected' : ''}`}
+                            onClick={() => setSelectedId(s.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedId(s.id);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            <span className="chapter-history-item-time">{formatDateShort(s.created_at)}</span>
+                            {desc && <span className="chapter-history-item-desc">{desc}</span>}
+                            <span className="chapter-history-item-meta">· 本章</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </aside>
+        </div>
+
+        {/* 底部：显示更改开关 */}
+        {selectedId != null && (
+          <div className="chapter-history-footer">
+            <label className="chapter-history-toggle-label">
+              <span>显示更改</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showChanges}
+                className={`chapter-history-toggle ${showChanges ? 'on' : ''}`}
+                onClick={() => setShowChanges((v) => !v)}
+              >
+                <span className="chapter-history-toggle-thumb" />
+              </button>
+            </label>
+          </div>
+        )}
       </div>
     </div>
   );
