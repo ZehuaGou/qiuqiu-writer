@@ -12,6 +12,7 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
+  invitation_code: string;
   username: string;
   email: string;
   password: string;

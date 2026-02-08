@@ -13,6 +13,7 @@ from memos.api.models.system import SystemSetting, AuditLog
 from memos.api.models.document import DocumentSyncHistory
 from memos.api.models.prompt_template import PromptTemplate
 from memos.api.models.yjs_document import YjsDocument
+from memos.api.models.invitation_code import InvitationCode
 
 __all__ = [
     "User", "UserProfile",
@@ -26,4 +27,5 @@ __all__ = [
     "DocumentSyncHistory",
     "PromptTemplate",
     "YjsDocument",
+    "InvitationCode",
 ]

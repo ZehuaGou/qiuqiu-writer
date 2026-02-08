@@ -31,6 +31,7 @@ class LoginRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     """注册请求模式"""
+    invitation_code: str
     username: str
     email: EmailStr
     password: str
@@ -42,6 +43,14 @@ class RegisterRequest(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     bio: Optional[str] = None
+
+    @validator("invitation_code")
+    def validate_invitation_code(cls, v):
+        if not v or not v.strip():
+            raise ValueError("邀请码不能为空")
+        if len(v.strip()) > 32:
+            raise ValueError("邀请码格式不正确")
+        return v.strip().upper()
 
     @validator("username")
     def validate_username(cls, v):

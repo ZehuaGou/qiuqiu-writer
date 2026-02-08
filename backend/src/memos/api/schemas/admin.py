@@ -205,3 +205,26 @@ class PromptTemplateUpdate(BaseModel):
     prompt_category: str | None = None
     data_key: str | None = None
 
+
+class InvitationCodeResponse(BaseModel):
+    id: int
+    code: str
+    used: int
+    used_by_user_id: str | None = None
+    used_at: str | None = None
+    created_at: str | None = None
+
+
+class InvitationCodeListResponse(BaseModel):
+    total: int
+    items: list[InvitationCodeResponse]
+    page: int
+    size: int
+
+
+class GenerateInvitationCodesResponse(BaseModel):
+    success: bool
+    message: str
+    count: int
+    codes: list[str]
+

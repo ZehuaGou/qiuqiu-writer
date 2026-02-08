@@ -19,6 +19,7 @@ from memos.api.core.security import (
 )
 from memos.api.core.config import get_settings
 from memos.api.services.user_service import UserService
+from memos.api.services.invitation_code_service import InvitationCodeService
 from memos.api.schemas.auth import (
     LoginRequest, RegisterRequest, RefreshTokenRequest,
     LogoutRequest, TokenResponse, RefreshTokenResponse,
@@ -36,8 +37,16 @@ async def register(
     db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
-    用户注册
+    用户注册（需有效邀请码）
     """
+    inv_service = InvitationCodeService(db)
+    inv = await inv_service.get_by_code(request.invitation_code)
+    if not inv or inv.used != 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="邀请码无效或已被使用"
+        )
+
     user_service = UserService()
 
     # 检查用户名是否已存在
@@ -77,7 +86,15 @@ async def register(
         )
 
     user_id = user.get("id")
-    
+
+    # 消耗邀请码
+    ok = await inv_service.consume(request.invitation_code, user_id)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="邀请码已被使用，请刷新后重试"
+        )
+
     # 生成令牌
     access_token = create_access_token(
         subject=user_id,

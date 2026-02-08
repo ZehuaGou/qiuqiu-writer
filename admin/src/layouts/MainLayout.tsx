@@ -13,6 +13,7 @@ import {
   ToolOutlined,
   DatabaseOutlined,
   ThunderboltOutlined,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -77,6 +78,11 @@ const MainLayout: React.FC = () => {
       key: '/system-settings',
       icon: <ToolOutlined />,
       label: 'System Settings',
+    },
+    {
+      key: '/invitation-codes',
+      icon: <GiftOutlined />,
+      label: 'Invitation Codes',
     },
     {
       key: '/maintenance',

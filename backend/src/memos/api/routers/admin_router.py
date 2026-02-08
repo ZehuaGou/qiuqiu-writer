@@ -9,9 +9,11 @@ from memos.api.schemas.admin import (
     UserListResponse, WorkListResponse, StatusUpdateRequest, UserUpdateRequest,
     PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate,
     SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse,
-    SystemMonitorResponse, CubeListResponse, CubeResponse
+    SystemMonitorResponse, CubeListResponse, CubeResponse,
+    InvitationCodeListResponse, InvitationCodeResponse, GenerateInvitationCodesResponse,
 )
 from memos.api.services.admin_service import AdminService
+from memos.api.services.invitation_code_service import InvitationCodeService
 from memos.mem_user.mysql_user_manager import MySQLUserManager
 from memos.mem_user.persistent_factory import PersistentUserManagerFactory
 from memos.configs.mem_user import UserManagerConfigFactory
@@ -302,6 +304,44 @@ async def delete_cube(
     if not success:
         raise HTTPException(status_code=404, detail="Cube not found")
     return {"success": True}
+
+@router.post("/invitation-codes/generate", response_model=GenerateInvitationCodesResponse)
+async def generate_invitation_codes(
+    count: int = 100,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin),
+):
+    """一键生成指定数量的邀请码（默认100个）"""
+    if count < 1 or count > 500:
+        raise HTTPException(status_code=400, detail="count must be between 1 and 500")
+    service = InvitationCodeService(db)
+    codes = await service.generate_batch(count=count)
+    return GenerateInvitationCodesResponse(
+        success=True,
+        message=f"已生成 {len(codes)} 个邀请码",
+        count=len(codes),
+        codes=codes,
+    )
+
+
+@router.get("/invitation-codes", response_model=InvitationCodeListResponse)
+async def list_invitation_codes(
+    page: int = 1,
+    size: int = 50,
+    used: bool | None = None,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin),
+):
+    """分页获取邀请码列表。used=true 仅已使用，used=false 仅未使用，不传为全部"""
+    service = InvitationCodeService(db)
+    total, items = await service.list_codes(page=page, size=size, used_only=used)
+    return InvitationCodeListResponse(
+        total=total,
+        items=[InvitationCodeResponse.model_validate(x) for x in items],
+        page=page,
+        size=size,
+    )
+
 
 @router.post("/maintenance/clear-cache")
 async def clear_cache(

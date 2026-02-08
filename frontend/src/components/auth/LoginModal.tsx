@@ -24,6 +24,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
 
   // 注册表单
   const [registerForm, setRegisterForm] = useState<RegisterRequest>({
+    invitation_code: '',
     username: '',
     email: '',
     password: '',
@@ -80,6 +81,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       onClose();
       // 重置表单
       setRegisterForm({
+        invitation_code: '',
         username: '',
         email: '',
         password: '',
@@ -170,6 +172,20 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
           </form>
         ) : (
           <form className="login-form" onSubmit={handleRegister}>
+            <div className="form-group">
+              <label>邀请码</label>
+              <input
+                type="text"
+                value={registerForm.invitation_code}
+                onChange={(e) =>
+                  setRegisterForm({ ...registerForm, invitation_code: e.target.value.toUpperCase() })
+                }
+                placeholder="请输入邀请码"
+                required
+                disabled={loading}
+                autoComplete="off"
+              />
+            </div>
             <div className="form-group">
               <label>用户名</label>
               <input
