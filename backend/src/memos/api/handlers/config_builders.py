@@ -40,9 +40,10 @@ def build_graph_db_config(user_id: str = "default") -> dict[str, Any]:
         "neo4j": APIConfig.get_neo4j_config(user_id=user_id),
         "nebular": APIConfig.get_nebular_config(user_id=user_id),
         "polardb": APIConfig.get_polardb_config(user_id=user_id),
+        "noop": APIConfig.get_noop_graph_config(),
     }
-
-    graph_db_backend = os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
+    disable_neo4j = os.getenv("DISABLE_NEO4J", "false").lower() == "true"
+    graph_db_backend = "noop" if disable_neo4j else os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
     return GraphDBConfigFactory.model_validate(
         {
             "backend": graph_db_backend,

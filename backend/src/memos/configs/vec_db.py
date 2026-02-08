@@ -51,6 +51,16 @@ class MilvusVecDBConfig(BaseVecDBConfig):
     password: str = Field(default="", description="Password for Milvus connection")
 
 
+class NoOpVecDBConfig(BaseVecDBConfig):
+    """Config for no-op vector DB (no external connection). Used when DISABLE_QDRANT=true."""
+
+    collection_name: str = Field(default="noop", description="Placeholder collection name")
+    vector_dimension: int | None = Field(default=768, description="N/A for noop")
+    distance_metric: Literal["cosine", "euclidean", "dot"] | None = Field(
+        default="cosine", description="N/A for noop"
+    )
+
+
 class VectorDBConfigFactory(BaseConfig):
     """Factory class for creating vector database configurations."""
 
@@ -60,6 +70,7 @@ class VectorDBConfigFactory(BaseConfig):
     backend_to_class: ClassVar[dict[str, Any]] = {
         "qdrant": QdrantVecDBConfig,
         "milvus": MilvusVecDBConfig,
+        "noop": NoOpVecDBConfig,
     }
 
     @field_validator("backend")

@@ -592,24 +592,22 @@ class APIConfig:
 
     @staticmethod
     def get_neo4j_community_config(user_id: str | None = None) -> dict[str, Any]:
-        """Get Neo4j community configuration."""
+        """Get Neo4j community configuration. When DISABLE_QDRANT=true, vec_config uses noop backend."""
         # Determine embedding dimension based on embedder configuration
         embedder_config = APIConfig.get_embedder_config()
         embedder_model = embedder_config.get("config", {}).get("model_name_or_path", "")
-        
+
         # Default dimension
         default_dimension = 1024
-        
+
         # If using sentence_transformer with nomic-embed-text-v1.5, use 768
         if embedder_config.get("backend") == "sentence_transformer":
             if "nomic-embed-text-v1.5" in embedder_model:
                 default_dimension = 768
                 logger.info(f"🔧 Using embedding dimension 768 for nomic-embed-text-v1.5")
             else:
-                # For other sentence_transformer models, try to get dimension from env or use default
                 default_dimension = int(os.getenv("EMBEDDING_DIMENSION", 768))
         elif embedder_config.get("backend") == "universal_api":
-            # For universal_api, check model name
             if "text-embedding-3-large" in embedder_model:
                 default_dimension = 3072
             elif "text-embedding-3-small" in embedder_model:
@@ -618,9 +616,25 @@ class APIConfig:
                 default_dimension = int(os.getenv("EMBEDDING_DIMENSION", 1024))
         else:
             default_dimension = int(os.getenv("EMBEDDING_DIMENSION", 1024))
-        
+
         embedding_dimension = int(os.getenv("EMBEDDING_DIMENSION", default_dimension))
-        
+        disable_qdrant = os.getenv("DISABLE_QDRANT", "false").lower() == "true"
+        if disable_qdrant:
+            logger.info("DISABLE_QDRANT=true: using noop vector backend (no Qdrant connection)")
+        vec_config = (
+            {"backend": "noop", "config": {}}
+            if disable_qdrant
+            else {
+                "backend": "qdrant",
+                "config": {
+                    "collection_name": "neo4j_vec_db",
+                    "vector_dimension": embedding_dimension,
+                    "distance_metric": "cosine",
+                    "host": os.getenv("QDRANT_HOST", "localhost"),
+                    "port": int(os.getenv("QDRANT_PORT", "6333")),
+                },
+            }
+        )
         return {
             "uri": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
             "user": os.getenv("NEO4J_USER", "neo4j"),
@@ -630,19 +644,13 @@ class APIConfig:
             "auto_create": False,
             "use_multi_db": False,
             "embedding_dimension": embedding_dimension,
-            "vec_config": {
-                # Pass nested config to initialize external vector DB
-                # If you use qdrant, please use Server instead of local mode.
-                "backend": "qdrant",
-                "config": {
-                    "collection_name": "neo4j_vec_db",
-                    "vector_dimension": embedding_dimension,
-                    "distance_metric": "cosine",
-                    "host": os.getenv("QDRANT_HOST", "localhost"),
-                    "port": int(os.getenv("QDRANT_PORT", "6333")),
-                },
-            },
+            "vec_config": vec_config,
         }
+
+    @staticmethod
+    def get_noop_graph_config() -> dict[str, Any]:
+        """Get no-op graph config (no external connection). Used when DISABLE_NEO4J=true."""
+        return {}
 
     @staticmethod
     def get_neo4j_config(user_id: str | None = None) -> dict[str, Any]:
@@ -1000,6 +1008,7 @@ class APIConfig:
         neo4j_config = APIConfig.get_neo4j_config(user_id)
         nebular_config = APIConfig.get_nebular_config(user_id)
         polardb_config = APIConfig.get_polardb_config(user_id)
+        noop_graph_config = APIConfig.get_noop_graph_config()
         internet_config = (
             APIConfig.get_internet_config()
             if os.getenv("ENABLE_INTERNET", "false").lower() == "true"
@@ -1010,8 +1019,12 @@ class APIConfig:
             "neo4j": neo4j_config,
             "nebular": nebular_config,
             "polardb": polardb_config,
+            "noop": noop_graph_config,
         }
-        graph_db_backend = os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
+        disable_neo4j = os.getenv("DISABLE_NEO4J", "false").lower() == "true"
+        graph_db_backend = "noop" if disable_neo4j else os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
+        if disable_neo4j:
+            logger.info("DISABLE_NEO4J=true: using noop graph backend (no Neo4j connection)")
         if graph_db_backend in graph_db_backend_map:
             # Create MemCube config
             # Get embedder config with logging
@@ -1132,18 +1145,21 @@ class APIConfig:
         neo4j_config = APIConfig.get_neo4j_config(user_id="default")
         nebular_config = APIConfig.get_nebular_config(user_id="default")
         polardb_config = APIConfig.get_polardb_config(user_id="default")
+        noop_graph_config = APIConfig.get_noop_graph_config()
         graph_db_backend_map = {
             "neo4j-community": neo4j_community_config,
             "neo4j": neo4j_config,
             "nebular": nebular_config,
             "polardb": polardb_config,
+            "noop": noop_graph_config,
         }
         internet_config = (
             APIConfig.get_internet_config()
             if os.getenv("ENABLE_INTERNET", "false").lower() == "true"
             else None
         )
-        graph_db_backend = os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
+        disable_neo4j = os.getenv("DISABLE_NEO4J", "false").lower() == "true"
+        graph_db_backend = "noop" if disable_neo4j else os.getenv("NEO4J_BACKEND", "neo4j-community").lower()
         if graph_db_backend in graph_db_backend_map:
             return GeneralMemCubeConfig.model_validate(
                 {

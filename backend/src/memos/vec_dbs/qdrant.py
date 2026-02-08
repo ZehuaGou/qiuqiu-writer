@@ -85,14 +85,15 @@ class QdrantVecDB(BaseVecDB):
         self._collection_created = False
     
     def _ensure_connection(self, max_retries: int = 5, retry_delay: float = 2.0):
-        """Ensure Qdrant connection is available with retry logic."""
+        """Ensure Qdrant connection is available with retry logic.
+        连接被拒绝（服务未启动）时立即失败，避免长时间重试阻塞聊天并拖慢其他接口。
+        """
         import time
-        
+
         connection_info = f"host={self.config.host}, port={self.config.port}" if self.config.host else f"path={self.config.path}"
-        
+
         for attempt in range(max_retries):
             try:
-                # Simple health check: try to list collections
                 collections = self.client.get_collections()
                 logger.info(
                     f"✅ Qdrant connection verified (attempt {attempt + 1}/{max_retries}) "
@@ -102,9 +103,19 @@ class QdrantVecDB(BaseVecDB):
             except Exception as e:
                 error_str = str(e)
                 error_type = type(e).__name__
-                
+                # 连接被拒绝（服务未启动）：不重试，立即失败，避免阻塞 10+ 秒
+                is_refused = (
+                    "Connection refused" in error_str
+                    or "Errno 61" in error_str
+                    or (getattr(e, "errno", None) == 61)
+                )
+                if is_refused:
+                    logger.error(
+                        f"❌ Qdrant connection refused at {connection_info}: {error_type}: {error_str}. "
+                        "Service likely not running. Failing fast (no retry)."
+                    )
+                    raise
                 if attempt < max_retries - 1:
-                    # Longer delay for 502 errors (service might be restarting)
                     current_delay = retry_delay * (2 ** attempt) if "502" in error_str or "Bad Gateway" in error_str else retry_delay * (1.5 ** attempt)
                     logger.warning(
                         f"⚠️ Qdrant connection check failed (attempt {attempt + 1}/{max_retries}) "
@@ -117,11 +128,9 @@ class QdrantVecDB(BaseVecDB):
                         f"❌ Failed to connect to Qdrant after {max_retries} attempts "
                         f"at {connection_info}: {error_type}: {error_str}"
                     )
-                    # Provide helpful error message
                     if "502" in error_str or "Bad Gateway" in error_str:
                         raise ConnectionError(
                             f"Qdrant service returned 502 Bad Gateway after {max_retries} retries. "
-                            f"This usually means the Qdrant service is temporarily unavailable or restarting. "
                             f"Connection info: {connection_info}. "
                             f"Please check: docker ps | grep qdrant && curl http://{self.config.host or 'localhost'}:{self.config.port or 6333}/collections"
                         ) from e

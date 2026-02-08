@@ -207,6 +207,18 @@ class PolarDBGraphDBConfig(BaseConfig):
         return self
 
 
+class NoOpGraphDBConfig(BaseGraphDBConfig):
+    """Config for no-op graph DB (no external connection). Used when DISABLE_NEO4J=true."""
+
+    uri: str | list = Field(default="noop://", description="Placeholder URI")
+    user: str = Field(default="noop", description="Placeholder user")
+    password: str = Field(default="", description="Placeholder password")
+    db_name: str = Field(default="noop", description="Placeholder db name")
+    use_multi_db: bool = Field(default=False, description="N/A for noop")
+    user_name: str | None = Field(default="default", description="Placeholder user_name")
+    embedding_dimension: int = Field(default=768, description="N/A for noop")
+
+
 class GraphDBConfigFactory(BaseModel):
     backend: str = Field(..., description="Backend for graph database")
     config: dict[str, Any] = Field(..., description="Configuration for the graph database backend")
@@ -216,6 +228,7 @@ class GraphDBConfigFactory(BaseModel):
         "neo4j-community": Neo4jCommunityGraphDBConfig,
         "nebular": NebulaGraphDBConfig,
         "polardb": PolarDBGraphDBConfig,
+        "noop": NoOpGraphDBConfig,
     }
 
     @field_validator("backend")
