@@ -255,7 +255,6 @@ export default function MainLayout() {
                       >
                         个人主页
                       </Link>
-                      <a href="#" className="menu-item">个人设置</a>
                       <div className="menu-divider"></div>
                       <a
                         href="#"

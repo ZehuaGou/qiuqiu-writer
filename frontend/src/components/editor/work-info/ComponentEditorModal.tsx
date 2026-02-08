@@ -4,6 +4,17 @@ import type { ComponentType, ComponentConfig, TemplateConfig } from './types';
 import { DataDependenciesSelector } from './DataDependenciesSelector';
 import { promptTemplateApi } from '../../../utils/promptTemplateApi';
 
+/** 多选标签随机颜色池（区分度高、适合做标签背景） */
+const TAG_COLORS = [
+  '#dbeafe', '#fce7f3', '#d1fae5', '#fef3c7', '#e0e7ff',
+  '#fed7aa', '#e9d5ff', '#a5f3fc', '#fecaca', '#bbf7d0',
+  '#bfdbfe', '#fde68a', '#ddd6fe', '#fbcfe8', '#ccfbf1',
+];
+
+function getRandomTagColor(): string {
+  return TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
+}
+
 interface ComponentEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -291,7 +302,7 @@ export default function ComponentEditorModal({
                       <button
                         onClick={() => {
                           const newOptions = [...((formData.config.options as any[]) || [])]; // eslint-disable-line @typescript-eslint/no-explicit-any
-                          newOptions.push({ label: '', value: '', color: '#e2e8f0' });
+                          newOptions.push({ label: '', value: '', color: getRandomTagColor() });
                           setFormData({
                             ...formData,
                             config: { ...formData.config, options: newOptions }
@@ -326,7 +337,7 @@ export default function ComponentEditorModal({
                           lines.forEach(line => {
                              // Check if already exists to avoid dupes if possible, or just add
                              if (!newOptions.find(o => o.label === line)) {
-                               newOptions.push({ label: line, value: line, color: '#e2e8f0' });
+                               newOptions.push({ label: line, value: line, color: getRandomTagColor() });
                              }
                           });
                           
