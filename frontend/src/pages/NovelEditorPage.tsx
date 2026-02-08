@@ -236,6 +236,12 @@ export default function NovelEditorPage() {
     });
     return Array.from(charSet);
   }, [chaptersData]);
+
+  // 传给章节弹窗的角色列表保持引用稳定，避免弹窗内 useEffect 因依赖变化反复重置选中状态
+  const chapterModalAvailableCharacters = useMemo(
+    () => availableCharacters.map((char, index) => ({ id: String(index), name: char })),
+    [availableCharacters]
+  );
   
   // ===== 加载作品详情 =====
   useEffect(() => {
@@ -1045,7 +1051,9 @@ export default function NovelEditorPage() {
         volumeId={currentVolumeId}
         volumeTitle={currentVolumeTitle}
         initialData={currentChapterData}
-        availableCharacters={availableCharacters.map((char, index) => ({ id: String(index), name: char }))}
+        availableCharacters={chapterModalAvailableCharacters}
+        workMetadata={work?.metadata as Record<string, unknown> | undefined}
+        defaultCharacterDataKey="component_data.characters"
         availableLocations={[]}
         availableVolumes={volumes.map((vol: { id: string; title: string }) => ({ id: vol.id, title: vol.title }))}
         onClose={closeChapterModal}

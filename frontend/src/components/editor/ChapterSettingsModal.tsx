@@ -44,19 +44,64 @@ interface Volume {
   title: string;
 }
 
+/** 从 metadata 按路径取数组并规范为 Character[]，支持 'component_data.characters' 或 'characters' */
+function getCharactersFromMetadata(
+  metadata: Record<string, unknown> | undefined,
+  dataKey: string
+): Character[] {
+  if (!metadata || !dataKey) return [];
+  const keys = dataKey.split('.');
+  let value: unknown = metadata;
+  for (const k of keys) {
+    if (value == null || typeof value !== 'object') return [];
+    value = (value as Record<string, unknown>)[k];
+  }
+  const arr = Array.isArray(value) ? value : [];
+  return arr.map((item, index) => {
+    if (item != null && typeof item === 'object' && 'name' in (item as object)) {
+      const o = item as Record<string, unknown>;
+      return {
+        id: String(o.id ?? (o as { id?: string }).id ?? index),
+        name: String(o.name ?? ''),
+        avatar: o.avatar as string | undefined,
+        appearance: o.appearance as Record<string, string> | undefined,
+        personality: o.personality as Record<string, string> | undefined,
+        description: o.description as string | undefined,
+        display_name: o.display_name as string | undefined,
+        gender: o.gender as string | undefined,
+        type: o.type as string | undefined,
+      };
+    }
+    if (typeof item === 'string') {
+      return { id: String(index), name: item };
+    }
+    return { id: String(index), name: String(item) };
+  });
+}
+
+const CHARACTER_DATA_KEY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'component_data.characters', label: '作品角色（设定 - component_data.characters）' },
+  { value: 'characters', label: '作品角色（metadata.characters）' },
+  { value: '', label: '仅本章已出现角色' },
+];
+
 interface ChapterSettingsModalProps {
   isOpen: boolean;
   mode: 'create' | 'edit';
   volumeId: string;
   volumeTitle: string;
   initialData?: Partial<ChapterData>;
+  /** 仅从章节中出现的角色（备用） */
   availableCharacters?: Character[];
+  /** 作品 metadata，用于按 dataKey 解析角色列表 */
+  workMetadata?: Record<string, unknown>;
+  /** 角色数据来源 key，如 'component_data.characters' 或 'characters'，空则用 availableCharacters */
+  defaultCharacterDataKey?: string;
   availableLocations?: Location[];
-  availableVolumes?: Volume[]; // 可用的卷列表
+  availableVolumes?: Volume[];
   onClose: () => void;
   onSave: (data: ChapterData) => void;
-  // content: 当前已生成的完整文本；isFinal: 是否为最终完成（可用于结束后保存等）
-  onGenerateContent?: (content: string, isFinal?: boolean) => void;  // 生成内容回调（支持流式）
+  onGenerateContent?: (content: string, isFinal?: boolean) => void;
 }
 
 interface CharacterSelectionCardProps {
@@ -167,11 +212,12 @@ export default function ChapterSettingsModal({
   volumeTitle,
   initialData,
   availableCharacters = [],
+  workMetadata,
+  defaultCharacterDataKey = 'component_data.characters',
   availableLocations = [],
   availableVolumes = [],
   onClose,
   onSave,
-  // onGenerateContent,
 }: ChapterSettingsModalProps) {
   const [title, setTitle] = useState(initialData?.title || '');
   const [chapterNumber, setChapterNumber] = useState<number | undefined>(undefined);
@@ -185,6 +231,8 @@ export default function ChapterSettingsModal({
   const [isGeneratingDetail, setIsGeneratingDetail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'outline' | 'characters'>('basic');
+  /** 角色数据来源：空表示仅本章已出现；非空表示从 workMetadata 的该 key 取 */
+  const [characterDataKey, setCharacterDataKey] = useState<string>(defaultCharacterDataKey);
   
   const [messageState, setMessageState] = useState<{
     isOpen: boolean;
@@ -215,10 +263,17 @@ export default function ChapterSettingsModal({
   // 是否显示卷号选择器（编辑章节时）
   const showVolumeSelector = mode === 'edit';
 
-  // 使用传入的角色数据，如果没有则使用空数组
-  const charactersToShow: Character[] = availableCharacters.length > 0 ? availableCharacters : [];
-  
-  // 使用传入的地点数据，如果没有则使用空数组
+  // 角色列表：可配置数据 key，优先从 work 的 metadata 对应 key 取，否则用本章已出现角色
+  const charactersFromWork = workMetadata && characterDataKey
+    ? getCharactersFromMetadata(workMetadata, characterDataKey)
+    : [];
+  const charactersToShow: Character[] =
+    charactersFromWork.length > 0
+      ? charactersFromWork
+      : availableCharacters.length > 0
+        ? availableCharacters
+        : [];
+
   const locationsToShow: Location[] = availableLocations.length > 0 ? availableLocations : [];
 
   // 辅助函数：标准化选中的角色ID（处理 ID 变化或仅有 Name 的情况）
@@ -311,6 +366,13 @@ export default function ChapterSettingsModal({
       setActiveTab('basic');
     }
   }, [isOpen]);
+
+  // 打开时同步角色数据 key 的默认值
+  useEffect(() => {
+    if (isOpen && defaultCharacterDataKey !== undefined) {
+      setCharacterDataKey(defaultCharacterDataKey);
+    }
+  }, [isOpen, defaultCharacterDataKey]);
 
   // 初始化数据
   useEffect(() => {
@@ -851,6 +913,32 @@ export default function ChapterSettingsModal({
 
           {!isLoading && activeTab === 'characters' && (
             <div className="modal-section-content">
+              {workMetadata && (
+                <div className="form-group character-data-key-group">
+                  <label className="form-label">
+                    <Users size={16} />
+                    角色数据来源
+                  </label>
+                  <div className="select-wrapper">
+                    <select
+                      className="form-select"
+                      value={characterDataKey}
+                      onChange={(e) => setCharacterDataKey(e.target.value)}
+                      title="选择从作品设定中读取角色列表的数据 key"
+                    >
+                      {CHARACTER_DATA_KEY_OPTIONS.map((opt) => (
+                        <option key={opt.value || 'empty'} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="select-arrow" size={16} />
+                  </div>
+                  <div className="form-hint">
+                    选择「作品角色」可看到作品设定中的全部角色并勾选本章出场角色
+                  </div>
+                </div>
+              )}
               {charactersToShow.length > 0 ? (
                 <div className="character-selection-grid">
                   {charactersToShow.map(char => (
@@ -866,7 +954,11 @@ export default function ChapterSettingsModal({
                 <div className="empty-state">
                   <Users size={48} />
                   <p>暂无可用角色</p>
-                  <span className="empty-hint">请先在角色管理中添加角色</span>
+                  <span className="empty-hint">
+                    {workMetadata
+                      ? '请在上方选择「作品角色」数据来源，或在作品信息/角色管理中添加角色'
+                      : '请先在角色管理中添加角色'}
+                  </span>
                 </div>
               )}
             </div>
