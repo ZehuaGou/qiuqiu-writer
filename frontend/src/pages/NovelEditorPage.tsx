@@ -229,7 +229,8 @@ export default function NovelEditorPage() {
     replaceAllMatches,
   } = useFindReplace({
     editor,
-    onMessage: (msg: string, type: 'success' | 'error') => showMessage(msg, type),
+    onMessage: (msg: string, type: 'success' | 'error', options?: { toast?: boolean; autoCloseMs?: number }) =>
+      showMessage(msg, type, undefined, undefined, options),
   });
   
   // ===== 可用角色列表 =====
@@ -929,6 +930,7 @@ export default function NovelEditorPage() {
                         placeholder="查找"
                         autoFocus
                         onKeyDown={(e) => {
+                          e.stopPropagation();
                           if (e.key === 'Enter') {
                             e.preventDefault();
                             if (e.shiftKey) {
@@ -973,6 +975,7 @@ export default function NovelEditorPage() {
                         onChange={(e) => setReplaceText(e.target.value)}
                         placeholder="替换"
                         onKeyDown={(e) => {
+                          e.stopPropagation();
                           if (e.key === 'Enter') {
                             e.preventDefault();
                             replaceCurrent();
@@ -1117,6 +1120,8 @@ export default function NovelEditorPage() {
         title={messageState.title}
         message={messageState.message}
         type={messageState.type}
+        toast={messageState.toast}
+        autoCloseMs={messageState.autoCloseMs}
         onConfirm={() => {
           closeMessage();
           if (messageState.onConfirm) messageState.onConfirm();

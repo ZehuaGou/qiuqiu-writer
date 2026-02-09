@@ -6,9 +6,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Editor } from '@tiptap/react';
 
+export interface UseFindReplaceMessageOptions {
+  toast?: boolean;
+  autoCloseMs?: number;
+}
+
 export interface UseFindReplaceOptions {
   editor: Editor | null;
-  onMessage?: (message: string, type: 'success' | 'error') => void;
+  onMessage?: (message: string, type: 'success' | 'error', options?: UseFindReplaceMessageOptions) => void;
 }
 
 export interface UseFindReplaceReturn {
@@ -79,7 +84,8 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
       setMatches(foundMatches);
       if (foundMatches.length > 0) {
         setCurrentMatchIndex(0);
-        scrollToMatch(foundMatches[0]);
+        // 输入时只滚动、不抢焦点，避免第二个字被输入到编辑器
+        scrollToMatch(foundMatches[0], false);
       } else {
         setCurrentMatchIndex(-1);
       }
@@ -90,28 +96,61 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
     }
   }, [editor, findText, matchCase]);
   
-  // 滚动到匹配项
-  const scrollToMatch = useCallback((match: { start: number; end: number }) => {
+  // 滚动到匹配项，使匹配处固定在可视区域正中间；focusEditor=false 时不抢焦点
+  const scrollToMatch = useCallback((match: { start: number; end: number }, focusEditor = true) => {
     if (!editor) return;
-    
+
     editor.commands.setTextSelection({ from: match.start, to: match.end });
-    editor.commands.focus();
-    
-    try {
-      const editorElement = editor.view.dom;
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        const editorRect = editorElement.getBoundingClientRect();
-        
-        if (rect.top < editorRect.top || rect.bottom > editorRect.bottom) {
-          range.startContainer.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }
-    } catch (err) {
-      console.warn('滚动到匹配项失败:', err);
+    if (focusEditor) {
+      editor.commands.focus();
     }
+
+    const runScroll = () => {
+      try {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        const range = selection.getRangeAt(0);
+        const matchRect = range.getBoundingClientRect();
+        if (matchRect.height === 0 && matchRect.width === 0) return;
+
+        const dom = editor.view.dom;
+        const scrollContainer: HTMLElement | null =
+          dom.closest('.editor-with-header') as HTMLElement ||
+          dom.closest('.chapter-editor-container') as HTMLElement ||
+          (() => {
+            let el: HTMLElement | null = dom.parentElement;
+            while (el && el !== document.body) {
+              const style = getComputedStyle(el);
+              if (el.scrollHeight > el.clientHeight && style.overflowY !== 'visible') {
+                return el;
+              }
+              el = el.parentElement;
+            }
+            return null;
+          })();
+
+        if (!scrollContainer) {
+          range.startContainer.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const matchCenterY = matchRect.top + matchRect.height / 2;
+        const containerCenterY = containerRect.top + containerRect.height / 2;
+        const deltaY = matchCenterY - containerCenterY;
+        const targetScrollTop = scrollContainer.scrollTop + deltaY;
+        const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+        const clamped = Math.max(0, Math.min(targetScrollTop, maxScroll));
+
+        scrollContainer.scrollTo({ top: clamped, behavior: 'smooth' });
+      } catch (err) {
+        console.warn('滚动到匹配项失败:', err);
+      }
+    };
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(runScroll);
+    });
   }, [editor]);
   
   // 打开/关闭查找替换面板
@@ -125,28 +164,28 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
     }
   }, [isReplacePanelOpen, editor]);
   
-  // 查找下一个
+  // 查找下一个（点击按钮时聚焦编辑器，便于继续操作）
   const findNext = useCallback(() => {
     if (matches.length === 0) {
       findMatches();
       return;
     }
-    
+
     const nextIndex = (currentMatchIndex + 1) % matches.length;
     setCurrentMatchIndex(nextIndex);
-    scrollToMatch(matches[nextIndex]);
+    scrollToMatch(matches[nextIndex], true);
   }, [matches, currentMatchIndex, findMatches, scrollToMatch]);
-  
+
   // 查找上一个
   const findPrevious = useCallback(() => {
     if (matches.length === 0) {
       findMatches();
       return;
     }
-    
+
     const prevIndex = currentMatchIndex <= 0 ? matches.length - 1 : currentMatchIndex - 1;
     setCurrentMatchIndex(prevIndex);
-    scrollToMatch(matches[prevIndex]);
+    scrollToMatch(matches[prevIndex], true);
   }, [matches, currentMatchIndex, findMatches, scrollToMatch]);
   
   // 替换当前匹配项
@@ -179,7 +218,7 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
       const newHtmlContent = htmlContent.replace(regex, replaceText);
       editor.commands.setContent(newHtmlContent);
       
-      onMessage?.(`已替换 ${matches.length} 处"${findText}"为"${replaceText}"`, 'success');
+      onMessage?.(`已替换 ${matches.length} 处"${findText}"为"${replaceText}"`, 'success', { toast: true, autoCloseMs: 2000 });
       setMatches([]);
       setCurrentMatchIndex(-1);
       setFindText('');

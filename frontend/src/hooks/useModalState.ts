@@ -19,8 +19,15 @@ export interface UseModalStateReturn {
   
   // 消息提示
   messageState: MessageState;
-  showMessage: (message: string, type?: MessageType, title?: string, onConfirm?: () => void) => void;
+  showMessage: (message: string, type?: MessageType, title?: string, onConfirm?: () => void, options?: ShowMessageOptions) => void;
   closeMessage: () => void;
+}
+
+export interface ShowMessageOptions {
+  /** 仅提示、无确定/取消按钮，自动关闭（用于替换成功等轻提示） */
+  toast?: boolean;
+  /** 自动关闭延迟（毫秒），toast 时默认 2000 */
+  autoCloseMs?: number;
 }
 
 export interface MessageState {
@@ -29,6 +36,8 @@ export interface MessageState {
   message: string;
   title?: string;
   onConfirm?: () => void;
+  toast?: boolean;
+  autoCloseMs?: number;
 }
 
 export function useModalState(): UseModalStateReturn {
@@ -68,7 +77,8 @@ export function useModalState(): UseModalStateReturn {
     message: string,
     type: MessageType = 'info',
     title?: string,
-    onConfirm?: () => void
+    onConfirm?: () => void,
+    options?: ShowMessageOptions
   ) => {
     setMessageState({
       isOpen: true,
@@ -76,6 +86,8 @@ export function useModalState(): UseModalStateReturn {
       message,
       title,
       onConfirm,
+      toast: options?.toast,
+      autoCloseMs: options?.autoCloseMs ?? (options?.toast ? 2000 : undefined),
     });
   }, []);
   

@@ -13,6 +13,9 @@ interface MessageModalProps {
   onConfirm?: () => void;
   confirmText?: string;
   cancelText?: string;
+  /** 仅提示、无按钮，自动关闭（替换成功等） */
+  toast?: boolean;
+  autoCloseMs?: number;
 }
 
 export default function MessageModal({
@@ -23,7 +26,9 @@ export default function MessageModal({
   type = 'info',
   onConfirm,
   confirmText = '确定',
-  cancelText = '取消'
+  cancelText = '取消',
+  toast = false,
+  autoCloseMs,
 }: MessageModalProps) {
   const [visible, setVisible] = useState(false);
 
@@ -36,6 +41,12 @@ export default function MessageModal({
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !toast || autoCloseMs == null || autoCloseMs <= 0) return;
+    const t = setTimeout(onClose, autoCloseMs);
+    return () => clearTimeout(t);
+  }, [isOpen, toast, autoCloseMs, onClose]);
 
   if (!visible && !isOpen) return null;
 
@@ -75,22 +86,24 @@ export default function MessageModal({
           {message}
         </div>
 
-        <div className="message-modal-footer">
-          {onConfirm && (
-            <button className="message-btn secondary" onClick={onClose}>
-              {cancelText}
+        {!toast && (
+          <div className="message-modal-footer">
+            {onConfirm && (
+              <button className="message-btn secondary" onClick={onClose}>
+                {cancelText}
+              </button>
+            )}
+            <button 
+              className="message-btn primary" 
+              onClick={() => {
+                if (onConfirm) onConfirm();
+                onClose();
+              }}
+            >
+              {confirmText}
             </button>
-          )}
-          <button 
-            className="message-btn primary" 
-            onClick={() => {
-              if (onConfirm) onConfirm();
-              onClose();
-            }}
-          >
-            {confirmText}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
