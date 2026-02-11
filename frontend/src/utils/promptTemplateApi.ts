@@ -185,7 +185,7 @@ class PromptTemplateApiClient extends BaseApiClient {
     try {
       // 使用批量查询接口
       const templates = await this.post<PromptTemplate[]>(
-        '/api/v1/prompt-templates/batch',
+        '/api/v1/prompt-templates/batch/',
         ids,
         signal
       );

@@ -236,8 +236,12 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
       }, 300);
       return () => clearTimeout(timeoutId);
     } else {
-      setMatches([]);
-      setCurrentMatchIndex(-1);
+      // 避免同步更新 state 导致级联渲染警告
+      const timeoutId = setTimeout(() => {
+        setMatches([]);
+        setCurrentMatchIndex(-1);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
   }, [findText, matchCase, isReplacePanelOpen, editor, findMatches]);
   

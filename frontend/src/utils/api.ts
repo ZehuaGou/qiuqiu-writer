@@ -57,7 +57,7 @@ class ApiClient extends BaseApiClient {
     if (memCubeId) {
       params.mem_cube_id = memCubeId;
     }
-    const response = await this.get<ApiResponse<Document>>(`/api/documents/${docId}`, params);
+    const response = await this.get<ApiResponse<Document>>(`/api/documents/${docId}/`, params);
     return response.data;
   }
 
@@ -72,7 +72,7 @@ class ApiClient extends BaseApiClient {
       queryParams.append('mem_cube_id', memCubeId);
     }
     
-    const response = await this.request<ApiResponse<Document>>(`/api/documents/${docId}?${queryParams.toString()}`, {
+    const response = await this.request<ApiResponse<Document>>(`/api/documents/${docId}/?${queryParams.toString()}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -88,7 +88,7 @@ class ApiClient extends BaseApiClient {
     if (memCubeId) {
       queryParams.append('mem_cube_id', memCubeId);
     }
-    await this.request(`/api/documents/${docId}?${queryParams.toString()}`, {
+    await this.request(`/api/documents/${docId}/?${queryParams.toString()}`, {
       method: 'DELETE',
     });
   }
@@ -106,7 +106,7 @@ class ApiClient extends BaseApiClient {
     base_content?: string;
     metadata?: Record<string, unknown>;
   }): Promise<SyncResponse> {
-    const response = await this.post<ApiResponse<SyncResponse>>('/v1/sharedb/documents/sync', data);
+    const response = await this.post<ApiResponse<SyncResponse>>('/v1/sharedb/documents/sync/', data);
     return response.data;
   }
 
@@ -114,7 +114,7 @@ class ApiClient extends BaseApiClient {
    * 获取 ShareDB 文档
    */
   async getShareDBDocument(docId: string): Promise<ShareDBDocument> {
-    const response = await this.get<ApiResponse<ShareDBDocument>>(`/v1/sharedb/documents/${docId}`);
+    const response = await this.get<ApiResponse<ShareDBDocument>>(`/v1/sharedb/documents/${docId}/`);
     return response.data;
   }
 }

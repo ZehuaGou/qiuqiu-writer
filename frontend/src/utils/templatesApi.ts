@@ -35,7 +35,7 @@ class TemplatesApiClient extends BaseApiClient {
    */
   async saveWorkTemplateConfig(workId: number, templateConfig: TemplateConfig): Promise<{ message: string; work_id: number; template_config: TemplateConfig }> {
     return this.post<{ message: string; work_id: number; template_config: TemplateConfig }>(
-      `/api/v1/templates/works/${workId}/template-config`,
+      `/api/v1/templates/works/${workId}/template-config/`,
       templateConfig
     );
   }
@@ -45,7 +45,7 @@ class TemplatesApiClient extends BaseApiClient {
    */
   async getWorkTemplateConfig(workId: number): Promise<{ work_id: number; template_config: TemplateConfig | null; message?: string }> {
     return this.get<{ work_id: number; template_config: TemplateConfig | null; message?: string }>(
-      `/api/v1/templates/works/${workId}/template-config`
+      `/api/v1/templates/works/${workId}/template-config/`
     );
   }
 
@@ -82,21 +82,21 @@ class TemplatesApiClient extends BaseApiClient {
       tags?: string[];
     }
   ): Promise<WorkTemplate> {
-    return this.put<WorkTemplate>(`/api/v1/templates/${templateId}`, templateData);
+    return this.put<WorkTemplate>(`/api/v1/templates/${templateId}/`, templateData);
   }
 
   /**
    * 删除模板
    */
   async deleteTemplate(templateId: number): Promise<void> {
-    return this.delete<void>(`/api/v1/templates/${templateId}`);
+    return this.delete<void>(`/api/v1/templates/${templateId}/`);
   }
 
   /**
    * 确保用户有默认小说模板：有则返回，没有则由后端基于系统小说标准模板创建一份并返回。
    */
   async ensureDefaultNovelTemplate(): Promise<WorkTemplate> {
-    return this.get<WorkTemplate>('/api/v1/templates/ensure-default-novel');
+    return this.get<WorkTemplate>('/api/v1/templates/ensure-default-novel/');
   }
 
   /**

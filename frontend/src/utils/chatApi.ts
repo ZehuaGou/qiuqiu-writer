@@ -112,7 +112,7 @@ export async function sendChatMessage(
 
   let data: ChatCompleteResponse;
   try {
-    data = await productChatApi.post<ChatCompleteResponse>('/api/v1/product/chat/complete/', body);
+    data = await productChatApi.post<ChatCompleteResponse>('/api/v1/product/chat/complete', body);
   } catch (err) {
     throw new Error(err instanceof Error ? err.message : '对话接口调用失败');
   }
@@ -166,7 +166,7 @@ export async function streamChatMessage(
     session_id: 'default_session',
   };
 
-  const resp = await productChatApi.requestRaw('/api/v1/product/chat/', {
+  const resp = await productChatApi.requestRaw('/api/v1/product/chat', {
     method: 'POST',
     body: JSON.stringify(body),
   });

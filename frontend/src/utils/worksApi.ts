@@ -352,7 +352,7 @@ class WorksApiClient extends BaseApiClient {
     } : {};
     
     const response = await this.post<BackendWorkResponse>(
-      `/api/v1/works/${workId}/recover`,
+      `/api/v1/works/${workId}/recover/`,
       backendData
     );
     
@@ -371,7 +371,7 @@ class WorksApiClient extends BaseApiClient {
    * 发布作品
    */
   async publishWork(workId: string): Promise<Work> {
-    const response = await this.post<Work>(`/api/v1/works/${workId}/publish`);
+    const response = await this.post<Work>(`/api/v1/works/${workId}/publish/`);
     return {
       ...response,
       work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),
@@ -382,7 +382,7 @@ class WorksApiClient extends BaseApiClient {
    * 归档作品
    */
   async archiveWork(workId: string): Promise<Work> {
-    const response = await this.post<Work>(`/api/v1/works/${workId}/archive`);
+    const response = await this.post<Work>(`/api/v1/works/${workId}/archive/`);
     return {
       ...response,
       work_type: mapWorkTypeToFrontend(response.work_type as BackendWorkType),

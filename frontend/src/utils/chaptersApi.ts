@@ -87,7 +87,7 @@ class ChaptersApiClient extends BaseApiClient {
    * 获取章节文档内容（直接从 ShareDB/MongoDB 获取）
    */
   async getChapterDocument(chapterId: number): Promise<ChapterDocumentResponse> {
-    return this.get<ChapterDocumentResponse>(`/api/v1/chapters/${chapterId}/document/`);
+    return this.get<ChapterDocumentResponse>(`/api/v1/chapters/${chapterId}/document`);
   }
 
   /**
@@ -249,7 +249,7 @@ class ChaptersApiClient extends BaseApiClient {
     include_versions?: boolean,
     cacheKey?: string
   ): Promise<Chapter> {
-    const response = await this.get<Chapter>(`/api/v1/chapters/${chapterId}/`, {
+    const response = await this.get<Chapter>(`/api/v1/chapters/${chapterId}`, {
       include_versions,
     });
     
@@ -277,14 +277,14 @@ class ChaptersApiClient extends BaseApiClient {
     chapterId: number,
     updates: ChapterUpdate
   ): Promise<Chapter> {
-    return this.put<Chapter>(`/api/v1/chapters/${chapterId}/`, updates);
+    return this.put<Chapter>(`/api/v1/chapters/${chapterId}`, updates);
   }
 
   /**
    * 删除章节（软删除，可恢复）
    */
   async deleteChapter(chapterId: number): Promise<void> {
-    await this.delete(`/api/v1/chapters/${chapterId}/`);
+    await this.delete(`/api/v1/chapters/${chapterId}`);
   }
 
   /**

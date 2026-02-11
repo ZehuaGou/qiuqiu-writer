@@ -30,6 +30,7 @@ app = FastAPI(
     title="QiuQiuWriter API",
     description="QiuQiuWriter API服务 - 包含AI分析、产品API和服务器API",
     version="1.0.0",
+    redirect_slashes=False,
 )
 
 # 配置CORS
