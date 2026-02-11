@@ -97,7 +97,7 @@ export class BaseApiClient {
   /**
    * GET 请求的便捷方法
    */
-  protected async get<T>(endpoint: string, params?: Record<string, unknown>): Promise<T> {
+  async get<T>(endpoint: string, params?: Record<string, unknown>): Promise<T> {
     let url = endpoint;
     if (params) {
       const queryParams = new URLSearchParams();
@@ -117,7 +117,7 @@ export class BaseApiClient {
   /**
    * POST 请求的便捷方法
    */
-  protected async post<T>(endpoint: string, data?: unknown, signal?: AbortSignal): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, signal?: AbortSignal): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
@@ -151,6 +151,20 @@ export class BaseApiClient {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  /**
+   * 返回原始 Response，不解析 JSON、不根据 ok 抛错，供流式或自定义处理使用
+   */
+  async requestRaw(endpoint: string, options: RequestInit = {}): Promise<Response> {
+    const url = `${this.baseUrl}${endpoint}`;
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...this.getAuthHeaders(),
+        ...options.headers,
+      },
     });
   }
 }

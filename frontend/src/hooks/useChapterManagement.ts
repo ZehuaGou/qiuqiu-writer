@@ -181,7 +181,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
         return p;
       });
     }
-  }, []);
+  }, [setSearchParams]);
 
   // ===== 加载章节列表 =====
   useEffect(() => {

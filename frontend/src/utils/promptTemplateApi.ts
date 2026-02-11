@@ -71,14 +71,14 @@ class PromptTemplateApiClient extends BaseApiClient {
     templateId: number,
     templateData: PromptTemplateUpdate
   ): Promise<PromptTemplate> {
-    return this.put<PromptTemplate>(`/api/v1/prompt-templates/${templateId}`, templateData);
+    return this.put<PromptTemplate>(`/api/v1/prompt-templates/${templateId}/`, templateData);
   }
 
   /**
    * 获取Prompt模板
    */
   async getPromptTemplate(templateId: number): Promise<PromptTemplate> {
-    return this.get<PromptTemplate>(`/api/v1/prompt-templates/${templateId}`);
+    return this.get<PromptTemplate>(`/api/v1/prompt-templates/${templateId}/`);
   }
 
   /**

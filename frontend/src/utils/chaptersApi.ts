@@ -87,7 +87,7 @@ class ChaptersApiClient extends BaseApiClient {
    * 获取章节文档内容（直接从 ShareDB/MongoDB 获取）
    */
   async getChapterDocument(chapterId: number): Promise<ChapterDocumentResponse> {
-    return this.get<ChapterDocumentResponse>(`/api/v1/chapters/${chapterId}/document`);
+    return this.get<ChapterDocumentResponse>(`/api/v1/chapters/${chapterId}/document/`);
   }
 
   /**
@@ -168,7 +168,7 @@ class ChaptersApiClient extends BaseApiClient {
     cacheKey: string,
     skipCache?: boolean
   ): Promise<ChapterListResponse> {
-    const { skipCache: _skip, ...queryParams } = params;
+    const { skipCache: _, ...queryParams } = params;
     const response = await this.get<ChapterListResponse>('/api/v1/chapters/', queryParams);
 
     // 非跳过缓存时才写入（回收站列表不缓存，避免删除后仍看到旧空列表）
@@ -249,7 +249,7 @@ class ChaptersApiClient extends BaseApiClient {
     include_versions?: boolean,
     cacheKey?: string
   ): Promise<Chapter> {
-    const response = await this.get<Chapter>(`/api/v1/chapters/${chapterId}`, {
+    const response = await this.get<Chapter>(`/api/v1/chapters/${chapterId}/`, {
       include_versions,
     });
     
@@ -277,14 +277,14 @@ class ChaptersApiClient extends BaseApiClient {
     chapterId: number,
     updates: ChapterUpdate
   ): Promise<Chapter> {
-    return this.put<Chapter>(`/api/v1/chapters/${chapterId}`, updates);
+    return this.put<Chapter>(`/api/v1/chapters/${chapterId}/`, updates);
   }
 
   /**
    * 删除章节（软删除，可恢复）
    */
   async deleteChapter(chapterId: number): Promise<void> {
-    await this.delete(`/api/v1/chapters/${chapterId}`);
+    await this.delete(`/api/v1/chapters/${chapterId}/`);
   }
 
   /**
@@ -294,32 +294,6 @@ class ChaptersApiClient extends BaseApiClient {
     return this.post<Chapter>(`/api/v1/chapters/${chapterId}/restore`, {});
   }
 
-  /**
-   * 获取章节版本历史
-   */
-  async getChapterVersions(
-    chapterId: number,
-    page?: number,
-    size?: number
-  ): Promise<ChapterVersion[]> {
-    return this.get<ChapterVersion[]>(
-      `/api/v1/chapters/${chapterId}/versions`,
-      { page, size }
-    );
-  }
-
-  /**
-   * 创建章节版本快照
-   */
-  async createChapterVersion(
-    chapterId: number,
-    changeDescription?: string
-  ): Promise<ChapterVersion> {
-    return this.post<ChapterVersion>(
-      `/api/v1/chapters/${chapterId}/versions`,
-      { change_description: changeDescription }
-    );
-  }
 
   /** Yjs 原生快照（Git 式版本）列表 */
   async listYjsSnapshots(

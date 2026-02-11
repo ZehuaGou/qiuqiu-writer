@@ -3,7 +3,7 @@
  * 对接后端认证接口
  */
 
-import { API_BASE_URL } from './apiConfig';
+import { BaseApiClient } from './baseApiClient';
 
 export interface LoginRequest {
   username_or_email: string;
@@ -45,105 +45,41 @@ export interface AuthError {
   detail: string;
 }
 
-class AuthApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
-  }
-
+class AuthApiClient extends BaseApiClient {
   /**
    * 登录
    */
   async login(credentials: LoginRequest): Promise<TokenResponse> {
-    const response = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
-    });
-
-    if (!response.ok) {
-      const error: AuthError = await response.json().catch(() => ({
-        detail: response.statusText,
-      }));
-      throw new Error(error.detail || '登录失败');
-    }
-
-    return response.json();
+    const data = await this.post<TokenResponse>('/api/v1/auth/login', credentials);
+    return data;
   }
 
   /**
    * 注册
    */
   async register(data: RegisterRequest): Promise<TokenResponse> {
-    const response = await fetch(`${this.baseUrl}/api/v1/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      
-      // 处理422验证错误
-      if (response.status === 422 && errorData.detail) {
-        const errors = Array.isArray(errorData.detail) 
-          ? errorData.detail 
-          : [errorData.detail];
-        const errorMessages = (errors as unknown[]).map((err) => {
-          if (typeof err === 'string') return err;
-          if (typeof err === 'object' && err !== null && 'msg' in err) {
-            const e = err as { msg?: string; loc?: unknown };
-            const loc = Array.isArray(e.loc) ? e.loc.join('.') : '';
-            const msg = e.msg ?? '';
-            return `${loc}: ${msg}`.trim();
-          }
-          return JSON.stringify(err);
-        });
-        throw new Error(errorMessages.join('; ') || '数据验证失败');
-      }
-      
-      // 处理其他错误
-      const error: AuthError = errorData.detail 
-        ? { detail: typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail) }
-        : { detail: errorData.message || response.statusText || '注册失败' };
-      throw new Error(error.detail);
-    }
-
-    return response.json();
+    return await this.post<TokenResponse>('/api/v1/auth/register', data);
   }
 
   /**
    * 获取当前用户信息
    */
   async getCurrentUser(): Promise<UserInfo> {
-    const token = this.getToken();
-    if (!token) {
+    if (!this.isAuthenticated()) {
       throw new Error('未登录');
     }
 
-    const response = await fetch(`${this.baseUrl}/api/v1/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
+    try {
+      const data = await this.get<UserInfo | { user: UserInfo }>('/api/v1/auth/me');
+      return 'user' in data ? data.user : data;
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
         this.clearToken();
         throw new Error('登录已过期，请重新登录');
       }
-      throw new Error('获取用户信息失败');
+      throw err;
     }
-
-    const data = await response.json();
-    return data.user || data;
   }
 
   /**
@@ -157,14 +93,7 @@ class AuthApiClient {
     }
 
     try {
-      await fetch(`${this.baseUrl}/api/v1/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
-      });
+      await this.post('/api/v1/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
     } catch (error) {
       console.error('登出请求失败:', error);
     } finally {
@@ -181,23 +110,15 @@ class AuthApiClient {
       throw new Error('刷新令牌不存在');
     }
 
-    const response = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-
-    if (!response.ok) {
+    try {
+      const data = await this.post<TokenResponse>('/api/v1/auth/refresh', { refresh_token: refreshToken });
+      this.setToken(data.access_token);
+      this.setRefreshToken(data.refresh_token);
+      return data;
+    } catch {
       this.clearToken();
       throw new Error('刷新令牌失败，请重新登录');
     }
-
-    const data = await response.json();
-    this.setToken(data.access_token);
-    this.setRefreshToken(data.refresh_token);
-    return data;
   }
 
   /**
@@ -247,33 +168,23 @@ class AuthApiClient {
    * 更新用户资料
    */
   async updateProfile(data: Partial<UserInfo>): Promise<UserInfo> {
-    const token = this.getToken();
-    if (!token) {
+    if (!this.isAuthenticated()) {
       throw new Error('未登录');
     }
 
-    const response = await fetch(`${this.baseUrl}/api/v1/auth/me`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
+    try {
+      const result = await this.put<UserInfo | { user: UserInfo }>('/api/v1/auth/me', data);
+      const updatedUser = 'user' in result ? result.user : result;
+      this.setUserInfo(updatedUser);
+      return updatedUser;
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
         this.clearToken();
         throw new Error('登录已过期，请重新登录');
       }
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || errorData.message || '更新用户资料失败');
+      throw err;
     }
-
-    const result = await response.json();
-    const updatedUser = result.user || result;
-    this.setUserInfo(updatedUser);
-    return updatedUser;
   }
 }
 

@@ -121,7 +121,11 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
   const wsProviderRef = useRef<WebsocketProvider | null>(null);
   const isInitialized = useRef(false);
   const documentIdRef = useRef<string>(documentId);
-  documentIdRef.current = documentId;
+
+  // 更新 documentIdRef
+  useEffect(() => {
+    documentIdRef.current = documentId;
+  }, [documentId]);
 
   // ===== 初始化：同一作品共用一个 WebSocket，按章节使用不同 field =====
   useEffect(() => {

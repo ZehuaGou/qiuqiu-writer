@@ -80,5 +80,5 @@ export function restoreYjsSnapshotToEditor(
   const fragment = tempDoc.getXmlFragment(FRAGMENT_NAME);
   const json = yXmlFragmentToProsemirrorJSON(fragment);
   tempDoc.destroy();
-  editor.commands.setContent(json, false);
+  editor.commands.setContent(json, { emitUpdate: false });
 }

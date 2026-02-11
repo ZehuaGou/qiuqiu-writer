@@ -175,7 +175,7 @@ async def root():
     
     # 动态添加其他路由的端点
     try:
-        endpoints["product"] = "/product/*"
+        endpoints["product"] = "/api/v1/product/*"
     except:
         pass
     

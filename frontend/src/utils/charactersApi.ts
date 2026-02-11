@@ -43,7 +43,7 @@ class CharactersApiClient extends BaseApiClient {
    * 获取角色详情
    */
   async getCharacter(characterId: number): Promise<Character> {
-    return this.get<Character>(`/api/v1/characters/${characterId}`);
+    return this.get<Character>(`/api/v1/characters/${characterId}/`);
   }
 }
 

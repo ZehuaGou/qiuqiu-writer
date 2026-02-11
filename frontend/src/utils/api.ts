@@ -4,7 +4,7 @@
 
 import type { ShareDBDocument, SyncResponse } from '../types/sharedb';
 
-import { API_BASE_URL } from './apiConfig';
+import { BaseApiClient } from './baseApiClient';
 
 export interface Document {
   id: string;
@@ -22,47 +22,7 @@ export interface ApiResponse<T> {
   data: T;
 }
 
-class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
-  }
-
-  private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...this.getAuthHeaders(),
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `API request failed: ${response.statusText}`
-      );
-    }
-
-    return response.json();
-  }
-
+class ApiClient extends BaseApiClient {
   // Document operations
   async createDocument(
     userId: string,
@@ -70,26 +30,21 @@ class ApiClient {
     content: string = '',
     memCubeId?: string
   ): Promise<Document> {
-    const response = await this.request<Document>('/api/documents/', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: userId,
-        title,
-        content,
-        mem_cube_id: memCubeId,
-      }),
+    const response = await this.post<ApiResponse<Document>>('/api/documents/', {
+      user_id: userId,
+      title,
+      content,
+      mem_cube_id: memCubeId,
     });
     return response.data;
   }
 
   async listDocuments(userId: string, memCubeId?: string): Promise<Document[]> {
-    const params = new URLSearchParams({ user_id: userId });
+    const params: Record<string, string | number | boolean | undefined> = { user_id: userId };
     if (memCubeId) {
-      params.append('mem_cube_id', memCubeId);
+      params.mem_cube_id = memCubeId;
     }
-    const response = await this.request<Document[]>(
-      `/api/documents/?${params.toString()}`
-    );
+    const response = await this.get<ApiResponse<Document[]>>('/api/documents/', params);
     return response.data;
   }
 
@@ -98,13 +53,11 @@ class ApiClient {
     userId: string,
     memCubeId?: string
   ): Promise<Document> {
-    const params = new URLSearchParams({ user_id: userId });
+    const params: Record<string, string | number | boolean | undefined> = { user_id: userId };
     if (memCubeId) {
-      params.append('mem_cube_id', memCubeId);
+      params.mem_cube_id = memCubeId;
     }
-    const response = await this.request<Document>(
-      `/api/documents/${docId}?${params.toString()}`
-    );
+    const response = await this.get<ApiResponse<Document>>(`/api/documents/${docId}`, params);
     return response.data;
   }
 
@@ -114,17 +67,15 @@ class ApiClient {
     updates: { title?: string; content?: string },
     memCubeId?: string
   ): Promise<Document> {
-    const params = new URLSearchParams({ user_id: userId });
+    const queryParams = new URLSearchParams({ user_id: userId });
     if (memCubeId) {
-      params.append('mem_cube_id', memCubeId);
+      queryParams.append('mem_cube_id', memCubeId);
     }
-    const response = await this.request<Document>(
-      `/api/documents/${docId}?${params.toString()}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      }
-    );
+    
+    const response = await this.request<ApiResponse<Document>>(`/api/documents/${docId}?${queryParams.toString()}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
     return response.data;
   }
 
@@ -133,11 +84,11 @@ class ApiClient {
     userId: string,
     memCubeId?: string
   ): Promise<void> {
-    const params = new URLSearchParams({ user_id: userId });
+    const queryParams = new URLSearchParams({ user_id: userId });
     if (memCubeId) {
-      params.append('mem_cube_id', memCubeId);
+      queryParams.append('mem_cube_id', memCubeId);
     }
-    await this.request(`/api/documents/${docId}?${params.toString()}`, {
+    await this.request(`/api/documents/${docId}?${queryParams.toString()}`, {
       method: 'DELETE',
     });
   }
@@ -155,10 +106,7 @@ class ApiClient {
     base_content?: string;
     metadata?: Record<string, unknown>;
   }): Promise<SyncResponse> {
-    const response = await this.request<SyncResponse>('/v1/sharedb/documents/sync', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const response = await this.post<ApiResponse<SyncResponse>>('/v1/sharedb/documents/sync', data);
     return response.data;
   }
 
@@ -166,7 +114,7 @@ class ApiClient {
    * 获取 ShareDB 文档
    */
   async getShareDBDocument(docId: string): Promise<ShareDBDocument> {
-    const response = await this.request<ShareDBDocument>(`/v1/sharedb/documents/${docId}`);
+    const response = await this.get<ApiResponse<ShareDBDocument>>(`/v1/sharedb/documents/${docId}`);
     return response.data;
   }
 }

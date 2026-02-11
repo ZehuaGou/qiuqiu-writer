@@ -44,58 +44,6 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
   const [matches, setMatches] = useState<Array<{ start: number; end: number }>>([]);
   
-  // 查找匹配项
-  const findMatches = useCallback(() => {
-    if (!editor || !findText.trim()) {
-      setMatches([]);
-      setCurrentMatchIndex(-1);
-      return;
-    }
-
-    try {
-      const { state } = editor;
-      const { doc } = state;
-      
-      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = matchCase 
-        ? new RegExp(escaped, 'g')
-        : new RegExp(escaped, 'gi');
-
-      const foundMatches: Array<{ start: number; end: number }> = [];
-      
-      doc.descendants((node, pos) => {
-        if (node.isText && node.text) {
-          regex.lastIndex = 0;
-          let match;
-          
-          while ((match = regex.exec(node.text)) !== null) {
-            foundMatches.push({
-              start: pos + match.index,
-              end: pos + match.index + match[0].length,
-            });
-            
-            if (match[0].length === 0) {
-              regex.lastIndex++;
-            }
-          }
-        }
-      });
-
-      setMatches(foundMatches);
-      if (foundMatches.length > 0) {
-        setCurrentMatchIndex(0);
-        // 输入时只滚动、不抢焦点，避免第二个字被输入到编辑器
-        scrollToMatch(foundMatches[0], false);
-      } else {
-        setCurrentMatchIndex(-1);
-      }
-    } catch (err) {
-      console.error('查找失败:', err);
-      setMatches([]);
-      setCurrentMatchIndex(-1);
-    }
-  }, [editor, findText, matchCase]);
-  
   // 滚动到匹配项，使匹配处固定在可视区域正中间；focusEditor=false 时不抢焦点
   const scrollToMatch = useCallback((match: { start: number; end: number }, focusEditor = true) => {
     if (!editor) return;
@@ -152,6 +100,58 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
       requestAnimationFrame(runScroll);
     });
   }, [editor]);
+
+  // 查找匹配项
+  const findMatches = useCallback(() => {
+    if (!editor || !findText.trim()) {
+      setMatches([]);
+      setCurrentMatchIndex(-1);
+      return;
+    }
+
+    try {
+      const { state } = editor;
+      const { doc } = state;
+      
+      const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = matchCase 
+        ? new RegExp(escaped, 'g')
+        : new RegExp(escaped, 'gi');
+
+      const foundMatches: Array<{ start: number; end: number }> = [];
+      
+      doc.descendants((node, pos) => {
+        if (node.isText && node.text) {
+          regex.lastIndex = 0;
+          let match;
+          
+          while ((match = regex.exec(node.text)) !== null) {
+            foundMatches.push({
+              start: pos + match.index,
+              end: pos + match.index + match[0].length,
+            });
+            
+            if (match[0].length === 0) {
+              regex.lastIndex++;
+            }
+          }
+        }
+      });
+
+      setMatches(foundMatches);
+      if (foundMatches.length > 0) {
+        setCurrentMatchIndex(0);
+        // 输入时只滚动、不抢焦点，避免第二个字被输入到编辑器
+        scrollToMatch(foundMatches[0], false);
+      } else {
+        setCurrentMatchIndex(-1);
+      }
+    } catch (err) {
+      console.error('查找失败:', err);
+      setMatches([]);
+      setCurrentMatchIndex(-1);
+    }
+  }, [editor, findText, matchCase, scrollToMatch]);
   
   // 打开/关闭查找替换面板
   const handleReplace = useCallback(() => {

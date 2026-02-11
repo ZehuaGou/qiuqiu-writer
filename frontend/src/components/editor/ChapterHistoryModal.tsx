@@ -3,8 +3,8 @@
  * 左侧：主内容区（对比/更改）；右侧：历史记录列表（按月分组）；顶部：返回、还原、编辑记录 N/M、上一项/下一项
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, History, Plus, RotateCcw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowLeft, Plus, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { chaptersApi, type YjsSnapshotMeta } from '../../utils/chaptersApi';
 import { getContentJSONFromYjsSnapshotBase64, getTextFromProsemirrorJSON } from '../../utils/yjsSnapshot';
 import { diffLines, type DiffLine } from '../../utils/simpleDiff';
@@ -22,8 +22,8 @@ interface ChapterHistoryModalProps {
 }
 
 /** 格式：1月7日 19:45 */
-function formatDateShort(iso: string | undefined): string {
-  if (!iso) return '—';
+function formatDateShort(iso: string | null | undefined): string {
+  if (iso == null || iso === '') return '—';
   try {
     const d = new Date(iso);
     return d.toLocaleString('zh-CN', {
@@ -38,8 +38,8 @@ function formatDateShort(iso: string | undefined): string {
 }
 
 /** 分组用：1月 */
-function formatMonth(iso: string | undefined): string {
-  if (!iso) return '';
+function formatMonth(iso: string | null | undefined): string {
+  if (iso == null || iso === '') return '';
   try {
     const d = new Date(iso);
     return d.toLocaleString('zh-CN', { month: 'numeric' }) + '月';
@@ -66,7 +66,6 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
 export default function ChapterHistoryModal({
   isOpen,
   chapterId,
-  chapterTitle,
   onClose,
   getCurrentContent,
   onCreateVersion,
@@ -86,7 +85,7 @@ export default function ChapterHistoryModal({
   getCurrentContentRef.current = getCurrentContent;
   const loadingSnapshotIdRef = useRef<number | null>(null);
 
-  const loadSnapshots = () => {
+  const loadSnapshots = useCallback(() => {
     if (!chapterId) return;
     const id = parseInt(chapterId, 10);
     if (Number.isNaN(id)) return;
@@ -96,7 +95,7 @@ export default function ChapterHistoryModal({
       .then((res) => setSnapshots(res.snapshots || []))
       .catch(() => setSnapshots([]))
       .finally(() => setLoading(false));
-  };
+  }, [chapterId]);
 
   useEffect(() => {
     if (!isOpen || !chapterId) {
@@ -106,13 +105,13 @@ export default function ChapterHistoryModal({
       return;
     }
     loadSnapshots();
-  }, [isOpen, chapterId]);
+  }, [isOpen, chapterId, loadSnapshots]);
 
   const selectedIndex = selectedId != null ? snapshots.findIndex((s) => s.id === selectedId) : -1;
   const currentPosition = selectedIndex >= 0 ? selectedIndex + 1 : 0;
   const totalCount = snapshots.length;
 
-  const loadDiffFor = async (snapshotId: number) => {
+  const loadDiffFor = useCallback(async (snapshotId: number) => {
     const id = chapterId ? parseInt(chapterId, 10) : NaN;
     if (!chapterId || Number.isNaN(id)) return;
     const getCurrent = getCurrentContentRef.current;
@@ -139,7 +138,7 @@ export default function ChapterHistoryModal({
         setDiffLoading(false);
       }
     }
-  };
+  }, [chapterId]);
 
   useEffect(() => {
     if (selectedId != null) loadDiffFor(selectedId);
@@ -148,7 +147,7 @@ export default function ChapterHistoryModal({
       setVersionTextState(null);
       loadingSnapshotIdRef.current = null;
     }
-  }, [selectedId, chapterId]);
+  }, [selectedId, loadDiffFor]);
 
   const handleCreateVersion = async () => {
     if (!onCreateVersion) return;
@@ -305,7 +304,7 @@ export default function ChapterHistoryModal({
                   <div key={monthLabel} className="chapter-history-group">
                     <div className="chapter-history-group-label">{monthLabel}</div>
                     <ul className="chapter-history-list">
-                      {items.map((s, idxInGroup) => {
+                      {items.map((s) => {
                         const globalIndex = snapshots.findIndex((x) => x.id === s.id);
                         const isFirst = globalIndex === 0;
                         const isLast = globalIndex === snapshots.length - 1;

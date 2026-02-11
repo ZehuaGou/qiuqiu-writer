@@ -196,7 +196,7 @@ class WorksApiClient extends BaseApiClient {
         : params.work_type
     } : undefined;
     
-    const response = await this.get<WorkListResponseBackend>('/api/v1/works', backendParams);
+    const response = await this.get<WorkListResponseBackend>('/api/v1/works/', backendParams);
     
     // 转换作品类型
     return {

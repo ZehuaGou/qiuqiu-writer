@@ -1,4 +1,6 @@
-import { API_BASE_URL } from './apiConfig';
+import { BaseApiClient } from './baseApiClient';
+
+const productChatApi = new BaseApiClient();
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -89,14 +91,6 @@ export async function sendChatMessage(
     throw new Error('请先登录并选择作品');
   }
 
-  const token = localStorage.getItem('access_token');
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   // 将前端的对话历史转换为后端需要的格式
   const historyPayload = history.map((m) => ({
     role: m.role,
@@ -116,22 +110,11 @@ export async function sendChatMessage(
     session_id: 'default_session',
   };
 
-  const resp = await fetch(`${API_BASE_URL}/product/chat/complete`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`对话接口调用失败: ${resp.status} ${resp.statusText} ${text}`);
-  }
-
   let data: ChatCompleteResponse;
   try {
-    data = (await resp.json()) as ChatCompleteResponse;
-  } catch {
-    throw new Error('对话接口返回不是有效的 JSON');
+    data = await productChatApi.post<ChatCompleteResponse>('/api/v1/product/chat/complete/', body);
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : '对话接口调用失败');
   }
 
   if (data.code !== 200) {
@@ -168,14 +151,6 @@ export async function streamChatMessage(
     throw new Error('请先登录并选择作品');
   }
 
-  const token = localStorage.getItem('access_token');
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const historyPayload = history.map((m) => ({
     role: m.role,
     content: m.content,
@@ -191,9 +166,8 @@ export async function streamChatMessage(
     session_id: 'default_session',
   };
 
-  const resp = await fetch(`${API_BASE_URL}/product/chat`, {
+  const resp = await productChatApi.requestRaw('/api/v1/product/chat/', {
     method: 'POST',
-    headers,
     body: JSON.stringify(body),
   });
 

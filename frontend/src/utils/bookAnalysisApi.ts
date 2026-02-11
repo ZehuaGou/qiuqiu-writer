@@ -3,7 +3,9 @@
  * 基于 SmartReads 的分析逻辑，预留从 memos 后端获取模型服务的接口
  */
 
-import { API_BASE_URL } from './apiConfig';
+import { BaseApiClient } from './baseApiClient';
+
+const bookAnalysisClient = new BaseApiClient();
 
 export interface BookAnalysisResult {
   work_id?: string;
@@ -45,16 +47,13 @@ export interface AnalysisProgress {
  */
 export async function getAnalysisPromptFromBackend(templateType: string = 'chapter_analysis'): Promise<string> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/prompt-templates/type/${templateType}/default`);
-    if (response.ok) {
-      const result = await response.json();
-      return result.prompt_content || '';
-    }
+    const result = await bookAnalysisClient.get<{ prompt_content?: string }>(
+      `/api/v1/prompt-templates/type/${templateType}/default/`
+    );
+    return result.prompt_content || '';
   } catch (error) {
     console.warn('获取后端prompt模板失败，使用默认模板:', error);
   }
-  
-  // 如果后端获取失败，返回默认的prompt（向后兼容）
   return getDefaultAnalysisPrompt();
 }
 
@@ -128,24 +127,12 @@ export async function analyzeChapterContent(
   work_id?: number
 ): Promise<string> {
   try {
-    // 获取认证token
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    // 调用API（流式响应）
-    const response = await fetch(`${API_BASE_URL}/ai/analyze-chapter`, {
+    const response = await bookAnalysisClient.requestRaw('/ai/analyze-chapter/', {
       method: 'POST',
-      headers: headers,
       body: JSON.stringify({
         content,
-        // prompt 由后端从数据库获取，不在这里传递
         settings: settings || {},
-        work_id: work_id, // 如果提供了 work_id，分析完成后会将角色信息保存到作品的 metainfo 中
+        work_id: work_id,
       }),
     });
 
@@ -354,23 +341,16 @@ export async function analyzeBookEnhanced(
   try {
     
     
-    // 获取认证token
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    const response = await fetch(`${API_BASE_URL}/ai/analyze-book?auto_create_work=${autoCreateWork}`, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({
-        content,
-        settings: settings || {},
-      }),
-    });
+    const response = await bookAnalysisClient.requestRaw(
+      `/ai/analyze-book?auto_create_work=${autoCreateWork}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          content,
+          settings: settings || {},
+        }),
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`API 调用失败: ${response.status} ${response.statusText}`);
@@ -508,20 +488,10 @@ export async function analyzeChaptersIncremental(
   try {
     
     
-    // 获取认证token
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    const response = await fetch(
-      `${API_BASE_URL}/ai/analyze-chapters-incremental?work_id=${workId}`,
+    const response = await bookAnalysisClient.requestRaw(
+      `/ai/analyze-chapters-incremental?work_id=${workId}`,
       {
         method: 'POST',
-        headers: headers,
         body: JSON.stringify({
           content,
           settings: settings || {},
@@ -686,19 +656,9 @@ export async function analyzeChapterByFile(
 }> {
   try {
     
-    
-    // 获取认证token
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
-    const response = await fetch(`${API_BASE_URL}/ai/analyze-chapter-by-file`, {
+    const response = await bookAnalysisClient.requestRaw('/ai/analyze-chapter-by-file/', {
       method: 'POST',
-      headers: headers,
       body: JSON.stringify({
         file_name: fileName,
         content: content,
@@ -913,20 +873,17 @@ export async function createWorkFromFile(
   }>;
 }> {
   try {
-    
-    
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/ai/create-work-from-file`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
+    const result = await bookAnalysisClient.post<{
+      work_id: string;
+      work_title: string;
+      work_created: boolean;
+      chapters_created: number;
+      chapters_skipped: number;
+      created_chapters: Array<{ chapter_id: number; chapter_number: number; volume_number: number; title: string }>;
+      skipped_chapters: Array<{ chapter_id: number; chapter_number: number; volume_number: number; title: string }>;
+    }>(
+      '/ai/create-work-from-file/',
+      {
         file_name: fileName,
         chapters: chapters.map(ch => ({
           chapter_number: ch.chapter_number,
@@ -934,18 +891,8 @@ export async function createWorkFromFile(
           content: ch.content,
           volume_number: ch.volume_number || 1
         }))
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `API request failed: ${response.statusText}`
-      );
-    }
-
-    const result = await response.json();
-    
+      }
+    );
     return result;
   } catch (error) {
     console.error('❌ 创建作品和章节失败:', error);
@@ -977,33 +924,15 @@ export async function analyzeChapter(
 }> {
   try {
     onProgress?.({ message: '开始分析章节...', status: 'start' });
-    
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
-    const response = await fetch(
-      `${API_BASE_URL}/ai/generate-chapter-outlines?work_id=${workId}&chapter_ids=${chapterId}`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          settings: settings || {},
-        }),
-      }
+    const data = await bookAnalysisClient.post<{
+      success: boolean;
+      message?: string;
+      results?: Array<{ success: boolean; outline?: unknown; detailed_outline?: unknown }>;
+    }>(
+      `/ai/generate-chapter-outlines?work_id=${workId}&chapter_ids=${chapterId}`,
+      { settings: settings || {} }
     );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API 调用失败: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    // 解析JSON响应
-    const data = await response.json();
 
     if (!data.success) {
       throw new Error(data.message || '分析失败');
@@ -1035,32 +964,21 @@ export async function testAPIConnection(): Promise<{
   try {
     
     
-    const response = await fetch(`${API_BASE_URL}/ai/health`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (response.ok) {
-      const result = await response.json();
+    try {
+      const result = await bookAnalysisClient.get<{ data: { status: string; models?: string[] } }>('/ai/health/');
       const data = result.data;
-      
-      
-      
       return {
-        success: data.status === 'healthy',
-        message: data.status === 'healthy' 
-          ? `AI 服务正常运行，可用模型: ${data.models?.length || 0} 个` 
+        success: data?.status === 'healthy',
+        message: data?.status === 'healthy'
+          ? `AI 服务正常运行，可用模型: ${data.models?.length || 0} 个`
           : 'AI 服务不可用',
-        models: data.models,
+        models: data?.models,
       };
-    } else {
-      const errorText = await response.text();
-      console.error('❌ 连接失败:', response.status, errorText);
+    } catch (err) {
+      console.error('❌ 连接失败:', err);
       return {
         success: false,
-        message: `连接失败: ${response.status} ${response.statusText}`,
+        message: err instanceof Error ? err.message : '连接失败',
       };
     }
   } catch (error) {
@@ -1107,14 +1025,6 @@ export async function generateComponentData(
   settings?: AnalysisSettings
 ): Promise<{ component_id: string; data_key: string; generated_data: string }> {
   try {
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     const body: Record<string, unknown> = {
       work_id: workId,
       component_id: componentId,
@@ -1141,21 +1051,11 @@ export async function generateComponentData(
       };
     }
 
-    const response = await fetch(
-      `${API_BASE_URL}/ai/generate-component-data`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API 调用失败: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
+    const result = await bookAnalysisClient.post<{
+      component_id: string;
+      data_key: string;
+      generated_data: string;
+    }>('/ai/generate-component-data', body);
     return result;
   } catch (error) {
     console.error('生成组件数据失败:', error);
@@ -1173,38 +1073,23 @@ export async function generateChapterContent(
   settings?: AnalysisSettings
 ): Promise<string> {
   try {
-    
-    
-    const token = localStorage.getItem('access_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(
-      `${API_BASE_URL}/ai/generate-chapter-content`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          outline,
-          detailed_outline: detailedOutline,
-          chapter_title: chapterTitle,
-          characters: characters || [],
-          locations: locations || [],
-          settings: settings || {},
-        }),
-      }
-    );
+    const response = await bookAnalysisClient.requestRaw('/ai/generate-chapter-content', {
+      method: 'POST',
+      body: JSON.stringify({
+        outline,
+        detailed_outline: detailedOutline,
+        chapter_title: chapterTitle,
+        characters: characters || [],
+        locations: locations || [],
+        settings: settings || {},
+      }),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`API 调用失败: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    // 处理流式响应 (SSE)
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error('无法获取响应流');

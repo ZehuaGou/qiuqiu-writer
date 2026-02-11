@@ -114,7 +114,7 @@ class TemplatesApiClient extends BaseApiClient {
     sort_order?: 'asc' | 'desc';
     include_fields?: boolean;
   }): Promise<WorkTemplate[]> {
-    return this.get<WorkTemplate[]>('/api/v1/templates', params);
+    return this.get<WorkTemplate[]>('/api/v1/templates/', params);
   }
 }
 

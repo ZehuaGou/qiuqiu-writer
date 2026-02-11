@@ -3,11 +3,12 @@
  * 处理文档的本地缓存、服务器同步、版本管理等
  */
 
-import { API_BASE_URL } from './apiConfig';
 import { localCacheManager } from './localCacheManager';
 import { chaptersApi, type ChapterDocumentResponse } from './chaptersApi';
 import type { ShareDBDocument, SyncResponse } from '../types/document';
+import { BaseApiClient } from './baseApiClient';
 
+export const sharedbApi = new BaseApiClient();
 interface SyncRequestBody {
   doc_id: string;
   version: number;
@@ -494,9 +495,6 @@ export const documentCache = {
         // 这样可以在同步前确保本地有备份，同时避免重复更新
         await documentCache.updateDocument(documentId, contentToSave, metadata);
 
-        // 关键修复：调用后端 ShareDB 同步接口（使用编辑器内容）
-        const token = localStorage.getItem('access_token');
-        
         try {
           // 关键修复：验证内容不为空（空字符串也是有效内容，但需要确保不是 undefined 或 null）
           if (contentToSave === null || contentToSave === undefined) {
@@ -543,28 +541,13 @@ export const documentCache = {
             },
           });
           
-          const syncResponse = await fetch(`${API_BASE_URL}/v1/sharedb/documents/sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : '',
-            },
-            body: JSON.stringify(requestBody),
-          });
+          const result = await sharedbApi.post<SyncResponse>('/v1/sharedb/documents/sync/', requestBody);
 
           console.log('📥 [DocumentCache] 同步响应状态:', {
-            status: syncResponse.status,
-            statusText: syncResponse.statusText,
-            ok: syncResponse.ok,
+            success: result.success,
+            version: result.version,
+            error: result.error,
           });
-
-          if (!syncResponse.ok) {
-            const errorText = await syncResponse.text();
-            console.error('❌ [DocumentCache] 同步失败，响应内容:', errorText);
-            throw new Error(`同步失败: ${syncResponse.status} ${syncResponse.statusText} - ${errorText}`);
-          }
-
-          const result = await syncResponse.json();
           
           console.log('📥 [DocumentCache] 同步响应结果:', {
             success: result.success,
