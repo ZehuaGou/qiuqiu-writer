@@ -294,8 +294,8 @@ async def _load_pre_chapter_ctx(
             raise ValueError("作品中没有章节")
         first_chapters = all_ch[:-1] if len(all_ch) > 1 else []
         prev_chapter = all_ch[-1]
-        next_chapter_number = 0
         prev_chapter_number = prev_chapter.chapter_number or 0
+        next_chapter_number = prev_chapter_number + 1  # 续写模式下，下一章号 = 最后一章号 + 1
         # 直接组装 chapter_infos 与 previous_chapter_content，然后 return
         chapter_infos = []
         for ch in first_chapters:

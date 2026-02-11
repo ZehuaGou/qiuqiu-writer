@@ -63,7 +63,30 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
   const { workId, updateTrigger } = options;
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+  // 从 URL 获取初始选中章节
+  const [selectedChapter, setSelectedChapterState] = useState<string | null>(() => searchParams.get('chapterId'));
+
+  // 监听 URL 变化，同步到状态
+  useEffect(() => {
+    const urlId = searchParams.get('chapterId');
+    if (urlId !== selectedChapter) {
+      setSelectedChapterState(urlId);
+    }
+  }, [searchParams, selectedChapter]);
+
+  // 包装 setSelectedChapter，使其在更新状态的同时更新 URL
+  const setSelectedChapter = useCallback((id: string | null) => {
+    // 优先更新 URL，useEffect 会同步状态
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (id) {
+        p.set('chapterId', id);
+      } else {
+        p.delete('chapterId');
+      }
+      return p;
+    });
+  }, [setSearchParams]);
   const [chaptersData, setChaptersData] = useState<Record<string, ChapterFullData>>({});
   const [volumes, setVolumes] = useState<VolumeData[]>([]);
   const [deletedChapters, setDeletedChapters] = useState<Chapter[]>([]);
@@ -167,21 +190,12 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
       delete next[idStr];
       return next;
     });
-    setSelectedChapter(prev => (prev === chapterId || String(prev) === idStr ? selectChapterId : prev));
-    if (selectChapterId !== null) {
-      setSearchParams(prev => {
-        const p = new URLSearchParams(prev);
-        p.set('chapterId', selectChapterId!);
-        return p;
-      });
-    } else {
-      setSearchParams(prev => {
-        const p = new URLSearchParams(prev);
-        p.delete('chapterId');
-        return p;
-      });
+    
+    // 如果删除的是当前选中的章节，切换到上一个章节
+    if (selectedChapter === chapterId || String(selectedChapter) === idStr) {
+      setSelectedChapter(selectChapterId);
     }
-  }, [setSearchParams]);
+  }, [selectedChapter, setSelectedChapter]);
 
   // ===== 加载章节列表 =====
   useEffect(() => {
@@ -352,16 +366,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
             targetChapterId = String(maxChapter.id);
           }
 
-          // 选中项与 URL 不一致时同步 URL，便于下次刷新仍能选中当前章
-          const currentUrlChapterId = searchParams.get('chapterId');
-          if (targetChapterId && targetChapterId !== currentUrlChapterId) {
-            setSearchParams(prev => {
-              const newParams = new URLSearchParams(prev);
-              newParams.set('chapterId', targetChapterId!);
-              return newParams;
-            });
-          }
-
+          // 统一通过 setSelectedChapter 更新，确保 URL 和状态同步
           setSelectedChapter(targetChapterId);
         }
       } catch (err) {

@@ -834,7 +834,10 @@ export default function AIAssistant({
         content,
         [...messages, userMsg],
         (event) => {
+          console.log('[AIAssistant] 收到事件:', event.type, event.data);
+          
           if (event.type === 'continue_chapter_result' && event.data) {
+            console.log('[AIAssistant] 处理 continue_chapter_result:', event.data);
             const result = event.data as ContinueChapterResult;
             setMessages(prev => {
               const next = [...prev];
@@ -876,9 +879,26 @@ export default function AIAssistant({
             });
           } else if (event.type === 'error') {
             const msg = typeof event.data === 'string' ? event.data : '对话出错';
-            // 只记录到控制台，不显示给用户
             console.error('[AIAssistant] 对话错误:', msg);
+            // 显示错误给用户
+            setMessages(prev => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              const errorMsg: MessageWithTime = {
+                role: 'assistant',
+                content: `错误: ${msg}`,
+                timestamp: new Date(),
+              };
+              if (last?.role === 'assistant') {
+                next[next.length - 1] = errorMsg;
+              } else {
+                next.push(errorMsg);
+              }
+              return next;
+            });
+            setIsSending(false);
           } else if (event.type === 'end') {
+            console.log('[AIAssistant] 收到 end 事件');
             setIsSending(false);
           }
         },

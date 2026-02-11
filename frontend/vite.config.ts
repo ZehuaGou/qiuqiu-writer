@@ -60,14 +60,17 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8001',
         changeOrigin: true,
+        ws: true, // 支持 WebSocket 代理
       },
       '/ai': {
         target: 'http://localhost:8001',
         changeOrigin: true,
+        ws: true, // 支持 WebSocket 代理
       },
       '/v1': {
         target: 'http://localhost:8001',
         changeOrigin: true,
+        ws: true, // 支持 WebSocket 代理
       },
     },
   },

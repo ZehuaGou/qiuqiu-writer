@@ -197,6 +197,12 @@ export async function streamChatMessage(
         const parsed = JSON.parse(dataStr);
         const type = parsed.type as ChatStreamEvent['type'];
         const event: ChatStreamEvent = { type, data: parsed.data ?? parsed.content };
+        
+        // 调试日志：记录 continue_chapter_result 事件
+        if (type === 'continue_chapter_result') {
+          console.log('[chatApi] 收到 continue_chapter_result:', event.data);
+        }
+        
         onEvent?.(event);
       } catch (e) {
         console.warn('解析聊天 SSE 消息失败:', e, dataStr);

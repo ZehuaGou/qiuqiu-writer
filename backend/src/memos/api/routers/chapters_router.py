@@ -733,11 +733,9 @@ async def get_chapter_document(
     current_user_id: str = Depends(get_current_user_id)
 ) -> Dict[str, Any]:
     """
-    获取章节ShareDB文档内容
+    获取章节文档内容（直接从 ShareDB/MongoDB 获取）
     """
     chapter_service = ChapterService(db)
-
-    # 检查章节访问权限
     chapter = await chapter_service.get_chapter_by_id(chapter_id)
     if not chapter:
         raise HTTPException(
@@ -745,45 +743,32 @@ async def get_chapter_document(
             detail="章节不存在"
         )
 
+    # 检查访问权限
     if not await chapter_service.can_access_work(
         user_id=current_user_id,
         work_id=chapter.work_id
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="没有访问该章节的权限"
+            detail="无权访问此作品的章节"
         )
 
-    # 获取ShareDB文档
-    # 优先使用新格式 work_{work_id}_chapter_{chapter_id}，兼容旧格式 chapter_{chapter_id}
+    await sharedb_service.initialize()
+    
+    # 优先使用新格式 ID
     document_id_new = f"work_{chapter.work_id}_chapter_{chapter_id}"
-    
     document = await sharedb_service.get_document(document_id_new)
-
-    # 关键修复：只返回文档的 content 字段，而不是整个 document 对象
-    # 这样前端就不会显示 JSON 信息，只显示内容
-    import json
-    document_content = ""
-    document_exists = False
     
-    if document:
-        document_exists = True
-        document_content = document.get("content", "")
-        if isinstance(document_content, dict):
-            # 如果 content 是字典，尝试提取文本内容
-            document_content = document_content.get("content", "") or json.dumps(document_content, ensure_ascii=False)
-        elif not isinstance(document_content, str):
-            document_content = str(document_content) if document_content else ""
-    else:
-        # 如果ShareDB文档不存在，返回特殊标记，让前端知道需要使用本地缓存
-        logger.warning(f"ShareDB文档不存在（新格式和旧格式都不存在）: {document_id_new} / {document_id_old}，返回空内容标记")
-        document_content = ""  # 空字符串表示 MongoDB 没有数据
-    
+    # 如果没找到，尝试旧格式 ID
+    if not document:
+        document_id_old = f"chapter_{chapter_id}"
+        document = await sharedb_service.get_document(document_id_old)
+        
     return {
-        "document_id": document_id_new,  # 返回新格式的文档ID
-        "content": document_content,  # 只返回内容字符串，而不是整个 document 对象
-        "document_exists": document_exists,  # 关键修复：标记文档是否存在于 MongoDB
-        "chapter_info": chapter.to_dict()
+        "document_id": document.get("id") if document else document_id_new,
+        "content": document.get("content", "") if document else "",
+        "chapter_info": chapter.to_dict(),
+        "document_exists": document is not None
     }
 
 

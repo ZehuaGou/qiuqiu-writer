@@ -524,6 +524,8 @@ async def chat(chat_req: ChatRequest):
             if not work_id:
                 yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行续写章节'})}\n\n"
                 return
+            # 解析命令中的章节 ID，例如 /continue-chapter @chapter:2384
+            # 第一个提取到的章节 ID 即为 previous_chapter_id
             chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
             previous_chapter_id = chapter_ids[0] if chapter_ids else None
             user_description = _parse_continue_chapter_user_description(chat_req.query)
@@ -549,29 +551,49 @@ async def chat(chat_req: ChatRequest):
 
                     analysis_settings = AnalysisSettings()
                     book_analysis_service = BookAnalysisService(stream_db)
-                    result = await book_analysis_service.generate_continue_chapter_outlines(
-                        work_id=work_id,
-                        ai_service=ai_service,
-                        previous_chapter_id=previous_chapter_id,
-                        user_description=user_description,
-                        settings={
-                            "model": analysis_settings.model,
-                            "temperature": analysis_settings.temperature,
-                            "max_tokens": analysis_settings.max_tokens,
-                        },
-                    )
-                    await stream_db.commit()
+                    logger.info(f"开始生成续写章节推荐: work_id={work_id}, previous_chapter_id={previous_chapter_id}, user_description={user_description}")
+                    
+                    try:
+                        result = await book_analysis_service.generate_continue_chapter_outlines(
+                            work_id=work_id,
+                            ai_service=ai_service,
+                            previous_chapter_id=previous_chapter_id,
+                            user_description=user_description,
+                            settings={
+                                "model": analysis_settings.model,
+                                "temperature": analysis_settings.temperature,
+                                "max_tokens": analysis_settings.max_tokens,
+                            },
+                        )
+                        await stream_db.commit()
 
-                    payload = {
-                        "next_chapter_number": result.get("next_chapter_number"),
-                        "recommendations": result.get("recommendations", []),
-                    }
-                    yield f"data: {json.dumps({'type': 'continue_chapter_result', 'data': payload}, ensure_ascii=False)}\n\n"
-                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                        payload = {
+                            "next_chapter_number": result.get("next_chapter_number"),
+                            "recommendations": result.get("recommendations", []),
+                        }
+                        logger.info(f"续写章节结果: next_chapter_number={payload.get('next_chapter_number')}, recommendations_count={len(payload.get('recommendations', []))}")
+                        if not payload.get("next_chapter_number"):
+                            logger.warning(f"续写章节结果中 next_chapter_number 为空: result={result}")
+                        if not payload.get("recommendations"):
+                            logger.warning(f"续写章节结果中 recommendations 为空: result={result}")
+                        
+                        result_json = json.dumps({'type': 'continue_chapter_result', 'data': payload}, ensure_ascii=False)
+                        logger.info(f"发送 continue_chapter_result: {result_json[:200]}...")
+                        yield f"data: {result_json}\n\n"
+                        yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                    except Exception as inner_e:
+                        await stream_db.rollback()
+                        error_msg = f"生成续写章节推荐失败: {str(inner_e)}"
+                        logger.error(f"Error in generate_continue_chapter_outlines: {inner_e}", exc_info=True)
+                        yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+                        yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                        return
                 except Exception as e:
                     await stream_db.rollback()
+                    error_msg = f"续写章节流处理失败: {str(e)}"
                     logger.error(f"Error in continue-chapter stream: {e}", exc_info=True)
-                    yield f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
         async def run_generate_outlines_stream():
             """调用章节大纲生成服务并流式返回结果文本。流内使用独立 session，避免请求 session 在流被取消时非法关闭。"""

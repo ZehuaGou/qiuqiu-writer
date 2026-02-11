@@ -168,7 +168,9 @@ class ChaptersApiClient extends BaseApiClient {
     cacheKey: string,
     skipCache?: boolean
   ): Promise<ChapterListResponse> {
-    const { skipCache: _, ...queryParams } = params;
+    // 从 params 中移除 skipCache，避免发送到后端
+    const queryParams: Record<string, unknown> = { ...params };
+    delete queryParams.skipCache;
     const response = await this.get<ChapterListResponse>('/api/v1/chapters/', queryParams);
 
     // 非跳过缓存时才写入（回收站列表不缓存，避免删除后仍看到旧空列表）

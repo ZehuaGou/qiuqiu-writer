@@ -7,6 +7,8 @@ import { localCacheManager } from './localCacheManager';
 import { chaptersApi, type ChapterDocumentResponse } from './chaptersApi';
 import type { ShareDBDocument, SyncResponse } from '../types/document';
 import { BaseApiClient } from './baseApiClient';
+import { versionConflictManager } from './versionConflictManager';
+import type { VersionConflictInfo } from '../components/editor/VersionConflictModal';
 
 export const sharedbApi = new BaseApiClient();
 interface SyncRequestBody {
@@ -564,6 +566,90 @@ export const documentCache = {
             const previousVersion = documentCache.currentVersion.get(documentId) || 0;
             const previousContent = documentCache.currentContent.get(documentId) || '';
             
+            // 检查是否有版本冲突（服务器版本与本地版本不一致，且内容也不同）
+            const hasConflict = result.version !== localVersion && resultContent !== contentToSave;
+            
+            if (hasConflict && resultContent && resultContent !== contentToSave) {
+              // 检测到冲突，尝试使用冲突管理器解决
+              try {
+                // 先获取服务器上的完整内容（用于显示）
+                const remoteDoc = await documentCache.fetchFromServer(documentId);
+                const remoteContent = remoteDoc?.content || resultContent;
+                
+                const conflictInfo: VersionConflictInfo = {
+                  documentId,
+                  localVersion: localVersion,
+                  remoteVersion: result.version,
+                  localContent: contentToSave,
+                  remoteContent: remoteContent,
+                  localTimestamp: new Date().toISOString(),
+                  remoteTimestamp: remoteDoc?.metadata?.updated_at,
+                };
+                
+                console.log('⚠️ [DocumentCache] 检测到版本冲突，请求用户解决:', conflictInfo);
+                
+                const resolution = await versionConflictManager.resolveConflict(conflictInfo);
+                
+                console.log('✅ [DocumentCache] 用户选择的解决方式:', resolution);
+                
+                // 根据用户选择处理冲突
+                if (resolution === 'keep_local') {
+                  // 保留本地版本：重新同步本地内容，强制覆盖服务器
+                  const forceSyncResult = await sharedbApi.post<SyncResponse>('/v1/sharedb/documents/sync/', {
+                    ...requestBody,
+                    version: result.version, // 使用服务器版本号
+                    force: true, // 强制覆盖标志（如果后端支持）
+                  });
+                  
+                  if (forceSyncResult.success) {
+                    const finalContent = typeof forceSyncResult.content === 'string' ? forceSyncResult.content : contentToSave;
+                    documentCache.currentVersion.set(documentId, forceSyncResult.version);
+                    documentCache.currentContent.set(documentId, finalContent);
+                    
+                    const existingDoc = await localCacheManager.get<ShareDBDocument>(documentId);
+                    if (existingDoc) {
+                      existingDoc.version = forceSyncResult.version;
+                      existingDoc.content = finalContent;
+                      await localCacheManager.set(documentId, existingDoc, forceSyncResult.version);
+                    }
+                    
+                    return {
+                      success: true,
+                      version: forceSyncResult.version,
+                      content: finalContent,
+                      operations: forceSyncResult.operations || [],
+                      work: forceSyncResult.work,
+                      chapter: forceSyncResult.chapter,
+                    };
+                  }
+                } else if (resolution === 'keep_remote') {
+                  // 保留线上版本：使用服务器返回的内容
+                  documentCache.currentVersion.set(documentId, result.version);
+                  documentCache.currentContent.set(documentId, resultContent);
+                  
+                  const existingDoc = await localCacheManager.get<ShareDBDocument>(documentId);
+                  if (existingDoc) {
+                    existingDoc.version = result.version;
+                    existingDoc.content = resultContent;
+                    await localCacheManager.set(documentId, existingDoc, result.version);
+                  }
+                  
+                  return {
+                    success: true,
+                    version: result.version,
+                    content: resultContent,
+                    operations: result.operations || [],
+                    work: result.work,
+                    chapter: result.chapter,
+                  };
+                }
+                // 'merge' 或 'cancel': 继续使用服务器返回的合并结果
+              } catch (conflictError) {
+                console.warn('⚠️ [DocumentCache] 冲突解决失败，使用服务器合并结果:', conflictError);
+                // 如果冲突解决失败，继续使用服务器返回的合并结果
+              }
+            }
+            
             // 更新当前版本和内容
             documentCache.currentVersion.set(documentId, result.version);
             documentCache.currentContent.set(documentId, resultContent);
@@ -627,7 +713,87 @@ export const documentCache = {
               chapter: result.chapter,  // 传递章节信息（如果存在）
             };
           } else {
-            throw new Error(result.error || '同步失败');
+            // 同步失败，检查是否是版本冲突
+            const errorMsg = result.error || '同步失败';
+            const isVersionConflict = errorMsg.includes('版本') || errorMsg.includes('version') || errorMsg.includes('conflict');
+            
+            if (isVersionConflict) {
+              // 尝试获取服务器版本信息
+              try {
+                const remoteDoc = await documentCache.fetchFromServer(documentId);
+                if (remoteDoc) {
+                  const conflictInfo: VersionConflictInfo = {
+                    documentId,
+                    localVersion: localVersion,
+                    remoteVersion: remoteDoc.version || result.version,
+                    localContent: contentToSave,
+                    remoteContent: typeof remoteDoc.content === 'string' ? remoteDoc.content : '',
+                    localTimestamp: new Date().toISOString(),
+                    remoteTimestamp: remoteDoc.metadata?.updated_at,
+                  };
+                  
+                  console.log('⚠️ [DocumentCache] 检测到版本冲突（同步失败），请求用户解决:', conflictInfo);
+                  
+                  const resolution = await versionConflictManager.resolveConflict(conflictInfo);
+                  
+                  // 根据用户选择重新尝试同步
+                  if (resolution === 'keep_local') {
+                    // 保留本地版本：使用更高的版本号重试
+                    const retryResult = await sharedbApi.post<SyncResponse>('/v1/sharedb/documents/sync/', {
+                      ...requestBody,
+                      version: Math.max(localVersion, (remoteDoc.version || 0) + 1),
+                    });
+                    
+                    if (retryResult.success) {
+                      const finalContent = typeof retryResult.content === 'string' ? retryResult.content : contentToSave;
+                      documentCache.currentVersion.set(documentId, retryResult.version);
+                      documentCache.currentContent.set(documentId, finalContent);
+                      
+                      const existingDoc = await localCacheManager.get<ShareDBDocument>(documentId);
+                      if (existingDoc) {
+                        existingDoc.version = retryResult.version;
+                        existingDoc.content = finalContent;
+                        await localCacheManager.set(documentId, existingDoc, retryResult.version);
+                      }
+                      
+                      return {
+                        success: true,
+                        version: retryResult.version,
+                        content: finalContent,
+                        operations: retryResult.operations || [],
+                        work: retryResult.work,
+                        chapter: retryResult.chapter,
+                      };
+                    }
+                  } else if (resolution === 'keep_remote') {
+                    // 保留线上版本：更新本地缓存为服务器版本
+                    documentCache.currentVersion.set(documentId, remoteDoc.version || 1);
+                    documentCache.currentContent.set(documentId, typeof remoteDoc.content === 'string' ? remoteDoc.content : '');
+                    
+                    const existingDoc = await localCacheManager.get<ShareDBDocument>(documentId);
+                    if (existingDoc) {
+                      existingDoc.version = remoteDoc.version || 1;
+                      existingDoc.content = typeof remoteDoc.content === 'string' ? remoteDoc.content : '';
+                      await localCacheManager.set(documentId, existingDoc, remoteDoc.version || 1);
+                    }
+                    
+                    return {
+                      success: true,
+                      version: remoteDoc.version || 1,
+                      content: typeof remoteDoc.content === 'string' ? remoteDoc.content : '',
+                      operations: [],
+                      work: undefined,
+                      chapter: undefined,
+                    };
+                  }
+                  // 'merge' 或 'cancel': 抛出错误，让调用者处理
+                }
+              } catch (conflictError) {
+                console.warn('⚠️ [DocumentCache] 冲突解决失败:', conflictError);
+              }
+            }
+            
+            throw new Error(errorMsg);
           }
       } catch (syncError) {
         console.warn('⚠️ [DocumentCache] 同步到服务器失败，但已保存到本地缓存:', syncError);

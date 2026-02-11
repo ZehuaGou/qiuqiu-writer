@@ -93,8 +93,10 @@ class YjsRoom:
     def doc(self):
         """Lazily create pycrdt.Doc."""
         if self._doc is None:
-            from pycrdt import Doc
+            from pycrdt import Doc, XmlFragment, Text
             self._doc = Doc()
+            self._XmlFragment = XmlFragment
+            self._Text = Text
         return self._doc
 
     async def load_from_db(self):
@@ -152,6 +154,125 @@ class YjsRoom:
                         yjs_state=state,
                     ))
                 await session.commit()
+
+            # Also save to MongoDB documents collection for other services to use
+            try:
+                from memos.api.services.sharedb_service import sharedb_service
+                from memos.api.models.chapter import Chapter
+                
+                # Extract work_id from room_name (work_{work_id})
+                work_id = None
+                if self.room_name.startswith("work_"):
+                    work_id = self.room_name.replace("work_", "")
+                
+                if work_id:
+                    # Initialize sharedb_service to get MongoDB connection
+                    await sharedb_service.initialize()
+                    if sharedb_service.use_mongodb and sharedb_service.mongodb_db is not None:
+                        collection = sharedb_service.mongodb_db.documents
+                        
+                        # Find all chapters for this work to sync their content
+                        async with AsyncSessionLocal() as session:
+                            from memos.api.models.work import Work
+                            from memos.api.models.chapter import Chapter
+                            from sqlalchemy import select
+
+                            # Improved work_id handling
+                            db_work_id = work_id
+                            # If it's a short ID like "54", try to find the long version in DB
+                            if work_id and len(work_id) < 10:
+                                work_result = await session.execute(
+                                    select(Work).where(Work.id.like(f"%{work_id}"))
+                                )
+                                work_obj = work_result.scalar_one_or_none()
+                                if work_obj:
+                                    db_work_id = work_obj.id
+                                    logger.info(f"[YjsRoom:{self.room_name}] Mapped short work_id {work_id} to {db_work_id}")
+
+                            chapter_result = await session.execute(
+                                select(Chapter).where(Chapter.work_id == db_work_id)
+                            )
+                            chapters = chapter_result.scalars().all()
+                            
+                            logger.info(f"[YjsRoom:{self.room_name}] Found {len(chapters)} chapters for work {db_work_id} to sync")
+                            
+                            # Ensure doc is initialized to have access to _XmlFragment and _Text
+                            _ = self.doc
+                            ydoc_keys = list(self.doc.keys())
+
+                            for chapter in chapters:
+                                field = f"chapter_{chapter.id}"
+                                content = None
+                                content_type = None
+
+                                # Try to get the object with the expected types
+                                async with self._lock:
+                                    try:
+                                        if field in ydoc_keys:
+                                            # In pycrdt 0.12.x, the type argument is required
+                                            # The frontend uses XmlFragment for chapters (see useYjsEditor.ts)
+                                            try:
+                                                raw_obj = self.doc.get(field, type=self._XmlFragment)
+                                                content_type = "XmlFragment"
+                                            except:
+                                                # Fallback to Text if XmlFragment fails
+                                                raw_obj = self.doc.get(field, type=self._Text)
+                                                content_type = "Text"
+                                            
+                                            if raw_obj:
+                                                content = str(raw_obj)
+                                                
+                                                # If content is still empty but we have an object, try to see if it has children
+                                                if (content == "" or content == "<xml_fragment></xml_fragment>") and content_type == "XmlFragment":
+                                                    try:
+                                                        if hasattr(raw_obj, "__len__") and len(raw_obj) > 0:
+                                                            # If it has children, str() might not be enough if it's nested
+                                                            # For now, we'll keep the str() result, but log it
+                                                            logger.debug(f"[YjsSync] Chapter {chapter.id} fragment has {len(raw_obj)} children but str() is empty/minimal")
+                                                    except:
+                                                        pass
+                                    except Exception as e:
+                                        logger.error(f"Error exploring field {field}: {e}")
+                                
+                                if content is not None:
+                                    # Update MongoDB
+                                    doc_id = f"work_{db_work_id}_chapter_{chapter.id}"
+                                    now = datetime.utcnow().isoformat()
+                                    result = await collection.update_one(
+                                        {"id": doc_id},
+                                        {
+                                            "$set": {
+                                                "content": content,
+                                                "updated_at": now,
+                                                "mtime": int(datetime.utcnow().timestamp() * 1000)
+                                            },
+                                            "$setOnInsert": {
+                                                "id": doc_id,
+                                                "title": chapter.title,
+                                                "metadata": {},
+                                                "operations": [],
+                                                "version": 1,
+                                                "created_at": now,
+                                                "type": "json0",
+                                                "v": 0,
+                                                "data": {}
+                                            }
+                                        },
+                                        upsert=True
+                                    )
+                                    
+                                    if result.modified_count > 0 or result.upserted_id:
+                                        logger.info(f"✅ [YjsSync] Chapter {chapter.id} synced to MongoDB ({content_type}), len={len(content)}, matched={result.matched_count}, upserted={result.upserted_id is not None}")
+                                    else:
+                                        # Already has the same content, still log at debug level
+                                        logger.debug(f"ℹ️ [YjsSync] Chapter {chapter.id} already up-to-date in MongoDB")
+                                else:
+                                    # Log if field is missing or empty in ydoc
+                                    logger.debug(f"ℹ️ [YjsSync] Chapter {chapter.id} has no content in Yjs doc (field: {field})")
+                        
+                        # logger.info(f"[YjsRoom:{self.room_name}] Completed MongoDB sync")
+            except Exception as mongo_err:
+                logger.error(f"[YjsRoom:{self.room_name}] Failed to sync to MongoDB: {mongo_err}")
 
             self._dirty = False
             logger.info(

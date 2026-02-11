@@ -6,7 +6,7 @@
 import json
 import re
 from typing import Dict, Any, List, Optional, AsyncGenerator
-from sqlalchemy import and_
+from sqlalchemy import and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -747,6 +747,27 @@ class BookAnalysisService:
         template_obj = await self.get_default_prompt_template("continue_chapter")
         prompt_content = template_obj.prompt_content if template_obj else self._get_builtin_continue_chapter_prompt()
 
+        # 如果 previous_chapter_id 为 None，尝试获取作品的最后一章
+        if previous_chapter_id is None:
+            chapter_service = ChapterService(self.db)
+            max_chapter_number = await chapter_service.get_max_chapter_number(work_id)
+            if max_chapter_number > 0:
+                # 查询章节号为 max_chapter_number 的章节
+                from memos.api.models.chapter import Chapter
+                stmt = select(Chapter).where(
+                    Chapter.work_id == work_id,
+                    Chapter.chapter_number == max_chapter_number
+                ).order_by(desc(Chapter.id)).limit(1)
+                result = await self.db.execute(stmt)
+                last_chapter = result.scalar_one_or_none()
+                if last_chapter:
+                    previous_chapter_id = last_chapter.id
+                    logger.info(f"previous_chapter_id 为 None，使用作品最后一章: chapter_id={previous_chapter_id}, chapter_number={last_chapter.chapter_number}")
+                else:
+                    logger.warning(f"无法找到章节号为 {max_chapter_number} 的章节")
+            else:
+                logger.warning(f"作品 {work_id} 中没有章节，无法续写")
+
         user_prompt, ctx = await render_prompt(
             prompt_content,
             self.db,
@@ -816,11 +837,36 @@ class BookAnalysisService:
                 "detailed_outline": {},
             })
 
-        return {
-            "next_chapter_number": ctx.get("next_chapter_number"),
+        next_chapter_number = ctx.get("next_chapter_number")
+        if not next_chapter_number:
+            # 如果 ctx 中没有 next_chapter_number，尝试从 previous_chapter_id 计算
+            if previous_chapter_id:
+                from memos.api.models.chapter import Chapter
+                stmt = select(Chapter).where(Chapter.id == previous_chapter_id)
+                result = await self.db.execute(stmt)
+                prev_chapter = result.scalar_one_or_none()
+                if prev_chapter:
+                    next_chapter_number = (prev_chapter.chapter_number or 0) + 1
+                    logger.info(f"从 previous_chapter_id={previous_chapter_id} 计算得到 next_chapter_number={next_chapter_number}")
+                else:
+                    logger.warning(f"previous_chapter_id={previous_chapter_id} 对应的章节不存在")
+            else:
+                # 如果没有 previous_chapter_id，使用作品的最大章节号+1
+                chapter_service = ChapterService(self.db)
+                max_chapter_number = await chapter_service.get_max_chapter_number(work_id)
+                next_chapter_number = max_chapter_number + 1
+                logger.info(f"从作品最大章节号计算得到 next_chapter_number={next_chapter_number}")
+        
+        if not next_chapter_number:
+            raise ValueError("无法确定下一章的章节号，请确保作品中有章节")
+        
+        result_dict = {
+            "next_chapter_number": next_chapter_number,
             "recommendations": result_list,
             "raw_response": full_response,
         }
+        logger.info(f"generate_continue_chapter_outlines 完成: next_chapter_number={result_dict.get('next_chapter_number')}, recommendations_count={len(result_list)}")
+        return result_dict
 
     async def incremental_insert_to_work(
         self,
