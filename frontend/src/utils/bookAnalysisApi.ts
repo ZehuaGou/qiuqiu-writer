@@ -48,7 +48,7 @@ export interface AnalysisProgress {
 export async function getAnalysisPromptFromBackend(templateType: string = 'chapter_analysis'): Promise<string> {
   try {
     const result = await bookAnalysisClient.get<{ prompt_content?: string }>(
-      `/api/v1/prompt-templates/type/${templateType}/default/`
+      `/api/v1/prompt-templates/type/${templateType}/default`
     );
     return result.prompt_content || '';
   } catch (error) {
@@ -127,7 +127,7 @@ export async function analyzeChapterContent(
   work_id?: number
 ): Promise<string> {
   try {
-    const response = await bookAnalysisClient.requestRaw('/ai/analyze-chapter/', {
+    const response = await bookAnalysisClient.requestRaw('/ai/analyze-chapter', {
       method: 'POST',
       body: JSON.stringify({
         content,
@@ -657,7 +657,7 @@ export async function analyzeChapterByFile(
   try {
     
 
-    const response = await bookAnalysisClient.requestRaw('/ai/analyze-chapter-by-file/', {
+    const response = await bookAnalysisClient.requestRaw('/ai/analyze-chapter-by-file', {
       method: 'POST',
       body: JSON.stringify({
         file_name: fileName,
@@ -882,7 +882,7 @@ export async function createWorkFromFile(
       created_chapters: Array<{ chapter_id: number; chapter_number: number; volume_number: number; title: string }>;
       skipped_chapters: Array<{ chapter_id: number; chapter_number: number; volume_number: number; title: string }>;
     }>(
-      '/ai/create-work-from-file/',
+      '/ai/create-work-from-file',
       {
         file_name: fileName,
         chapters: chapters.map(ch => ({
@@ -965,7 +965,7 @@ export async function testAPIConnection(): Promise<{
     
     
     try {
-      const result = await bookAnalysisClient.get<{ data: { status: string; models?: string[] } }>('/ai/health/');
+      const result = await bookAnalysisClient.get<{ data: { status: string; models?: string[] } }>('/ai/health');
       const data = result.data;
       return {
         success: data?.status === 'healthy',

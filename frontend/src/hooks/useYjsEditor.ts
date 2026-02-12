@@ -177,6 +177,14 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       }
     };
 
+    // 如果 Provider 已经同步过（连接复用场景），可以尝试立即就绪
+    // 但为了保险，还是优先等 IndexedDB
+    if (wsProvider.synced) {
+      console.log('🚀 [useYjsEditor] Provider 已同步，尝试快速就绪');
+      // 仍然等待一小会儿，确保 IndexedDB 有机会加载（如果它还没加载完）
+      // 或者直接检查 idbProvider 的状态（如果 yjsConnectionManager 暴露了它）
+    }
+
     // 重启后先等 IndexedDB 把 ydoc 灌满，再显示编辑器，避免看到空内容
     workConn.idbProvider.whenSynced.then(() => {
       markReady();
@@ -184,15 +192,19 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       if (!readyMarked) markReady();
     });
 
-    wsProvider.on('sync', (isSynced: boolean) => {
+    // 监听同步事件
+    const syncHandler = (isSynced: boolean) => {
       if (isSynced) {
         markReady();
         onSyncSuccess?.(Date.now());
       }
-    });
+    };
+    wsProvider.on('sync', syncHandler);
 
+    // 5秒兜底，防止同步卡住导致编辑器一直不显示
     const timeout = setTimeout(() => {
       if (!readyMarked) {
+        console.warn('⚠️ [useYjsEditor] 同步超时，强制就绪');
         markReady();
       }
     }, 5000);
@@ -202,6 +214,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       setCollabState(null);
       setConnectionStatus('disconnected');
       wsProvider.off('status', statusHandler);
+      wsProvider.off('sync', syncHandler);
       yjsConnectionManager.releaseConnection(workId);
       wsProviderRef.current = null;
       isInitialized.current = false;

@@ -78,7 +78,7 @@ app = FastAPI(
     title="MemOS REST APIs",
     description="A REST API for managing and searching memories using MemOS.",
     version="1.0.0",
-    redirect_slashes=False,
+    redirect_slashes=True,
 )
 
 app.add_middleware(RequestContextMiddleware)

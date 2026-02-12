@@ -820,6 +820,7 @@ async def get_chapter_document(
     return {
         "document_id": document.get("id") if document else document_id_new,
         "content": document.get("content", "") if document else "",
+        "version": document.get("version", 1) if document else 1,
         "chapter_info": chapter.to_dict(),
         "document_exists": document is not None
     }

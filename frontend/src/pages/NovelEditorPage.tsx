@@ -45,6 +45,7 @@ import { syncManager } from '../utils/syncManager';
 import { countCharacters } from '../utils/textUtils';
 import { generateChapterContent } from '../utils/bookAnalysisApi';
 import { chaptersApi } from '../utils/chaptersApi';
+import { yjsApi } from '../utils/yjsApi';
 import { createYjsSnapshotFromEditor, restoreYjsSnapshotToEditor, getTextFromProsemirrorJSON } from '../utils/yjsSnapshot';
 
 // 样式
@@ -115,6 +116,30 @@ export default function NovelEditorPage() {
     workId,
     updateTrigger,
   });
+
+  // ===== 章节切换处理 =====
+  const handleChapterSelect = async (chapterId: string | null) => {
+    // 如果已经在该章节，不需要切换
+    if (selectedChapter === chapterId) return;
+
+    // 切换章节前，强制同步当前作品的 Yjs 状态到数据库
+    // 这样新章节加载时，从数据库拉取的内容就是最新的
+    if (workId) {
+      console.log(`🔄 [NovelEditorPage] 切换章节前强制同步 Yjs: work_${workId}`);
+      try {
+        await yjsApi.forceSync(workId);
+      } catch (err) {
+        console.warn('⚠️ [NovelEditorPage] 强制同步失败:', err);
+      }
+    }
+
+    setSelectedChapter(chapterId);
+    
+    // 移动端切换后自动关闭菜单
+    if (isMobile) {
+      setMobileMenuOpen(false);
+    }
+  };
   
   // ===== 章节操作 =====
   const {
@@ -828,7 +853,7 @@ export default function NovelEditorPage() {
               activeNav={activeNav}
               onNavChange={setActiveNav}
               selectedChapter={selectedChapter}
-              onChapterSelect={setSelectedChapter}
+              onChapterSelect={handleChapterSelect}
               onOpenChapterModal={handleOpenChapterModal}
               onOpenVolumeModal={handleOpenVolumeModal}
               onChapterDelete={handleDeleteChapter}
@@ -902,7 +927,7 @@ export default function NovelEditorPage() {
                     setMobileMenuOpen(false);
                   }}
                   selectedChapter={selectedChapter}
-                  onChapterSelect={setSelectedChapter}
+                  onChapterSelect={handleChapterSelect}
                   onOpenChapterModal={handleOpenChapterModal}
                   onOpenVolumeModal={handleOpenVolumeModal}
                   onChapterDelete={handleDeleteChapter}
