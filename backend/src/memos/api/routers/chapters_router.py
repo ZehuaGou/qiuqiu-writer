@@ -32,10 +32,10 @@ async def get_db_session(db: AsyncSession = Depends(get_async_db)) -> AsyncSessi
 from memos.api.services.chapter_service import ChapterService
 from memos.api.services.work_service import WorkService
 from memos.api.services.sharedb_service import ShareDBService
-from memos.api.models.chapter import Chapter, ChapterVersion
+from memos.api.services.yjs_ws_handler import yjs_ws_manager
+from memos.api.models.chapter import Chapter
 from memos.api.schemas.chapter import (
-    ChapterCreate, ChapterUpdate, ChapterResponse, ChapterListResponse,
-    ChapterVersionCreate, ChapterVersionResponse
+    ChapterCreate, ChapterUpdate, ChapterResponse, ChapterListResponse
 )
 import logging
 
@@ -287,7 +287,7 @@ async def get_chapter(
         # 如果ShareDB获取失败，使用数据库中的内容
         pass
 
-    return chapter.to_dict(include_versions=include_versions)
+    return chapter.to_dict(include_content=True)
 
 
 @router.put("/{chapter_id}", response_model=ChapterResponse)
@@ -552,166 +552,7 @@ async def get_yjs_snapshot(
     }
 
 
-# 版本管理
-@router.get("/{chapter_id}/versions", response_model=Dict[str, Any])
-async def get_chapter_versions(
-    chapter_id: int,
-    page: int = Query(1, ge=1, description="页码"),
-    size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: AsyncSession = Depends(get_db_session),
-    current_user_id: str = Depends(get_current_user_id)
-) -> Dict[str, Any]:
-    """
-    获取章节版本历史
-    """
-    chapter_service = ChapterService(db)
-
-    # 检查章节访问权限
-    chapter = await chapter_service.get_chapter_by_id(chapter_id)
-    if not chapter:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="章节不存在"
-        )
-
-    if not await chapter_service.can_access_work(
-        user_id=current_user_id,
-        work_id=chapter.work_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="没有访问该章节的权限"
-        )
-
-    versions, total = await chapter_service.get_chapter_versions(
-        chapter_id=chapter_id,
-        page=page,
-        size=size
-    )
-
-    return {
-        "versions": [version.to_dict() for version in versions],
-        "total": total,
-        "page": page,
-        "size": size
-    }
-
-
-@router.get("/{chapter_id}/versions/{version_id}", response_model=Dict[str, Any])
-async def get_chapter_version(
-    chapter_id: int,
-    version_id: int,
-    db: AsyncSession = Depends(get_db_session),
-    current_user_id: str = Depends(get_current_user_id)
-) -> Dict[str, Any]:
-    """
-    获取单个章节版本详情
-    """
-    chapter_service = ChapterService(db)
-
-    # 检查章节访问权限
-    chapter = await chapter_service.get_chapter_by_id(chapter_id)
-    if not chapter:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="章节不存在"
-        )
-
-    if not await chapter_service.can_access_work(
-        user_id=current_user_id,
-        work_id=chapter.work_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="没有访问该章节的权限"
-        )
-
-    version = await chapter_service.get_chapter_version(chapter_id, version_id)
-    if not version:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="版本不存在"
-        )
-
-    return version.to_dict()
-
-
-@router.post("/{chapter_id}/versions", response_model=ChapterVersionResponse)
-async def create_chapter_version(
-    chapter_id: int,
-    version_data: ChapterVersionCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db_session),
-    current_user_id: str = Depends(get_current_user_id)
-) -> Dict[str, Any]:
-    """
-    创建章节版本快照
-    """
-    chapter_service = ChapterService(db)
-
-    # 检查章节访问权限
-    chapter = await chapter_service.get_chapter_by_id(chapter_id)
-    if not chapter:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="章节不存在"
-        )
-
-    if not await chapter_service.can_access_work(
-        user_id=current_user_id,
-        work_id=chapter.work_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="没有访问该章节的权限"
-        )
-
-    # 获取当前内容（如果 frontend 提供了 content 则优先使用，否则从 ShareDB 获取）
-    current_content = version_data.content
-    current_title = chapter.title
-
-    if not current_content:
-        # 只有在 frontend 没传内容时，才尝试从 ShareDB 获取最新内容作为快照
-        try:
-            document_id_new = f"work_{chapter.work_id}_chapter_{chapter_id}"
-            document_id_old = f"chapter_{chapter_id}"
-            document = await sharedb_service.get_document(document_id_new)
-            if not document:
-                document = await sharedb_service.get_document(document_id_old)
-            
-            if document:
-                current_content = document.get("content", "")
-                current_title = document.get("title", chapter.title)
-            else:
-                current_content = chapter.content or ""
-        except Exception as e:
-            logger.warning(f"获取 ShareDB 内容失败，使用数据库备份: {e}")
-            current_content = chapter.content or ""
-
-    # 创建版本
-    version = await chapter_service.create_chapter_version(
-        chapter_id=chapter_id,
-        title=current_title,
-        content=current_content,
-        change_description=version_data.change_description,
-        created_by=current_user_id
-    )
-
-    # 记录审计日志
-    await chapter_service.create_audit_log(
-        user_id=current_user_id,
-        action="create_chapter_version",
-        target_type="chapter_version",
-        target_id=version.id,
-        details={
-            "chapter_id": chapter_id,
-            "version_number": version.version_number
-        },
-        ip_address=get_client_ip(request),
-        user_agent=get_user_agent(request)
-    )
-
-    return version.to_dict()
+# 移除了冗余的手动保存版本接口，统一使用 yjs-snapshots 逻辑
 
 
 # ShareDB WebSocket连接用于实时协作

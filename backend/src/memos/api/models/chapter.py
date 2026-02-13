@@ -42,7 +42,6 @@ class Chapter(Base):
     # 关系
     work = relationship("Work", back_populates="chapters")
     volume = relationship("Volume", back_populates="chapters")
-    versions = relationship("ChapterVersion", back_populates="chapter", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Chapter(id={self.id}, work_id={self.work_id}, title='{self.title}', number={self.chapter_number})>"
@@ -74,7 +73,7 @@ class Chapter(Base):
             return ""
         return self.summary[:100] + "..." if len(self.summary) > 100 else self.summary
 
-    def to_dict(self, include_content: bool = False, include_versions: bool = False) -> Dict[str, Any]:
+    def to_dict(self, include_content: bool = False) -> Dict[str, Any]:
         """转换为字典"""
         data = {
             "id": self.id,
@@ -98,60 +97,13 @@ class Chapter(Base):
             "content_preview": self.content_preview,
         }
 
-        if include_versions:
-            data["versions"] = [
-                {
-                    "id": version.id,
-                    "version_number": version.version_number,
-                    "title": version.title,
-                    "word_count": version.word_count,
-                    "change_description": version.change_description,
-                    "created_by": version.created_by,
-                    "created_at": version.created_at.isoformat() if version.created_at else None,
-                }
-                for version in self.versions
-            ]
+        if include_content and hasattr(self, 'content'):
+            data["content"] = self.content
 
         return data
 
 
-class ChapterVersion(Base):
-    """章节版本表"""
-
-    __tablename__ = "chapter_versions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
-    version_number = Column(Integer, nullable=False)
-    title = Column(String(200), nullable=False)
-    content = Column(Text)
-    content_hash = Column(String(32), index=True)
-    word_count = Column(Integer, default=0)
-    change_description = Column(Text)
-    created_by = Column(String(40), ForeignKey("users.id"), index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-
-    # 关系
-    chapter = relationship("Chapter", back_populates="versions")
-    created_by_user = relationship("User", back_populates="chapter_versions")
-
-    def __repr__(self):
-        return f"<ChapterVersion(id={self.id}, chapter_id={self.chapter_id}, version={self.version_number})>"
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
-        return {
-            "id": self.id,
-            "chapter_id": self.chapter_id,
-            "version_number": self.version_number,
-            "title": self.title,
-            "content": self.content,
-            "content_hash": self.content_hash,
-            "word_count": self.word_count,
-            "change_description": self.change_description,
-            "created_by": self.created_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
+# 移除了 ChapterVersion 类
 
 
 
@@ -162,11 +114,6 @@ Index("idx_chapters_volume", Chapter.volume_number)
 Index("idx_chapters_status", Chapter.status)
 Index("idx_chapters_number", Chapter.chapter_number)
 Index("idx_chapters_content_hash", Chapter.content_hash)
-
-Index("idx_chapter_versions_chapter", ChapterVersion.chapter_id)
-Index("idx_chapter_versions_version", ChapterVersion.version_number)
-Index("idx_chapter_versions_created_by", ChapterVersion.created_by)
-Index("idx_chapter_versions_chapter_version", ChapterVersion.chapter_id, ChapterVersion.version_number)
 
 
 class ChapterYjsSnapshot(Base):

@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 # y-protocols message types
 MSG_SYNC = 0
 MSG_AWARENESS = 1
+MSG_SAVE = 2  # Added for force sync via WebSocket
 
 # y-protocols sync sub-types
 MSG_SYNC_STEP1 = 0
@@ -342,6 +343,10 @@ class YjsRoom:
             elif msg_type == MSG_AWARENESS:
                 # Relay awareness messages to all other clients
                 await self._broadcast(data, exclude=ws)
+            elif msg_type == MSG_SAVE:
+                # Trigger force save to DB
+                logger.info(f"[YjsRoom:{self.room_name}] Received MSG_SAVE via WebSocket")
+                await self.save_to_db()
             else:
                 logger.warning(
                     f"[YjsRoom:{self.room_name}] Unknown message type: {msg_type}"

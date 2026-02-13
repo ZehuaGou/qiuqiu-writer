@@ -64,16 +64,6 @@ export interface ChapterListResponse {
   pages: number;
 }
 
-export interface ChapterVersion {
-  id: number;
-  chapter_id: number;
-  version_number: number;
-  title: string;
-  content: string;
-  change_description?: string;
-  created_at: string;
-}
-
 export interface ChapterDocumentResponse {
   document_id: string;
   content: string;
@@ -290,59 +280,12 @@ class ChaptersApiClient extends BaseApiClient {
     await this.delete(`/api/v1/chapters/${chapterId}`);
   }
 
-  /**
-   * 恢复已软删除的章节
-   */
+  /** 恢复已软删除的章节 */
   async restoreChapter(chapterId: number): Promise<Chapter> {
     return this.post<Chapter>(`/api/v1/chapters/${chapterId}/restore`, {});
   }
 
-  /**
-   * 创建章节版本（保存为历史记录）
-   */
-  async createChapterVersion(
-    chapterId: number,
-    versionData: {
-      content: string;
-      change_description?: string;
-    }
-  ): Promise<ChapterVersion> {
-    return this.post<ChapterVersion>(`/api/v1/chapters/${chapterId}/versions`, versionData);
-  }
-
-  /**
-   * 获取章节版本列表
-   */
-  async listChapterVersions(
-    chapterId: number,
-    page?: number,
-    size?: number,
-    skipCache?: boolean
-  ): Promise<{ versions: ChapterVersion[]; total: number; page: number; size: number }> {
-    const cacheKey = `chapter_versions_${chapterId}_${page || 1}_${size || 20}`;
-    
-    // 优先从缓存获取
-    if (!skipCache) {
-      const cached = await localCacheManager.get<{ versions: ChapterVersion[]; total: number; page: number; size: number }>(cacheKey);
-      if (cached) {
-        console.log('✅ [ChaptersApi] 从缓存加载版本列表:', cacheKey);
-        // 后台刷新
-        this.get<{ versions: ChapterVersion[]; total: number; page: number; size: number }>(`/api/v1/chapters/${chapterId}/versions`, { page, size }).then(res => {
-          localCacheManager.set(cacheKey, res, 1, { synced: true });
-        }).catch(() => {});
-        return cached;
-      }
-    }
-
-    const response = await this.get<{ versions: ChapterVersion[]; total: number; page: number; size: number }>(`/api/v1/chapters/${chapterId}/versions`, { page, size });
-    
-    // 写入缓存
-    if (response && response.versions) {
-      await localCacheManager.set(cacheKey, response, 1, { synced: true });
-    }
-    
-    return response;
-  }
+  // 移除了手动版本保存接口，统一使用 Yjs 快照逻辑
 
   /** Yjs 原生快照（Git 式版本）列表 */
   async listYjsSnapshots(
@@ -388,27 +331,7 @@ class ChaptersApiClient extends BaseApiClient {
     });
   }
 
-  /**
-   * 获取单个章节版本详情
-   */
-  async getChapterVersion(
-    chapterId: number,
-    versionId: number
-  ): Promise<ChapterVersion> {
-    const cacheKey = `chapter_version_detail_${chapterId}_${versionId}`;
-    
-    const cached = await localCacheManager.get<ChapterVersion>(cacheKey);
-    if (cached) {
-      console.log('✅ [ChaptersApi] 从缓存加载版本详情:', cacheKey);
-      return cached;
-    }
 
-    const response = await this.get<ChapterVersion>(`/api/v1/chapters/${chapterId}/versions/${versionId}`);
-    if (response) {
-      await localCacheManager.set(cacheKey, response, 1, { synced: true });
-    }
-    return response;
-  }
 
   /** 获取单个 Yjs 快照（含 snapshot base64，用于恢复） */
   async getYjsSnapshot(

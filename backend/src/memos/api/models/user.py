@@ -42,7 +42,6 @@ class User(Base):
         foreign_keys=lambda: [_get_work_collaborator_user_id()],
         cascade="all, delete-orphan"
     )
-    chapter_versions = relationship("ChapterVersion", back_populates="created_by_user", cascade="all, delete-orphan")
     # audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
     document_sync_history = relationship("DocumentSyncHistory", back_populates="user", cascade="all, delete-orphan")
 

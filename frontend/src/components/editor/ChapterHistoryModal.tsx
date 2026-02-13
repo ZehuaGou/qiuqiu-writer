@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { chaptersApi } from '../../utils/chaptersApi';
 import { getContentJSONFromYjsSnapshotBase64, getTextFromProsemirrorJSON } from '../../utils/yjsSnapshot';
 import { diffLines, type DiffLine } from '../../utils/simpleDiff';
@@ -17,8 +17,7 @@ interface ChapterHistoryModalProps {
   chapterTitle?: string;
   onClose: () => void;
   getCurrentContent?: () => string;
-  onCreateVersion?: () => Promise<void>;
-  onRestore?: (id: number, type: 'version' | 'snapshot') => Promise<void>;
+  onRestore?: (id: number, type: 'snapshot') => Promise<void>;
 }
 
 /** 格式：1月7日 19:45 */
@@ -65,7 +64,7 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
 
 interface UnifiedHistoryItem {
   id: number;
-  type: 'version' | 'snapshot';
+  type: 'snapshot';
   created_at: string | null;
   label: string;
   meta: string;
@@ -76,15 +75,13 @@ export default function ChapterHistoryModal({
   chapterId,
   onClose,
   getCurrentContent,
-  onCreateVersion,
   onRestore,
 }: ChapterHistoryModalProps) {
   const [items, setItems] = useState<UnifiedHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [selectedType, setSelectedType] = useState<'version' | 'snapshot' | null>(null);
+  const [selectedType, setSelectedType] = useState<'snapshot' | null>(null);
   const [diffLinesState, setDiffLinesState] = useState<DiffLine[] | null>(null);
   const [versionTextState, setVersionTextState] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -100,21 +97,10 @@ export default function ChapterHistoryModal({
     if (Number.isNaN(id)) return;
     setLoading(true);
     try {
-      console.log('🔍 [ChapterHistoryModal] 开始加载历史记录, chapterId:', id, 'skipCache:', skipCache);
-      const [vRes, sRes] = await Promise.all([
-        chaptersApi.listChapterVersions(id, 1, 50, skipCache),
-        chaptersApi.listYjsSnapshots(id, 1, 50, skipCache)
-      ]);
+      console.log('🔍 [ChapterHistoryModal] 开始加载历史快照, chapterId:', id, 'skipCache:', skipCache);
+      const sRes = await chaptersApi.listYjsSnapshots(id, 1, 50, skipCache);
       
-      console.log('📦 [ChapterHistoryModal] 接口返回:', { vRes, sRes });
-
-      const unifiedVersions: UnifiedHistoryItem[] = (vRes.versions || []).map(v => ({
-        id: v.id,
-        type: 'version',
-        created_at: v.created_at,
-        label: v.change_description || '手动保存版本',
-        meta: `版本 ${v.version_number}`
-      }));
+      console.log('📦 [ChapterHistoryModal] 快照接口返回:', sRes);
 
       const unifiedSnapshots: UnifiedHistoryItem[] = (sRes.snapshots || []).map(s => ({
         id: s.id,
@@ -124,16 +110,13 @@ export default function ChapterHistoryModal({
         meta: 'Yjs 快照'
       }));
 
-      console.log('✅ [ChapterHistoryModal] 统一后的版本:', unifiedVersions);
-      console.log('✅ [ChapterHistoryModal] 统一后的快照:', unifiedSnapshots);
-
-      const combined = [...unifiedVersions, ...unifiedSnapshots].sort((a, b) => {
+      const combined = [...unifiedSnapshots].sort((a, b) => {
         const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return timeB - timeA;
       });
 
-      console.log('📋 [ChapterHistoryModal] 合并后的历史记录:', combined);
+      console.log('📋 [ChapterHistoryModal] 历史记录:', combined);
       setItems(combined);
       
       // 如果当前没有选中项，自动选中第一个（最新的）
@@ -170,7 +153,7 @@ export default function ChapterHistoryModal({
   const currentPosition = selectedIndex >= 0 ? selectedIndex + 1 : 0;
   const totalCount = items.length;
 
-  const loadDiffFor = useCallback(async (id: number, type: 'version' | 'snapshot') => {
+  const loadDiffFor = useCallback(async (id: number, type: 'snapshot') => {
     const chapterIdNum = chapterId ? parseInt(chapterId, 10) : NaN;
     if (!chapterId || Number.isNaN(chapterIdNum)) return;
     const getCurrent = getCurrentContentRef.current;
@@ -189,13 +172,6 @@ export default function ChapterHistoryModal({
         if (loadingIdRef.current !== loadingKey) return;
         const versionJson = getContentJSONFromYjsSnapshotBase64(data.snapshot);
         versionText = getTextFromProsemirrorJSON(versionJson);
-      } else {
-        // 对于 ChapterVersion，我们可能需要一个获取单个版本的接口，或者从列表中找（如果列表含 content）
-        // 目前 listChapterVersions 可能不含 content 以节省带宽
-        // 我们假设后端返回的列表不含 content，所以需要获取详情
-        const res = await chaptersApi.getChapterVersion(chapterIdNum, id);
-        if (loadingIdRef.current !== loadingKey) return;
-        versionText = res.content || '';
       }
       
       setVersionTextState(versionText);
@@ -224,27 +200,12 @@ export default function ChapterHistoryModal({
     }
   }, [selectedId, selectedType, loadDiffFor]);
 
-  const handleCreateVersion = async () => {
-    if (!onCreateVersion) return;
-    setCreating(true);
-    try {
-      await onCreateVersion();
-      await loadHistory(true);
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const handleRestore = async () => {
     if (selectedId == null || selectedType == null || !onRestore) return;
     
     setRestoringId(selectedId);
     try {
-      if (selectedType === 'version') {
-        await onRestore(selectedId, 'version');
-      } else {
-        await onRestore(selectedId, 'snapshot');
-      }
+      await onRestore(selectedId, 'snapshot');
       onClose();
     } catch (err) {
       console.error('❌ [ChapterHistoryModal] 恢复失败:', err);
@@ -367,17 +328,6 @@ export default function ChapterHistoryModal({
           <aside className="chapter-history-sidebar">
             <div className="chapter-history-sidebar-header">
               <h3 className="chapter-history-sidebar-title">历史记录</h3>
-              {onCreateVersion && (
-                <button
-                  type="button"
-                  className="chapter-history-create-btn"
-                  onClick={handleCreateVersion}
-                  disabled={creating}
-                >
-                  <Plus size={14} />
-                  {creating ? '创建中…' : '创建版本'}
-                </button>
-              )}
             </div>
             {loading ? (
               <div className="chapter-history-loading">

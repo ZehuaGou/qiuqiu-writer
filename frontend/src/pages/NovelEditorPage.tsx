@@ -45,7 +45,6 @@ import { syncManager } from '../utils/syncManager';
 import { countCharacters } from '../utils/textUtils';
 import { generateChapterContent } from '../utils/bookAnalysisApi';
 import { chaptersApi } from '../utils/chaptersApi';
-import { yjsApi } from '../utils/yjsApi';
 import { createYjsSnapshotFromEditor, restoreYjsSnapshotToEditor, getTextFromProsemirrorJSON } from '../utils/yjsSnapshot';
 
 // 样式
@@ -125,11 +124,11 @@ export default function NovelEditorPage() {
     // 切换章节前，强制同步当前作品的 Yjs 状态到数据库
     // 这样新章节加载时，从数据库拉取的内容就是最新的
     if (workId) {
-      console.log(`🔄 [NovelEditorPage] 切换章节前强制同步 Yjs: work_${workId}`);
+      console.log(`🔄 [NovelEditorPage] 切换章节前触发 WebSocket 同步: work_${workId}`);
       try {
-        await yjsApi.forceSync(workId);
+        await syncToServer();
       } catch (err) {
-        console.warn('⚠️ [NovelEditorPage] 强制同步失败:', err);
+        console.warn('⚠️ [NovelEditorPage] 切换章节同步失败:', err);
       }
     }
 
@@ -281,15 +280,13 @@ export default function NovelEditorPage() {
 
              console.log('⚠️ [NovelEditorPage] 发现版本冲突且本地落后。执行修复...');
              
-             // A. 保存本地版本为历史记录
+             // A. 保存本地版本为历史记录 (使用 Yjs 快照)
              try {
-               await chaptersApi.createChapterVersion(chapterId, {
-                 content: localContent,
-                 change_description: '打开章节时检测到冲突，自动保存本地版本并拉取线上最新',
-               });
-               console.log('✅ [NovelEditorPage] 本地冲突版本已保存为历史记录');
+               const base64 = createYjsSnapshotFromEditor(editor);
+               await chaptersApi.createYjsSnapshot(chapterId, base64, '冲突自动保存');
+               console.log('✅ [NovelEditorPage] 本地冲突版本已保存为 Yjs 快照');
              } catch (historyErr) {
-               console.error('❌ [NovelEditorPage] 保存历史版本失败:', historyErr);
+               console.error('❌ [NovelEditorPage] 保存 Yjs 快照失败:', historyErr);
              }
  
              // B. 强制覆盖为线上最新版本 (仅在没有其他用户时安全)
@@ -491,7 +488,16 @@ export default function NovelEditorPage() {
     }
 
     try {
+      // 1. 触发强制同步到 MongoDB
       await syncToServer();
+      
+      // 2. 创建 Yjs 快照记录作为手动保存点
+      const chapterIdNum = parseInt(selectedChapter, 10);
+      if (!isNaN(chapterIdNum)) {
+        const base64 = createYjsSnapshotFromEditor(editor);
+        await chaptersApi.createYjsSnapshot(chapterIdNum, base64, '手动保存');
+      }
+      
       showMessage('保存成功', 'success');
     } catch (err) {
       console.error('保存失败:', err);
@@ -999,34 +1005,6 @@ export default function NovelEditorPage() {
                     <div className="embedded-toolbar">
                       <ChapterEditorToolbar
                         editor={editor}
-                        onCreateVersion={editor && selectedChapter ? async () => {
-                          const chapterIdNum = parseInt(selectedChapter!, 10);
-                          if (Number.isNaN(chapterIdNum)) return;
-                          
-                          // 同时创建 Yjs 快照 and 手动版本记录
-                          const base64 = createYjsSnapshotFromEditor(editor!);
-                          const htmlContent = editor!.getHTML();
-                          
-                          try {
-                            await Promise.all([
-                              chaptersApi.createYjsSnapshot(chapterIdNum, base64),
-                              chaptersApi.createChapterVersion(chapterIdNum, {
-                                content: htmlContent,
-                                change_description: '手动保存版本'
-                              })
-                            ]);
-                            
-                            // 更新本地缓存，确保版本创建后内容已同步到本地
-                            if (documentId) {
-                              await documentCache.updateDocument(documentId, htmlContent);
-                            }
-                            
-                            showMessage('版本已创建', 'success');
-                          } catch (err) {
-                            console.error('创建版本失败:', err);
-                            showMessage('创建版本失败', 'error');
-                          }
-                        } : undefined}
                         onManualSave={handleManualSave}
                         onEditChapter={handleEditCurrentChapter}
                         onOpenHistory={() => setIsHistoryModalOpen(true)}
@@ -1251,33 +1229,6 @@ export default function NovelEditorPage() {
         chapterTitle={selectedChapter && chaptersData[selectedChapter] ? chaptersData[selectedChapter].title : undefined}
         onClose={() => setIsHistoryModalOpen(false)}
         getCurrentContent={editor ? () => getTextFromProsemirrorJSON(editor.getJSON()) : undefined}
-        onCreateVersion={editor && selectedChapter ? async () => {
-          const chapterIdNum = parseInt(selectedChapter!, 10);
-          if (Number.isNaN(chapterIdNum)) return;
-          
-          const base64 = createYjsSnapshotFromEditor(editor!);
-          const htmlContent = editor!.getHTML();
-          
-          try {
-            await Promise.all([
-              chaptersApi.createYjsSnapshot(chapterIdNum, base64),
-              chaptersApi.createChapterVersion(chapterIdNum, {
-                content: htmlContent,
-                change_description: '手动保存版本'
-              })
-            ]);
-            
-            // 更新本地缓存，确保版本创建后内容已同步到本地
-            if (documentId) {
-              await documentCache.updateDocument(documentId, htmlContent);
-            }
-            
-            showMessage('版本已创建', 'success');
-          } catch (err) {
-            console.error('创建版本失败:', err);
-            showMessage('创建版本失败', 'error');
-          }
-        } : undefined}
         onRestore={editor && selectedChapter ? async (id, type) => {
           const chapterIdNum = parseInt(selectedChapter!, 10);
           if (Number.isNaN(chapterIdNum)) return;
@@ -1285,14 +1236,8 @@ export default function NovelEditorPage() {
           if (type === 'snapshot') {
             const data = await chaptersApi.getYjsSnapshot(chapterIdNum, id);
             restoreYjsSnapshotToEditor(editor!, data.snapshot);
-          } else {
-            // ChapterVersion 类型
-            const res = await chaptersApi.getChapterVersion(chapterIdNum, id);
-            if (res.content) {
-              editor!.commands.setContent(res.content);
-            }
+            showMessage('已恢复到此快照', 'success');
           }
-          showMessage('已恢复到此版本', 'success');
         } : undefined}
       />
       

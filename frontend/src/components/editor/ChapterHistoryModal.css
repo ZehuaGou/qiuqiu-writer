@@ -177,27 +177,7 @@
   color: #333;
 }
 
-.chapter-history-create-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #1890ff;
-  background: transparent;
-  border: 1px solid #1890ff;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.chapter-history-create-btn:hover:not(:disabled) {
-  background: #e6f7ff;
-}
-
-.chapter-history-create-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* 列表容器 */
 
 .chapter-history-groups {
   overflow-y: auto;

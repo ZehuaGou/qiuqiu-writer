@@ -9,14 +9,7 @@ export interface YjsSyncResponse {
 }
 
 class YjsApiClient extends BaseApiClient {
-  /**
-   * Force a sync from Yjs document state to MongoDB.
-   * This ensures that chapter content is persisted immediately.
-   */
-  async forceSync(workId: string): Promise<YjsSyncResponse> {
-    const roomName = `work_${workId}`;
-    return await this.post<YjsSyncResponse>(`/api/v1/yjs/${roomName}/sync`);
-  }
+  // forceSync 接口已废弃，改用 WebSocket 消息 MSG_SAVE (2) 触发同步
 }
 
 export const yjsApi = new YjsApiClient();

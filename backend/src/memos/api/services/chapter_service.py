@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.future import select
 
-from memos.api.models.chapter import Chapter, ChapterVersion, ChapterYjsSnapshot
+from memos.api.models.chapter import Chapter, ChapterYjsSnapshot
 from memos.api.models.work import Work, WorkCollaborator
 from memos.api.models.system import AuditLog
 
@@ -57,9 +57,7 @@ class ChapterService:
 
     async def get_chapter_by_id(self, chapter_id: int) -> Optional[Chapter]:
         """根据ID获取章节"""
-        stmt = select(Chapter).options(
-            selectinload(Chapter.versions)
-        ).where(Chapter.id == chapter_id)
+        stmt = select(Chapter).where(Chapter.id == chapter_id)
 
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
@@ -169,62 +167,6 @@ class ChapterService:
         await self.db.commit()
         await self.db.refresh(chapter)
         return True
-
-    async def create_chapter_version(self, **kwargs) -> ChapterVersion:
-        """创建章节版本"""
-        # 自动计算版本号
-        chapter_id = kwargs.get('chapter_id')
-        if chapter_id and 'version_number' not in kwargs:
-            stmt = select(func.max(ChapterVersion.version_number)).where(
-                ChapterVersion.chapter_id == chapter_id
-            )
-            result = await self.db.execute(stmt)
-            max_version = result.scalar()
-            kwargs['version_number'] = (max_version or 0) + 1
-
-        version = ChapterVersion(**kwargs)
-
-        self.db.add(version)
-        await self.db.commit()
-        await self.db.refresh(version)
-
-        return version
-
-    async def get_chapter_versions(
-        self,
-        chapter_id: int,
-        page: int = 1,
-        size: int = 20
-    ) -> Tuple[List[ChapterVersion], int]:
-        """获取章节版本列表"""
-        # 获取总数
-        count_stmt = select(func.count(ChapterVersion.id)).where(
-            ChapterVersion.chapter_id == chapter_id
-        )
-        total_result = await self.db.execute(count_stmt)
-        total = total_result.scalar()
-
-        # 获取版本列表
-        stmt = select(ChapterVersion).where(
-            ChapterVersion.chapter_id == chapter_id
-        ).order_by(desc(ChapterVersion.version_number))
-
-        # 分页
-        stmt = stmt.offset((page - 1) * size).limit(size)
-
-        result = await self.db.execute(stmt)
-        versions = result.scalars().all()
-
-        return list(versions), total
-
-    async def get_chapter_version(self, chapter_id: int, version_id: int) -> Optional[ChapterVersion]:
-        """获取单个章节版本详情"""
-        stmt = select(ChapterVersion).where(
-            ChapterVersion.id == version_id,
-            ChapterVersion.chapter_id == chapter_id,
-        )
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
 
     # 权限检查方法
     async def can_access_work(self, user_id: str, work_id: str) -> bool:

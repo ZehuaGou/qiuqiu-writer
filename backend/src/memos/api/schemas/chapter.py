@@ -70,19 +70,4 @@ class ChapterListResponse(BaseModel):
     size: int
     pages: int
 
-class ChapterVersionCreate(BaseModel):
-    """创建章节版本模式"""
-    content: Optional[str] = None
-    change_description: Optional[str] = None
-
-class ChapterVersionResponse(BaseModel):
-    """章节版本响应模式"""
-    id: int
-    chapter_id: int
-    version_number: int
-    title: str
-    created_at: datetime
-    change_description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+# 移除了 ChapterVersion 相关的 Schema

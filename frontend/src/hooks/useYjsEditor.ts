@@ -22,6 +22,9 @@ import { WebsocketProvider } from 'y-websocket';
 import { authApi } from '../utils/authApi';
 import { getWsBaseUrl } from '../utils/apiConfig';
 import { yjsConnectionManager } from '../utils/yjsConnectionManager';
+import { chaptersApi } from '../utils/chaptersApi';
+
+const MSG_SAVE = 2;
 
 /** 从 documentId 解析 workId 和 chapterId */
 function parseDocumentId(documentId: string): { workId: string; chapterId: string } | null {
@@ -332,12 +335,23 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
   const syncToServer = useCallback(async () => {
     if (!editor) return;
 
-    console.log('💾 [useYjsEditor] 手动保存确认（y-websocket 自动同步中）');
+    console.log('💾 [useYjsEditor] 手动保存（通过 WebSocket 触发）');
 
-    if (wsProviderRef.current?.wsconnected) {
+    try {
+      // 优先通过 WebSocket 发送保存消息
+      if (wsProviderRef.current?.wsconnected) {
+        const ws = wsProviderRef.current.ws;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const encoder = new Uint8Array([MSG_SAVE]);
+          ws.send(encoder);
+          console.log('📤 [useYjsEditor] 已发送 WebSocket 保存指令');
+        }
+      }
+      
       onSyncSuccess?.(Date.now());
-    } else {
-      onSyncError?.(new Error('WebSocket 未连接，文档将在重连后自动同步'));
+    } catch (err) {
+      console.error('❌ [useYjsEditor] 保存失败:', err);
+      onSyncError?.(err instanceof Error ? err : new Error('保存失败'));
     }
   }, [editor, onSyncSuccess, onSyncError]);
 
