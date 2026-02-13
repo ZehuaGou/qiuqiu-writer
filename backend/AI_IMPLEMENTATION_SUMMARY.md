@@ -114,7 +114,7 @@ backend/
              │
 ┌────────────▼────────────────────┐
 │    AI Service (ai_service.py)   │
-│  - analyze_chapter_stream()     │
+│  - get_ai_response()     │
 │  - get_default_prompt()         │
 │  - is_healthy()                 │
 └────────────┬────────────────────┘

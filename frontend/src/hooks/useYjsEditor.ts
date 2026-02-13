@@ -178,11 +178,9 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
     };
 
     // 如果 Provider 已经同步过（连接复用场景），可以尝试立即就绪
-    // 但为了保险，还是优先等 IndexedDB
     if (wsProvider.synced) {
       console.log('🚀 [useYjsEditor] Provider 已同步，尝试快速就绪');
-      // 仍然等待一小会儿，确保 IndexedDB 有机会加载（如果它还没加载完）
-      // 或者直接检查 idbProvider 的状态（如果 yjsConnectionManager 暴露了它）
+      markReady();
     }
 
     // 重启后先等 IndexedDB 把 ydoc 灌满，再显示编辑器，避免看到空内容

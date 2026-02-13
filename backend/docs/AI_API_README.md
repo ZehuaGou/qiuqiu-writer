@@ -51,7 +51,7 @@ backend/src/memos/api/
 
 **关键类**:
 - `AIService`: AI服务主类
-  - `analyze_chapter_stream()`: 流式章节分析
+  - `get_ai_response()`: 流式章节分析
   - `get_default_prompt()`: 获取默认提示词
   - `get_available_models()`: 获取可用模型列表
   - `is_healthy()`: 健康检查
@@ -370,7 +370,7 @@ import asyncio
 # 最多同时处理10个分析请求
 semaphore = asyncio.Semaphore(10)
 
-async def analyze_chapter_stream(...):
+async def get_ai_response(...):
     async with semaphore:
         # 执行分析逻辑
         ...

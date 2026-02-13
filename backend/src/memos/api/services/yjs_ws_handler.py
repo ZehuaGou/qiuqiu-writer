@@ -220,20 +220,25 @@ class YjsRoom:
                                                 content_type = "Text"
                                             
                                             if raw_obj:
-                                                # 使用 pycrdt 的 to_html 或类似方法获取更准确的 HTML
-                                                # 如果 str(raw_obj) 返回的是 <xml_fragment>...</xml_fragment>
-                                                # 我们需要提取其中的内容
+                                                # pycrdt's str() method returns the string representation of the fragment
+                                                # For XmlFragment, it might wrap content in <xml_fragment> tags
+                                                # We need to ensure we get the inner HTML content
                                                 raw_content = str(raw_obj)
+                                                
+                                                # Check if it's wrapped in default xml_fragment tags and strip them if needed
+                                                # This behavior might depend on pycrdt version
                                                 if raw_content.startswith("<xml_fragment>") and raw_content.endswith("</xml_fragment>"):
                                                     content = raw_content[14:-15]
                                                 else:
                                                     content = raw_content
                                                 
-                                                # 如果内容仍然为空但有子元素，记录警告
+                                                # If content is still empty but object has length, it might be an issue with string conversion
                                                 if (not content or content.strip() == "") and content_type == "XmlFragment":
                                                     try:
                                                         if hasattr(raw_obj, "__len__") and len(raw_obj) > 0:
-                                                            logger.warning(f"[YjsSync] Chapter {chapter.id} fragment has {len(raw_obj)} children but extracted content is empty")
+                                                            # Attempt to iterate children if string conversion failed
+                                                            # This is a fallback strategy
+                                                            logger.warning(f"[YjsSync] Chapter {chapter.id} empty string content but has {len(raw_obj)} children. Raw content: {raw_content[:100]}...")
                                                     except:
                                                         pass
                                     except Exception as e:
@@ -437,13 +442,14 @@ class YjsWebSocketManager:
     async def handle_connection(self, ws: WebSocket, room_name: str):
         """Handle a full WebSocket connection lifecycle for a room."""
         room = await self.get_room(room_name)
-        await room.add_client(ws)
 
         try:
+            await room.add_client(ws)
             while True:
                 data = await ws.receive_bytes()
                 await room.handle_message(ws, data)
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, RuntimeError):
+            # RuntimeError can occur if the connection is closed during send/receive
             pass
         except Exception as e:
             logger.error(f"[YjsWS:{room_name}] Connection error: {e}")

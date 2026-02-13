@@ -486,7 +486,7 @@ class BookAnalysisService:
             max_tokens = settings.get("max_tokens", 4000)
             
             # 直接获取完整AI响应
-            full_response = await ai_service.analyze_chapter_stream(
+            full_response = await ai_service.get_ai_response(
                 content=chapter_content,
                 prompt=enhanced_prompt,
                 system_prompt=None,
@@ -782,7 +782,7 @@ class BookAnalysisService:
         if user_description and user_description.strip():
             user_prompt = user_prompt.rstrip() + "\n\n## 用户对下一章的描述（请在设计方案时参考以下方向）\n" + user_description.strip() + "\n"
 
-        full_response = await ai_service.analyze_chapter_stream(
+        full_response = await ai_service.get_ai_response(
             content=ctx.get("previous_chapter_content") or "",
             prompt=user_prompt,
             system_prompt=None,
@@ -1167,7 +1167,7 @@ class BookAnalysisService:
             system_prompt = f"你是一位专业的小说分析专家，请从章节内容中提取 {data_key} 相关的数据，返回 JSON。"
 
             # 调用 AI
-            ai_response = await ai_service.analyze_chapter_stream(
+            ai_response = await ai_service.get_ai_response(
                 content=chapter_content,
                 prompt=user_prompt,
                 system_prompt=system_prompt,
@@ -1389,7 +1389,7 @@ class BookAnalysisService:
 
             # 调用 AI
             try:
-                ai_response = await ai_service.analyze_chapter_stream(
+                ai_response = await ai_service.get_ai_response(
                     content=chapter_content,
                     prompt=user_prompt,
                     system_prompt=system_prompt,
@@ -1456,7 +1456,7 @@ class BookAnalysisService:
                         请以清晰、结构化的格式输出总结报告。"""
 
                 # 调用 AI 进行总结
-                ai_summary_response = await ai_service.analyze_chapter_stream(
+                ai_summary_response = await ai_service.get_ai_response(
                     content=chapter_content,
                     prompt=summary_prompt,
                     system_prompt="你是一位专业的小说内容校验总结专家，擅长综合分析多个验证结果并生成清晰的总结报告。",

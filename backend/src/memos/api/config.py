@@ -1109,10 +1109,16 @@ class APIConfig:
                 f"🔧 Creating GeneralMemCube with embedder backend: {embedder_backend}"
             )
             if embedder_backend != "universal_api":
-                logger.warning(
-                    f"⚠️ WARNING: Embedder backend is '{embedder_backend}', not 'universal_api'. "
-                    f"This may cause issues if Ollama is not available."
-                )
+                if embedder_backend == "sentence_transformer":
+                    logger.info(
+                        f"ℹ️ Info: Embedder backend is '{embedder_backend}'. "
+                        f"Using local model, ensuring no external dependency issues."
+                    )
+                else:
+                    logger.warning(
+                        f"⚠️ WARNING: Embedder backend is '{embedder_backend}', not 'universal_api'. "
+                        f"This may cause issues if Ollama is not available."
+                    )
         
         default_mem_cube = GeneralMemCube(default_cube_config)
         

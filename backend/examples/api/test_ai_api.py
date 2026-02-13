@@ -66,7 +66,7 @@ def test_default_prompt():
         print(f"[✗] 错误: {str(e)}")
 
 
-def test_analyze_chapter_stream():
+def test_get_ai_response():
     """测试章节分析接口（流式响应）"""
     print("\n" + "=" * 60)
     print("测试 3: 章节分析接口（流式响应）")
@@ -185,7 +185,7 @@ def main():
     # 运行所有测试
     test_health_check()
     test_default_prompt()
-    test_analyze_chapter_stream()
+    test_get_ai_response()
     test_analyze_chapter_error()
 
     print("\n" + "=" * 60)

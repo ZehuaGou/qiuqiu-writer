@@ -41,6 +41,7 @@ from memos.api.services.book_analysis_service import BookAnalysisService
 from memos.api.services.chapter_service import ChapterService
 from memos.api.services.sharedb_service import ShareDBService
 from memos.api.services.work_service import WorkService
+from memos.api.services.yjs_ws_handler import yjs_ws_manager
 from memos.log import get_logger
 
 logger = get_logger(__name__)
@@ -454,7 +455,7 @@ async def analyze_work_chapters(
                 logger.info(f"🚀 开始分析批次 {batch_idx}，包含 {len(batch_chapters_data)} 章，最终prompt长度: {len(full_prompt)}")
                 
                 # 调用AI分析（使用单章分析的逻辑）
-                full_response = await ai_service.analyze_chapter_stream(
+                full_response = await ai_service.get_ai_response(
                     content=batch_content,
                     prompt=full_prompt,
                     system_prompt=None,  # 使用默认 system_prompt
@@ -720,7 +721,7 @@ async def analyze_book(
         # 执行非流式分析
         try:
             # 直接获取完整响应
-            full_response = await ai_service.analyze_chapter_stream(
+            full_response = await ai_service.get_ai_response(
                 content=request.content,
                 prompt=enhanced_prompt,
                 system_prompt=None,  # 使用默认 system_prompt
@@ -1024,7 +1025,7 @@ async def generate_chapter_outlines_internal(
                                                 
                                                 # 调用AI服务提取数据
                                                 logger.info(f"🚀 调用AI服务分析章节 {chapter_id} 的 {data_key} 数据，使用组件的 analysisPrompt")
-                                                ai_response = await ai_service.analyze_chapter_stream(
+                                                ai_response = await ai_service.get_ai_response(
                                                     content=chapter_content,
                                                     prompt=user_prompt,
                                                     system_prompt=system_prompt,
@@ -1617,8 +1618,7 @@ async def create_work_from_file(
                     word_count=chapter_word_count,
                 )
                 
-                # 4. 将章节内容保存到 ShareDB
-                # 关键修复：确保内容是HTML格式（如果前端已经转换，这里作为双重保障）
+                # 4. 将章节内容保存到 MongoDB (供 Yjs fetchInitialContent 使用)
                 content_html = convert_text_to_html(chapter_data.content)
                 
                 document_id = f"work_{work.id}_chapter_{chapter.id}"
@@ -1637,6 +1637,15 @@ async def create_work_from_file(
                     }
                 )
                 
+                # 5. 初始化 Yjs 状态
+                try:
+                    # 确保 YjsRoom 已加载
+                    room_name = f"work_{work.id}"
+                    await yjs_ws_manager.get_room(room_name)
+                    logger.info(f"✅ [Yjs] 章节 {chapter.id} 已在 YjsRoom {room_name} 中就绪")
+                except Exception as yjs_err:
+                    logger.warning(f"⚠️ [Yjs] 初始化房间失败 (非致命): {yjs_err}")
+
                 created_chapters.append({
                     "chapter_id": chapter.id,
                     "chapter_number": chapter_data.chapter_number,
@@ -1834,7 +1843,7 @@ async def generate_component_data(
         max_tokens = analysis_settings.max_tokens
         
         # 调用AI生成内容（非流式，一次性返回）
-        ai_response = await ai_service.analyze_chapter_stream(
+        ai_response = await ai_service.get_ai_response(
             content="",  # 对于生成任务，content可以为空
             prompt=formatted_prompt,
             system_prompt=None,  # 使用默认系统prompt

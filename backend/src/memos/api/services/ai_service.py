@@ -88,14 +88,14 @@ class AIService:
         """检查AI服务是否健康"""
         return bool(self.api_key)
 
-    async def analyze_chapter_stream(
+    async def get_ai_response(
         self,
         content: str,
         prompt: str | None = None,
         system_prompt: str | None = None,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 20000,
+        max_tokens: int = 40000,
         use_json_format: bool = True,
     ) -> str:
         """
@@ -149,6 +149,9 @@ class AIService:
                     },
                     {"role": "user", "content": user_content},
                 ],
+                "response_format": {
+                    'type': 'json_object'
+                } if use_json_format else None,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "stream": False,
