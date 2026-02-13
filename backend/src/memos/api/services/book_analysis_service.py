@@ -32,6 +32,87 @@ class BookAnalysisService:
         self.sharedb_service = ShareDBService()
         self.prompt_context_service = PromptContextService(db)
     
+    def _extract_json_from_ai_response(self, text: str, required_key: Optional[str] = None) -> Optional[Any]:
+        """
+        从 AI 响应中提取并解析 JSON 数据。
+        支持 Markdown 代码块和裸 JSON，具有较强的容错能力。
+        
+        Args:
+            text: AI 响应文本
+            required_key: 可选，提取出的 JSON 对象必须包含的键名
+            
+        Returns:
+            解析后的数据（dict 或 list），失败返回 None
+        """
+        if not text:
+            return None
+            
+        candidates = []
+        # 1. 尝试匹配所有代码块
+        code_blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+        candidates.extend([b.strip() for b in code_blocks if b.strip()])
+        
+        # 2. 尝试寻找所有平衡的 { } 和 [ ] 块
+        for start_char, end_char in [("{", "}"), ("[", "]")]:
+            start_idx = 0
+            while True:
+                brace_start = text.find(start_char, start_idx)
+                if brace_start == -1:
+                    break
+                
+                depth = 0
+                brace_end = -1
+                for i in range(brace_start, len(text)):
+                    if text[i] == start_char:
+                        depth += 1
+                    elif text[i] == end_char:
+                        depth -= 1
+                        if depth == 0:
+                            brace_end = i
+                            break
+                
+                if brace_end != -1:
+                    candidates.append(text[brace_start : brace_end + 1])
+                    start_idx = brace_end + 1
+                else:
+                    start_idx = brace_start + 1
+        
+        if not candidates:
+            return None
+            
+        # 按长度倒序排列，优先尝试最长的（通常是完整结果）
+        candidates.sort(key=len, reverse=True)
+        
+        # 尝试解析每个候选块
+        for cand in candidates:
+            try:
+                # 清理常见的非打印控制字符
+                clean_cand = re.sub(r'[\x00-\x1F\x7F]', '', cand)
+                # 尝试修复末尾多余的逗号
+                clean_cand = re.sub(r',\s*}', '}', clean_cand)
+                clean_cand = re.sub(r',\s*]', ']', clean_cand)
+                
+                parsed = json.loads(clean_cand)
+                
+                # 如果指定了 required_key，检查是否存在
+                if required_key:
+                    if isinstance(parsed, dict) and required_key in parsed:
+                        return parsed
+                else:
+                    return parsed
+            except Exception:
+                continue
+                
+        # 如果指定了 required_key 但没找到匹配的，最后尝试返回任何能解析的候选块
+        if required_key:
+            for cand in candidates:
+                try:
+                    return json.loads(cand)
+                except Exception:
+                    continue
+                    
+        return None
+    
     async def get_default_prompt_template(self, template_type: str = "chapter_analysis") -> Optional[PromptTemplate]:
         """
         获取默认的prompt模板对象
@@ -174,21 +255,11 @@ class BookAnalysisService:
             解析后的分析数据字典，包含characters、locations和chapters，如果解析失败返回None
         """
         try:
-            # 尝试提取JSON代码块
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', ai_response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # 尝试提取纯JSON对象
-                json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    logger.warning("无法在AI响应中找到JSON数据")
-                    return None
-            
-            # 解析JSON
-            data = json.loads(json_str)
+            # 使用统一的 JSON 提取方法
+            data = self._extract_json_from_ai_response(ai_response)
+            if not data:
+                logger.warning("无法在 AI 响应中提取到有效的 JSON")
+                return None
             
             # 确保返回的数据结构包含必需的字段
             result = {
@@ -228,21 +299,11 @@ class BookAnalysisService:
             解析后的数据字典，如果解析失败返回None
         """
         try:
-            # 尝试提取JSON代码块（支持对象和数组）
-            json_match = re.search(r'```json\s*(\[.*?\]|\{.*?\})\s*```', ai_response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                # 尝试提取纯JSON（支持对象和数组）
-                json_match = re.search(r'(\[.*?\]|\{.*\})', ai_response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    logger.warning("无法在AI响应中找到JSON数据")
-                    return None
-            
-            # 解析JSON
-            data = json.loads(json_str)
+            # 使用统一的 JSON 提取方法
+            data = self._extract_json_from_ai_response(ai_response)
+            if not data:
+                logger.warning(f"无法从 AI 响应中解析出 JSON. 响应内容: {ai_response[:500]}...")
+                return None
             
             # 如果直接是数组（如直接返回 characters 数组），包装成字典
             if isinstance(data, list):
@@ -279,24 +340,6 @@ class BookAnalysisService:
             
             return chapter_data
             
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON解析失败: {e}, 响应内容: {ai_response[:500]}")
-            # 尝试修复常见的JSON错误（如末尾多余的逗号）
-            try:
-                # 重新提取 JSON 字符串
-                json_match = re.search(r'(\[.*?\]|\{.*\})', ai_response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                    # 尝试移除末尾的逗号
-                    fixed_json = re.sub(r',\s*}', '}', json_str)
-                    fixed_json = re.sub(r',\s*]', ']', fixed_json)
-                    data = json.loads(fixed_json)
-                    if isinstance(data, list) and data and isinstance(data[0], dict) and "name" in data[0]:
-                        return {"characters": data}
-                    return data if isinstance(data, dict) else None
-            except Exception as fix_error:
-                logger.debug(f"尝试修复JSON失败: {fix_error}")
-            return None
         except Exception as e:
             logger.error(f"解析AI响应失败: {e}, 响应内容: {ai_response[:500]}")
             return None
@@ -792,31 +835,12 @@ class BookAnalysisService:
         )
 
         # 5) 解析 AI 返回的 3 个推荐（支持 ```json ... ``` 或裸 JSON）
-        json_str = ""
-        code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", full_response)
-        if code_block:
-            json_str = code_block.group(1).strip()
-        if not json_str:
-            # 尝试匹配最外层 { ... }
-            brace = full_response.find("{")
-            if brace >= 0:
-                depth = 0
-                end = -1
-                for i in range(brace, len(full_response)):
-                    if full_response[i] == "{":
-                        depth += 1
-                    elif full_response[i] == "}":
-                        depth -= 1
-                        if depth == 0:
-                            end = i
-                            break
-                if end >= 0:
-                    json_str = full_response[brace : end + 1]
+        data = self._extract_json_from_ai_response(full_response, required_key="recommendations")
 
-        if not json_str:
-            raise ValueError("无法从 AI 响应中解析出 JSON")
+        if not data:
+            logger.error(f"无法从 AI 响应中解析出 JSON. 原始响应:\n{full_response}")
+            raise ValueError("无法从 AI 响应中解析出 JSON，请检查模型输出或稍后重试")
 
-        data = json.loads(json_str)
         recommendations = data.get("recommendations", [])
         if not isinstance(recommendations, list):
             recommendations = []
