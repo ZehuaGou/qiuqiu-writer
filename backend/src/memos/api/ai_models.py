@@ -38,7 +38,7 @@ class AnalysisSettings(BaseModel):
         json_schema_extra={"example": 0.7},
     )
     max_tokens: int = Field(
-        default=4000,
+        default=7000,
         ge=1,
         description="最大token数",
         json_schema_extra={"example": 4000},

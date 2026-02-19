@@ -5,11 +5,11 @@
 import React, { useRef, useLayoutEffect, useCallback } from 'react';
 import './ChatInputContentEditable.css';
 
-const REF_REGEX = /@chapter:\d+\s*第\d+-\d+字|@chapter:\d+|@character:[^\s@]+/g;
+const REF_REGEX = /@chapter:\d+\s*第\d+-\d+字|@chapter:\d+|@character:[^\s@]+|\/[a-zA-Z0-9_-]+/g;
 
-function parseMessageForInputRefs(message: string): Array<{ type: 'text' | 'ref'; content: string }> {
+function parseMessageForInputRefs(message: string): Array<{ type: 'text' | 'ref' | 'slash'; content: string }> {
   if (!message) return [];
-  const segments: Array<{ type: 'text' | 'ref'; content: string }> = [];
+  const segments: Array<{ type: 'text' | 'ref' | 'slash'; content: string }> = [];
   let lastIndex = 0;
   let m: RegExpExecArray | null;
   REF_REGEX.lastIndex = 0;
@@ -17,8 +17,13 @@ function parseMessageForInputRefs(message: string): Array<{ type: 'text' | 'ref'
     if (m.index > lastIndex) {
       segments.push({ type: 'text', content: message.slice(lastIndex, m.index) });
     }
-    segments.push({ type: 'ref', content: m[0] });
-    lastIndex = m.index + m[0].length;
+    const content = m[0];
+    if (content.startsWith('/')) {
+      segments.push({ type: 'slash', content });
+    } else {
+      segments.push({ type: 'ref', content });
+    }
+    lastIndex = m.index + content.length;
   }
   if (lastIndex < message.length) {
     segments.push({ type: 'text', content: message.slice(lastIndex) });
@@ -36,6 +41,11 @@ function setContainerContent(container: HTMLElement, value: string): void {
   for (const seg of segments) {
     if (seg.type === 'text') {
       container.appendChild(document.createTextNode(seg.content));
+    } else if (seg.type === 'slash') {
+      const span = document.createElement('span');
+      span.className = 'chat-input-slash-inline';
+      span.textContent = seg.content;
+      container.appendChild(span);
     } else {
       const span = document.createElement('span');
       span.className = 'chat-input-ref-inline';
@@ -174,6 +184,7 @@ export interface ChatInputContentEditableProps {
   value: string;
   onChange: (text: string, cursorOffset: number) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  onCursorChange?: (cursorOffset: number) => void;
   placeholder?: string;
   disabled?: boolean;
   /** 父组件可写入当前光标偏移，用于 @ 菜单等 */
@@ -189,6 +200,7 @@ export default function ChatInputContentEditable({
   value,
   onChange,
   onKeyDown,
+  onCursorChange,
   placeholder = '输入你的问题...',
   disabled = false,
   cursorOffsetRef,
@@ -215,6 +227,20 @@ export default function ChatInputContentEditable({
     if (cursorOffsetRef) cursorOffsetRef.current = offset;
     onChange(text, offset);
   }, [onChange, cursorOffsetRef, ref]);
+
+  const updateCursorInfo = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const offset = getCursorOffset(el);
+    lastCursorOffsetRef.current = offset;
+    if (cursorOffsetRef) cursorOffsetRef.current = offset;
+    onCursorChange?.(offset);
+  }, [cursorOffsetRef, onCursorChange, ref]);
+
+  const handleSelect = useCallback(() => {
+    // We use a slight delay or rely on event loop to ensure selection is updated
+    requestAnimationFrame(updateCursorInfo);
+  }, [updateCursorInfo]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
@@ -277,7 +303,12 @@ export default function ChatInputContentEditable({
       onPaste={handlePaste}
       onCompositionStart={handleCompositionStart}
       onCompositionEnd={handleCompositionEnd}
-      onKeyDown={onKeyDown}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        handleSelect();
+      }}
+      onMouseUp={handleSelect}
+      onKeyUp={handleSelect}
       role="textbox"
       aria-multiline="true"
       aria-placeholder={placeholder}

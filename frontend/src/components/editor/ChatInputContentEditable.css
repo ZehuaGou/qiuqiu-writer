@@ -42,6 +42,18 @@
   vertical-align: baseline;
 }
 
+.chat-input-slash-inline {
+  display: inline;
+  padding: 2px 6px;
+  margin: 0 1px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: #8a4baf; /* Purple for slash commands */
+  border-radius: 4px;
+  vertical-align: baseline;
+}
+
 .chat-input-ce:disabled,
 .chat-input-ce[contenteditable="false"] {
   opacity: 0.6;

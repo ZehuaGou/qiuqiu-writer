@@ -541,13 +541,30 @@ export default function AIAssistant({
     const targetIndex = option.commandKind === 'slash' ? lastSlashIndex : lastAtIndex;
 
     if (targetIndex !== -1) {
+      let replacementEndIndex = cursorPos;
+      
+      // Calculate where the current token ends so we replace the whole thing
+      if (option.commandKind === 'slash') {
+        const textAfterCursor = msg.substring(cursorPos);
+        const match = textAfterCursor.match(/^[a-zA-Z0-9_-]*/);
+        if (match) {
+          replacementEndIndex += match[0].length;
+        }
+      } else {
+        const textAfterCursor = msg.substring(cursorPos);
+        const match = textAfterCursor.match(/^[^\s\n]*/);
+        if (match) {
+           replacementEndIndex += match[0].length;
+        }
+      }
+
       if (option.isCommand) {
         const commandText =
           option.commandKind === 'slash' ? `/${option.id} ` : `@${option.name} `;
         const newMessage = 
           msg.substring(0, targetIndex) + 
           commandText + 
-          msg.substring(cursorPos);
+          msg.substring(replacementEndIndex);
         const newCursorPos = targetIndex + commandText.length;
         setMessage(newMessage);
         setCharCount(newMessage.length);
@@ -561,7 +578,7 @@ export default function AIAssistant({
         const newMessage = 
           msg.substring(0, targetIndex) + 
           mentionText + ' ' + 
-          msg.substring(cursorPos);
+          msg.substring(replacementEndIndex);
         const newCursorPos = targetIndex + mentionText.length + 1;
         setMessage(newMessage);
         setCharCount(newMessage.length);
@@ -1090,6 +1107,10 @@ export default function AIAssistant({
                     value={message}
                     onChange={handleCEChange}
                     onKeyDown={handleKeyDown}
+                    onCursorChange={(offset) => {
+                      cursorOffsetRef.current = offset;
+                      runMentionMenuLogic(message, offset);
+                    }}
                     placeholder="输入你的问题..."
                     disabled={!isAuthenticated || !workId || isSending}
                     cursorOffsetRef={cursorOffsetRef}
