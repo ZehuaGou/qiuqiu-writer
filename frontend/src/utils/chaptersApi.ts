@@ -111,7 +111,7 @@ class ChaptersApiClient extends BaseApiClient {
       const cached = await localCacheManager.get<ChapterListResponse>(cacheKey);
       if (cached) {
         
-        this.listChaptersFromServer(params, cacheKey).catch(err => {
+        this.listChaptersFromServer(params, cacheKey).catch(() => {
           
         });
         return cached;
@@ -200,7 +200,7 @@ class ChaptersApiClient extends BaseApiClient {
     if (cached) {
       
       // 后台异步刷新（不阻塞用户）
-      this.getChapterFromServer(chapterId, include_versions, cacheKey).catch(err => {
+      this.getChapterFromServer(chapterId, include_versions, cacheKey).catch(() => {
         
       });
       return cached;

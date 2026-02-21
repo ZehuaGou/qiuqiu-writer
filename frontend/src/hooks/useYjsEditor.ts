@@ -308,7 +308,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
           .then((html) => {
             if (html !== null) apply(html);
           })
-          .catch((err) => {
+          .catch(() => {
             
           });
       }

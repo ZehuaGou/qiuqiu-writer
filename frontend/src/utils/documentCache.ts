@@ -580,7 +580,7 @@ export const documentCache = {
             }
             
             // 关键修复：确保 metadata 被正确保存，并记录日志
-            const finalDoc = existingDoc || await localCacheManager.get<ShareDBDocument>(documentId);
+            // const finalDoc = existingDoc || await localCacheManager.get<ShareDBDocument>(documentId);
                         
             
             return {

@@ -436,7 +436,7 @@ export function useIntelligentSync(
     const firstPollDelay = setTimeout(() => {
       const docId = documentIdRef.current;
             if (docId && docId.trim() !== '') {
-        pollForUpdatesRef.current().catch(error => {
+        pollForUpdatesRef.current().catch(() => {
           
         });
       }
@@ -457,7 +457,7 @@ export function useIntelligentSync(
             
       // 关键修复：确保轮询函数存在且定时器仍然有效
       if (pollForUpdatesRef.current && pollTimer.current) {
-        pollForUpdatesRef.current().catch(error => {
+        pollForUpdatesRef.current().catch(() => {
           
           // 关键修复：即使轮询失败，也不清理定时器，继续下一次轮询
         });

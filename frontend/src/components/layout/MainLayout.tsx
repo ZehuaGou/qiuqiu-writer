@@ -162,7 +162,6 @@ export default function MainLayout() {
 
   const isHomePage = location.pathname === '/';
   const isMyProfilePage = userInfo && location.pathname === `/users/${userInfo.id}`;
-  const isUserWorksPage = location.pathname.startsWith('/users/');
   const needLoginPrompt = !isAuthenticated && (location.state as { needLogin?: boolean })?.needLogin;
 
   return (

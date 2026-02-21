@@ -242,16 +242,16 @@ export default function NovelEditorPage() {
       // 关键修复：既然正在使用 Yjs 进行实时同步，我们将本地缓存标记为“已同步”
       // 这样可以避免 SyncManager 触发冗余的 ShareDB 同步请求，从而减少冲突
       if (documentId) {
-        documentCache.updateDocument(documentId, content, undefined, true).catch(err => {
+        documentCache.updateDocument(documentId, content, undefined, true).catch(() => {
           
         });
       }
     },
-    onSyncSuccess: (version) => {
+    onSyncSuccess: () => {
       
       setSyncStatus(syncManager.getStatus());
     },
-    onSyncError: (error) => {
+    onSyncError: () => {
       
     },
   });

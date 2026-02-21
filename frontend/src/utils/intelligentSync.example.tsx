@@ -35,7 +35,7 @@ export function ExampleEditor({ documentId }: { documentId: string }) {
       syncCheckInterval: 3000,      // 每 3 秒检查一次是否需要同步
       enablePolling: true,          // 启用轮询
       onSyncSuccess: () => {},
-      onSyncError: (error) => {
+      onSyncError: () => {
         
       },
       onCollaborativeUpdate: (hasUpdates) => {

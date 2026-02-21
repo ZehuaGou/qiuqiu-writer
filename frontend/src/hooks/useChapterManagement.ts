@@ -210,7 +210,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
       try {
         // 并行获取卷列表和章节列表
         const [dbVolumes, allChapters] = await Promise.all([
-          volumesApi.listVolumes(workId).catch((e: unknown) => {
+          volumesApi.listVolumes(workId).catch(() => {
             
             return [] as Volume[];
           }),

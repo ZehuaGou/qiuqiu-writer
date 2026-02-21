@@ -705,7 +705,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
         if (renderResult && typeof renderResult.then === 'function') {
           renderResult.then(() => {
             fullscreenGraphRef.current = fullscreenGraph;
-          }).catch((error) => {
+          }).catch(() => {
             
           });
         } else {

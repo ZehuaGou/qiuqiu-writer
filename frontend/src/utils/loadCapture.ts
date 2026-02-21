@@ -195,7 +195,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
       await new Promise(resolve => setTimeout(resolve, 50));
       
       // 🔍 [调试] 验证编辑器内容
-      const editorContentAfterClear = editor.getHTML();
+      // const editorContentAfterClear = editor.getHTML();
           } else {
       // 同一个章节重新加载，不需要清空编辑器
             
@@ -367,7 +367,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
             };
             
             // 异步更新缓存
-            localCacheManager.set(documentId, newDoc, 1).catch(err => {
+            localCacheManager.set(documentId, newDoc, 1).catch(() => {
               
             });
           } else {
@@ -442,7 +442,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
                 
         if (shouldSetContent) {
           // 🔍 [调试] 设置编辑器内容前的状态
-          const editorContentBeforeSet = editor.getHTML();
+          // const editorContentBeforeSet = editor.getHTML();
                     
           // 关键修复：设置内容时确保格式被正确解析和保留
           // TipTap 会自动规范化HTML，但我们需要确保格式信息不丢失
