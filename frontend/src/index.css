@@ -195,7 +195,7 @@ select.full-width {
 
   /* 背景 - 略带层次的灰白 */
   --bg-primary: #ffffff;
-  --bg-secondary: #f6f6f8;
+  --bg-secondary: rgb(246, 248, 250);
   --bg-tertiary: #eeeff1;
   --bg-sidebar: #fafafb;
   --bg-gradient-start: #000000;

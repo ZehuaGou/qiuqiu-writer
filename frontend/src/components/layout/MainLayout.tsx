@@ -163,33 +163,33 @@ export default function MainLayout() {
         </div>
       )}
       {/* GitHub风格的顶部导航栏 */}
-      <header className="github-header">
+      <header className={`github-header ${isMyProfilePage ? 'profile-header' : ''}`}>
         <div className="header-container">
           <div className="header-left">
             <Link to="/" className="logo-link">
               <span className="logo-icon">🌍</span>
               <span className="logo-text">球球写作</span>
             </Link>
-            
-            {!isHomePage && (
-              <nav className="header-nav">
-                <Link 
-                  to="/" 
-                  className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-                >
-                  探索
-                </Link>
-                {isAuthenticated && (
-                  <Link 
-                    to={userInfo ? `/users/${userInfo.id}` : '/'}
-                    className={`nav-link ${isMyProfilePage ? 'active' : ''}`}
-                  >
-                    个人主页
-                  </Link>
-                )}
-              </nav>
-            )}
           </div>
+            
+          {!isHomePage && (
+            <nav className="header-nav">
+              <Link 
+                to="/" 
+                className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
+              >
+                探索
+              </Link>
+              {isAuthenticated && (
+                <Link 
+                  to={userInfo ? `/users/${userInfo.id}` : '/'}
+                  className={`nav-link ${isMyProfilePage ? 'active' : ''}`}
+                >
+                  个人主页
+                </Link>
+              )}
+            </nav>
+          )}
 
           <div className="header-right">
             {isAuthenticated ? (

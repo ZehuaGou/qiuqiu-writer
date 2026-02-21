@@ -88,7 +88,7 @@
 .github-header {
   position: relative;
   z-index: 1000;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-light);
   box-shadow: var(--shadow-sm);
 }
@@ -99,15 +99,15 @@
   padding: 0 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 78px;
+  justify-content: flex-start;
+  height: 60px;
+  gap: 24px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 24px;
-  flex: 1;
 }
 
 .logo-link {
@@ -167,6 +167,60 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
+}
+
+/* 个人主页特殊布局 */
+.profile-header .header-container {
+  display: grid;
+  grid-template-areas: 
+    "logo right"
+    "nav nav";
+  grid-template-columns: 1fr auto;
+  height: 100px;
+  padding-top: 12px;
+  padding-bottom: 0;
+  gap: 0;
+  align-content: space-between;
+}
+
+.profile-header .header-left {
+  grid-area: logo;
+}
+
+.profile-header .header-right {
+  grid-area: right;
+  justify-self: end;
+  margin-left: 0;
+}
+
+.profile-header .header-nav {
+  grid-area: nav;
+  display: flex;
+  gap: 24px;
+  margin-top: 0;
+}
+
+.profile-header .nav-link {
+  background: transparent !important;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 4px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: all var(--transition-base);
+  margin-bottom: -1px; /* 让下划线与header底边重合 */
+}
+
+.profile-header .nav-link:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-hover);
+}
+
+.profile-header .nav-link.active {
+  color: var(--text-primary);
+  font-weight: 600;
+  border-bottom-color: var(--accent-primary); /* 下划线颜色 */
 }
 
 .header-btn {
