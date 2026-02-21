@@ -359,51 +359,54 @@ def ensure_memos_user_exists(user_id: str):
         
         # 用户已存在，但需要确保 cube 使用最新的配置
         # 重新加载 cube 以使用新的 embedder 配置
-        try:
-            from memos.api.config import APIConfig
-            # create_user_config 返回 (default_config, default_mem_cube)，需用 config 供 register_mem_cube 使用
-            user_config, default_mem_cube = APIConfig.create_user_config(
-                user_name=user_id,
-                user_id=user_id,
-            )
-            default_cube_config = default_mem_cube.config if default_mem_cube else None
+        # 优化：仅在必要时重新加载，避免每次请求都重载导致延迟
+        # 当前逻辑：假设内存中已存在即为最新，不再强制重载
+        # try:
+        #     from memos.api.config import APIConfig
+        #     # create_user_config 返回 (default_config, default_mem_cube)，需用 config 供 register_mem_cube 使用
+        #     user_config, default_mem_cube = APIConfig.create_user_config(
+        #         user_name=user_id,
+        #         user_id=user_id,
+        #     )
+        #     default_cube_config = default_mem_cube.config if default_mem_cube else None
 
-            # 获取用户的所有 cube 并强制重新加载以使用新配置
-            accessible_cubes = mos_product.user_manager.get_user_cubes(user_id)
-            for cube in accessible_cubes:
-                # 从内存中移除旧的 cube（如果存在）
-                if cube.cube_id in mos_product.mem_cubes:
-                    logger.info(
-                        f"🔄 Removing old cube {cube.cube_id} from memory for user {user_id} "
-                        f"to reload with latest embedder configuration"
-                    )
-                    del mos_product.mem_cubes[cube.cube_id]
-                    logger.debug(f"Removed old cube {cube.cube_id} from memory")
+        #     # 获取用户的所有 cube 并强制重新加载以使用新配置
+        #     accessible_cubes = mos_product.user_manager.get_user_cubes(user_id)
+        #     for cube in accessible_cubes:
+        #         # 从内存中移除旧的 cube（如果存在）
+        #         if cube.cube_id in mos_product.mem_cubes:
+        #             # logger.info(
+        #             #     f"🔄 Removing old cube {cube.cube_id} from memory for user {user_id} "
+        #             #     f"to reload with latest embedder configuration"
+        #             # )
+        #             # del mos_product.mem_cubes[cube.cube_id]
+        #             # logger.debug(f"Removed old cube {cube.cube_id} from memory")
+        #             pass  # 既然已存在，就不重载了，节省时间
                 
-                # 重新加载 cube 使用新配置（register_mem_cube 需要 GeneralMemCubeConfig，不能传 GeneralMemCube）
-                if cube.cube_path and os.path.exists(cube.cube_path):
-                    logger.info(
-                        f"🔄 Reloading cube {cube.cube_id} for user {user_id} "
-                        f"with new embedder configuration"
-                    )
-                    mos_product.register_mem_cube(
-                        cube.cube_path,
-                        cube.cube_id,
-                        user_id,
-                        memory_types=["act_mem"] if mos_product.config.enable_activation_memory else [],
-                        default_config=default_cube_config,  # GeneralMemCubeConfig 以强制重新加载
-                    )
-                    logger.info(f"✅ Reloaded cube {cube.cube_id} with new configuration")
-                else:
-                    logger.warning(
-                        f"Cube path {cube.cube_path} does not exist for cube {cube.cube_id}, "
-                        f"cannot reload with new configuration"
-                    )
-        except Exception as e:
-            logger.warning(
-                f"Failed to reload cube for user {user_id} with new config: {e}. "
-                f"This is not critical, but may result in using old embedder configuration."
-            )
+        #         # 重新加载 cube 使用新配置（register_mem_cube 需要 GeneralMemCubeConfig，不能传 GeneralMemCube）
+        #         # if cube.cube_path and os.path.exists(cube.cube_path):
+        #         #     logger.info(
+        #         #         f"🔄 Reloading cube {cube.cube_id} for user {user_id} "
+        #         #         f"with new embedder configuration"
+        #         #     )
+        #         #     mos_product.register_mem_cube(
+        #         #         cube.cube_path,
+        #         #         cube.cube_id,
+        #         #         user_id,
+        #         #         memory_types=["act_mem"] if mos_product.config.enable_activation_memory else [],
+        #         #         default_config=default_cube_config,  # GeneralMemCubeConfig 以强制重新加载
+        #         #     )
+        #         #     logger.info(f"✅ Reloaded cube {cube.cube_id} with new configuration")
+        #         # else:
+        #         #     logger.warning(
+        #         #         f"Cube path {cube.cube_path} does not exist for cube {cube.cube_id}, "
+        #         #         f"cannot reload with new configuration"
+        #         #     )
+        # except Exception as e:
+        #     logger.warning(
+        #         f"Failed to reload cube for user {user_id} with new config: {e}. "
+        #         f"This is not critical, but may result in using old embedder configuration."
+        #     )
         
         return  # 用户已存在，直接返回
     except (ValueError, KeyError) as e:
@@ -504,22 +507,10 @@ async def chat(chat_req: ChatRequest):
     使用短生命周期 session 仅做提及替换后即释放，避免流式响应期间占用连接池影响其他接口。
     """
     try:
-        mos_product = get_mos_product_instance()
-        ensure_memos_user_exists(chat_req.user_id)
-
-        command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info", "/continue-chapter")
-        is_command = chat_req.query.strip().lower().startswith(command_prefixes)
-
-        # 仅在此处使用 db，用毕即释放，不随流式响应长期占用连接
-        async with AsyncSessionLocal() as db:
-            mention_service = MentionService(db)
-            processed_query = await mention_service.replace_mentions_in_text(chat_req.query, chat_req.user_id)
-            processed_history = await mention_service.replace_mentions_in_history(chat_req.history or [], chat_req.user_id)
-
-        disable_memory = not chat_req.use_memory or is_command
+        # 内部流式函数定义 (保持原样，通过参数传递必要数据)
 
         async def run_continue_chapter_stream():
-            """续写章节：根据前三章大纲细纲与前一章内容，流式返回 3 个推荐大纲细纲。支持用户描述下一章大致方向。"""
+            """续写章节：根据前三章大纲细纲与前一章内容，流式返回 3 个推荐大纲细纲。逻辑分三阶段：准备Prompt(DB)、AI生成(无DB)、处理结果(DB)，避免长时间占用数据库连接。"""
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:
                 yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行续写章节'})}\n\n"
@@ -530,82 +521,158 @@ async def chat(chat_req: ChatRequest):
             previous_chapter_id = chapter_ids[0] if chapter_ids else None
             user_description = _parse_continue_chapter_user_description(chat_req.query)
 
-            async with AsyncSessionLocal() as stream_db:
-                try:
-                    yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
-                    yield f"data: {json.dumps({'type': 'text', 'data': '正在根据前三章大纲、细纲与前一章内容生成续写推荐…'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'data': '正在根据前三章大纲、细纲与前一章内容生成续写推荐…'}, ensure_ascii=False)}\n\n"
 
-                    work_service = WorkService(stream_db)
+            # Phase 1: 准备 Prompt（需要 DB）
+            user_prompt = ""
+            ctx = {}
+            analysis_settings = AnalysisSettings()
+            
+            # 使用独立的短 session
+            async with AsyncSessionLocal() as db_session:
+                try:
+                    work_service = WorkService(db_session)
                     work = await work_service.get_work_by_id(work_id)
                     if not work:
                         yield f"data: {json.dumps({'type': 'error', 'content': f'作品 {work_id} 不存在'})}\n\n"
                         return
-                    chapter_service = ChapterService(stream_db)
+                    
+                    chapter_service = ChapterService(db_session)
                     if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                         yield f"data: {json.dumps({'type': 'error', 'content': '没有编辑该作品的权限'})}\n\n"
                         return
-                    ai_service = get_ai_service()
-                    if not ai_service.is_healthy():
-                        yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
-                        return
 
-                    analysis_settings = AnalysisSettings()
-                    book_analysis_service = BookAnalysisService(stream_db)
-                    logger.info(f"开始生成续写章节推荐: work_id={work_id}, previous_chapter_id={previous_chapter_id}, user_description={user_description}")
-                    
-                    try:
-                        # 使用 asyncio.create_task 包装耗时任务，以便发送心跳
-                        task = asyncio.create_task(book_analysis_service.generate_continue_chapter_outlines(
-                            work_id=work_id,
-                            ai_service=ai_service,
-                            previous_chapter_id=previous_chapter_id,
-                            user_description=user_description,
-                            settings={
-                                "model": analysis_settings.model,
-                                "temperature": analysis_settings.temperature,
-                                "max_tokens": analysis_settings.max_tokens,
-                            },
-                        ))
-
-                        # 循环等待任务完成，期间发送心跳保持连接
-                        while not task.done():
-                            await asyncio.sleep(3)
-                            yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
-
-                        # 获取任务结果
-                        result = await task
-                        await stream_db.commit()
-
-                        payload = {
-                            "next_chapter_number": result.get("next_chapter_number"),
-                            "recommendations": result.get("recommendations", []),
-                        }
-                        logger.info(f"续写章节结果: next_chapter_number={payload.get('next_chapter_number')}, recommendations_count={len(payload.get('recommendations', []))}")
-                        if not payload.get("next_chapter_number"):
-                            logger.warning(f"续写章节结果中 next_chapter_number 为空: result={result}")
-                        if not payload.get("recommendations"):
-                            logger.warning(f"续写章节结果中 recommendations 为空: result={result}")
-                        
-                        result_json = json.dumps({'type': 'continue_chapter_result', 'data': payload}, ensure_ascii=False)
-                        logger.info(f"发送 continue_chapter_result: {result_json[:200]}...")
-                        yield f"data: {result_json}\n\n"
-                        yield f"data: {json.dumps({'type': 'end'})}\n\n"
-                    except Exception as inner_e:
-                        await stream_db.rollback()
-                        error_msg = f"生成续写章节推荐失败: {str(inner_e)}"
-                        logger.error(f"Error in generate_continue_chapter_outlines: {inner_e}", exc_info=True)
-                        yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
-                        yield f"data: {json.dumps({'type': 'end'})}\n\n"
-                        return
+                    book_analysis_service = BookAnalysisService(db_session)
+                    user_prompt, ctx = await book_analysis_service.prepare_continue_chapter_prompt(
+                        work_id=work_id,
+                        previous_chapter_id=previous_chapter_id,
+                        user_description=user_description
+                    )
                 except Exception as e:
-                    await stream_db.rollback()
-                    error_msg = f"续写章节流处理失败: {str(e)}"
-                    logger.error(f"Error in continue-chapter stream: {e}", exc_info=True)
+                    error_msg = f"准备续写数据失败: {str(e)}"
+                    logger.error(f"Error in prepare_continue_chapter_prompt: {e}", exc_info=True)
                     yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
                     yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                    return
+
+            # Phase 2: 调用 AI（不需要 DB，释放连接）
+            try:
+                ai_service = get_ai_service()
+                if not ai_service.is_healthy():
+                    yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
+                    return
+                
+                logger.info(f"开始调用 AI 生成续写章节推荐（并发模式）: work_id={work_id}")
+
+                # 定义并发生成 3 个推荐的任务
+                async def _call_single_recommendation(index: int):
+                    # 稍微调整 temperature 以增加多样性，避免生成相同内容
+                    # 基准 temperature + (0, 0.1, 0.2)
+                    temp_adj = min(analysis_settings.temperature + (index * 0.1), 1.0)
+                    
+                    # 覆盖指令：要求只生成 1 个推荐
+                    override_instruction = (
+                        "\n\n# IMPORTANT INSTRUCTION UPDATE\n"
+                        "Please IGNORE the previous instruction to generate 3 recommendations.\n"
+                        "Instead, generate ONLY ONE (1) recommendation.\n"
+                        "The output JSON must still contain a 'recommendations' array, but it should have exactly 1 item.\n"
+                        f"This is recommendation option #{index + 1}."
+                    )
+                    
+                    prompt_with_override = user_prompt + override_instruction
+                    
+                    return await ai_service.get_ai_response(
+                        content=ctx.get("previous_chapter_content") or "",
+                        prompt=prompt_with_override,
+                        system_prompt=None,
+                        model=analysis_settings.model,
+                        temperature=temp_adj,
+                        max_tokens=analysis_settings.max_tokens,
+                    )
+
+                # 创建 3 个并发任务
+                tasks = [asyncio.create_task(_call_single_recommendation(i)) for i in range(3)]
+                
+                # 循环等待所有任务完成，期间发送心跳
+                while not all(task.done() for task in tasks):
+                    await asyncio.sleep(3)
+                    yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
+                
+                # 获取结果（允许部分失败）
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # 合并结果
+                combined_recommendations = []
+                # 临时使用无 DB 的 Service 实例来调用静态工具方法
+                temp_service = BookAnalysisService(None)
+                
+                valid_responses_count = 0
+                for i, res in enumerate(results):
+                    if isinstance(res, Exception):
+                        logger.error(f"Recommendation task {i} failed: {res}")
+                        continue
+                    
+                    # 提取 JSON
+                    try:
+                        # 使用 BookAnalysisService 的 robust JSON 提取逻辑
+                        data = temp_service._extract_json_from_ai_response(res, required_key="recommendations")
+                        
+                        if data and "recommendations" in data and isinstance(data["recommendations"], list):
+                            # 取第一个推荐（因为我们要求只生成1个）
+                            if data["recommendations"]:
+                                rec = data["recommendations"][0]
+                                if isinstance(rec, dict):
+                                    # 如果没有标题，补充默认标题
+                                    if "title" not in rec or not rec["title"]:
+                                        rec["title"] = f"推荐方案{len(combined_recommendations) + 1}"
+                                    combined_recommendations.append(rec)
+                                    valid_responses_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to parse response from task {i}: {e}")
+
+                if not combined_recommendations:
+                    raise ValueError("所有AI推荐任务均失败或无法解析")
+
+                # 构造合并后的 full_response JSON 字符串，供 Phase 3 处理
+                full_response = json.dumps({"recommendations": combined_recommendations}, ensure_ascii=False)
+                logger.info(f"并发生成完成，合并得到 {len(combined_recommendations)} 个推荐")
+
+            except Exception as e:
+                error_msg = f"AI生成失败: {str(e)}"
+                logger.error(f"Error in AI generation: {e}", exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                return
+
+            # Phase 3: 处理结果（需要 DB）
+            async with AsyncSessionLocal() as db_session:
+                try:
+                    book_analysis_service = BookAnalysisService(db_session)
+                    result = await book_analysis_service.process_continue_chapter_response(
+                        full_response, ctx, work_id, previous_chapter_id
+                    )
+                    
+                    payload = {
+                        "next_chapter_number": result.get("next_chapter_number"),
+                        "recommendations": result.get("recommendations", []),
+                    }
+                    
+                    logger.info(f"续写章节结果: next_chapter_number={payload.get('next_chapter_number')}, recommendations_count={len(payload.get('recommendations', []))}")
+                    
+                    result_json = json.dumps({'type': 'continue_chapter_result', 'data': payload}, ensure_ascii=False)
+                    logger.info(f"发送 continue_chapter_result: {result_json[:200]}...")
+                    yield f"data: {result_json}\n\n"
+                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                except Exception as e:
+                    error_msg = f"处理续写结果失败: {str(e)}"
+                    logger.error(f"Error in process_continue_chapter_response: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                    return
 
         async def run_generate_outlines_stream():
-            """调用章节大纲生成服务并流式返回结果文本。流内使用独立 session，避免请求 session 在流被取消时非法关闭。"""
+            """调用章节大纲生成服务并流式返回结果文本。使用 3 阶段模型避免长时间占用 DB 连接。"""
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:
                 yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行章节分析'})}\n\n"
@@ -616,73 +683,124 @@ async def chat(chat_req: ChatRequest):
                 ids = _parse_chapter_ids_from_command(chat_req.query)
                 chapter_ids = ids if ids else None
 
-            async with AsyncSessionLocal() as stream_db:
+            # Phase 0: 初始检查与获取章节列表（需要 DB）
+            chapter_info_list = []
+            async with AsyncSessionLocal() as db_session:
                 try:
-                    yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
-
-                    work_service = WorkService(stream_db)
+                    work_service = WorkService(db_session)
                     work = await work_service.get_work_by_id(work_id)
                     if not work:
-                        raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+                        yield f"data: {json.dumps({'type': 'error', 'content': f'作品 {work_id} 不存在'})}\n\n"
+                        return
 
-                    chapter_service = ChapterService(stream_db)
+                    chapter_service = ChapterService(db_session)
                     if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
-                        raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
+                        yield f"data: {json.dumps({'type': 'error', 'content': '没有编辑该作品的权限'})}\n\n"
+                        return
 
-                    ai_service = get_ai_service()
-                    if not ai_service.is_healthy():
-                        raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-
-                    analysis_settings = AnalysisSettings()
-                    book_analysis_service = BookAnalysisService(stream_db)
-
-                    chapter_id_list = chapter_ids
-                    success_count = 0
-                    error_count = 0
-                    total = 0
+                    # 获取要处理的章节列表
+                    if chapter_ids:
+                        chapters = []
+                        for chapter_id in chapter_ids:
+                            chapter = await chapter_service.get_chapter_by_id(chapter_id)
+                            if chapter and chapter.work_id == work_id:
+                                chapters.append(chapter)
+                    else:
+                        chapters, _ = await chapter_service.get_chapters(
+                            filters={"work_id": work_id},
+                            page=1,
+                            size=1000,
+                            sort_by="chapter_number",
+                            sort_order="asc"
+                        )
                     
-                    iterator = book_analysis_service.generate_outlines_for_all_chapters(
-                        work_id=work_id,
-                        ai_service=ai_service,
-                        prompt=None,
-                        settings={
-                            "model": analysis_settings.model,
-                            "temperature": analysis_settings.temperature,
-                            "max_tokens": analysis_settings.max_tokens,
-                        },
-                        chapter_ids=chapter_id_list,
-                    )
-
-                    while True:
-                        try:
-                            # 包装迭代器的 __anext__ 方法以支持心跳
-                            task = asyncio.create_task(iterator.__anext__())
-                            while not task.done():
-                                await asyncio.sleep(3)
-                                yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
-                            result = await task
-                        except StopAsyncIteration:
-                            break
-                        
-                        total += 1
-                        if "error" in result:
-                            error_count += 1
-                            error_msg = f"章节 {result.get('chapter_number') or result.get('chapter_id')} 失败: {result.get('error')}"
-                            yield f"data: {json.dumps({'type': 'text', 'data': error_msg}, ensure_ascii=False)}\n\n"
-                        else:
-                            success_count += 1
-                            success_msg = f"章节 {result.get('chapter_number') or result.get('chapter_id')} 完成"
-                            yield f"data: {json.dumps({'type': 'text', 'data': success_msg}, ensure_ascii=False)}\n\n"
-
-                    await stream_db.commit()
-                    summary = f"章节大纲生成完成：成功 {success_count}，失败 {error_count}，总计 {total}"
-                    yield f"data: {json.dumps({'type': 'text', 'data': summary}, ensure_ascii=False)}\n\n"
-                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                    # 提取必要信息，避免后续使用 detached 对象
+                    for c in chapters:
+                        chapter_info_list.append({
+                            "id": c.id,
+                            "title": c.title,
+                            "chapter_number": c.chapter_number
+                        })
                 except Exception as e:
-                    await stream_db.rollback()
-                    logger.error(f"Error in analysis stream: {e}", exc_info=True)
-                    error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
-                    yield error_data
+                    logger.error(f"Error in init generate outlines: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'error', 'content': f'初始化失败: {str(e)}'})}\n\n"
+                    return
+
+            if not chapter_info_list:
+                 yield f"data: {json.dumps({'type': 'text', 'data': '没有找到可分析的章节'}, ensure_ascii=False)}\n\n"
+                 yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                 return
+
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                 yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
+                 return
+
+            analysis_settings = AnalysisSettings()
+            
+            total_chapters = len(chapter_info_list)
+            success_count = 0
+            error_count = 0
+            
+            yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'data': f'开始分析 {total_chapters} 个章节...'}, ensure_ascii=False)}\n\n"
+
+            for index, info in enumerate(chapter_info_list, 1):
+                chapter_id = info["id"]
+                chapter_title = info["title"]
+                chapter_number = info["chapter_number"]
+                
+                try:
+                    # Phase 1: 准备 Prompt（需要 DB）
+                    async with AsyncSessionLocal() as db_session:
+                        book_analysis_service = BookAnalysisService(db_session)
+                        enhanced_prompt, chapter_content, _ = await book_analysis_service.prepare_chapter_outline_prompt(
+                            work_id=work_id,
+                            chapter_id=chapter_id,
+                            prompt=None
+                        )
+                    
+                    # Phase 2: 调用 AI（不需要 DB）
+                    # 封装任务以便使用心跳
+                    async def _do_ai_call():
+                         return await ai_service.get_ai_response(
+                            content=chapter_content,
+                            prompt=enhanced_prompt,
+                            system_prompt=None,
+                            model=analysis_settings.model,
+                            temperature=analysis_settings.temperature,
+                            max_tokens=analysis_settings.max_tokens,
+                        )
+                    
+                    ai_task = asyncio.create_task(_do_ai_call())
+                    while not ai_task.done():
+                        await asyncio.sleep(3)
+                        yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
+                    
+                    full_response = await ai_task
+
+                    # Phase 3: 处理结果（需要 DB）
+                    async with AsyncSessionLocal() as db_session:
+                         book_analysis_service = BookAnalysisService(db_session)
+                         result = await book_analysis_service.process_chapter_outline_response(
+                             full_response, chapter_id
+                         )
+                         await db_session.commit()
+                    
+                    # 发送成功消息
+                    success_count += 1
+                    success_msg = f"章节 {chapter_number} 完成"
+                    yield f"data: {json.dumps({'type': 'text', 'data': success_msg}, ensure_ascii=False)}\n\n"
+
+                except Exception as e:
+                    error_count += 1
+                    error_msg = f"章节 {chapter_number} 失败: {str(e)}"
+                    logger.error(f"处理章节 {chapter_id} 失败: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'text', 'data': error_msg}, ensure_ascii=False)}\n\n"
+
+            summary = f"章节大纲生成完成：成功 {success_count}，失败 {error_count}，总计 {total_chapters}"
+            yield f"data: {json.dumps({'type': 'text', 'data': summary}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
         async def run_chapter_info_analysis_stream():
             """调用章节组件信息分析服务并流式返回结果文本。流内使用独立 session。"""
@@ -691,118 +809,154 @@ async def chat(chat_req: ChatRequest):
                 yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行章节组件信息分析'})}\n\n"
                 return
 
-            async with AsyncSessionLocal() as stream_db:
+            chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+
+            # 初始检查
+            async with AsyncSessionLocal() as check_db:
+                work_service = WorkService(check_db)
+                work = await work_service.get_work_by_id(work_id)
+                if not work:
+                    yield f"data: {json.dumps({'type': 'error', 'content': f'作品 {work_id} 不存在'})}\n\n"
+                    return
+
+                chapter_service = ChapterService(check_db)
+                if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
+                    yield f"data: {json.dumps({'type': 'error', 'content': '没有编辑该作品的权限'})}\n\n"
+                    return
+                
+                # 如果没有指定章节，默认使用第一章
+                if not chapter_ids:
+                    chapters, _ = await chapter_service.get_chapters(
+                        filters={"work_id": work_id},
+                        page=1,
+                        size=1,
+                        sort_by="chapter_number",
+                        sort_order="asc"
+                    )
+                    if chapters:
+                        chapter_ids = [chapters[0].id]
+                    else:
+                        yield f"data: {json.dumps({'type': 'error', 'content': '作品中没有章节，无法执行组件信息分析'})}\n\n"
+                        return
+
+                current_user_id = work.owner_id
+
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
+                return
+
+            analysis_settings = AnalysisSettings()
+            
+            yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+
+            total = len(chapter_ids)
+            success_count = 0
+            error_count = 0
+            all_summaries = []
+
+            for idx, chapter_id in enumerate(chapter_ids, 1):
                 try:
-                    yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'text', 'data': f'正在分析章节 {idx}/{total} (ID: {chapter_id})...'}, ensure_ascii=False)}\n\n"
 
-                    work_service = WorkService(stream_db)
-                    work = await work_service.get_work_by_id(work_id)
-                    if not work:
-                        raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
-
-                    chapter_service = ChapterService(stream_db)
-                    if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
-                        raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
-
-                    chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
-                    if not chapter_ids:
-                        chapters, _ = await chapter_service.get_chapters(
-                            filters={"work_id": work_id},
-                            page=1,
-                            size=1,
-                            sort_by="chapter_number",
-                            sort_order="asc"
+                    # Phase 1: Prepare (DB)
+                    tasks = []
+                    chapter_content = ""
+                    async with AsyncSessionLocal() as db_session:
+                        book_analysis_service = BookAnalysisService(db_session)
+                        tasks, chapter_content, _ = await book_analysis_service.prepare_component_analysis_tasks(
+                            work_id=work_id,
+                            chapter_id=chapter_id,
                         )
-                        if chapters:
-                            chapter_ids = [chapters[0].id]
-                        else:
-                            yield f"data: {json.dumps({'type': 'error', 'content': '作品中没有章节，无法执行组件信息分析'})}\n\n"
-                            return
+                    
+                    if not tasks:
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 无需分析或未找到模板'}, ensure_ascii=False)}\n\n"
+                        continue
 
-                    ai_service = get_ai_service()
-                    if not ai_service.is_healthy():
-                        raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+                    # Phase 2 & 3: Process each task
+                    chapter_summary_parts = []
+                    
+                    for task_info in tasks:
+                        data_key = task_info["data_key"]
+                        prompt = task_info["prompt"]
+                        system_prompt = task_info["system_prompt"]
+                        
+                        # Phase 2: AI (No DB)
+                        # 封装任务以便使用心跳
+                        async def _do_ai_call():
+                            return await ai_service.get_ai_response(
+                                content=chapter_content,
+                                prompt=prompt,
+                                system_prompt=system_prompt,
+                                model=analysis_settings.model,
+                                temperature=analysis_settings.temperature,
+                                max_tokens=analysis_settings.max_tokens,
+                                use_json_format=True
+                            )
 
-                    analysis_settings = AnalysisSettings()
-                    book_analysis_service = BookAnalysisService(stream_db)
-                    current_user_id = work.owner_id
+                        ai_task = asyncio.create_task(_do_ai_call())
+                        while not ai_task.done():
+                            await asyncio.sleep(3)
+                            yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
+                        
+                        ai_response = await ai_task
+                        
+                        # Phase 3: Process (DB)
+                        async with AsyncSessionLocal() as db_session:
+                            book_analysis_service = BookAnalysisService(db_session)
+                            stats = await book_analysis_service.process_component_analysis_result(
+                                work_id, chapter_id, data_key, ai_response, current_user_id
+                            )
+                            await db_session.commit()
+                        
+                        if stats["processed"] > 0:
+                            chapter_summary_parts.append(f"- {data_key}: 提取 {stats['processed']} 条，更新 {stats['updated']} 条")
 
-                    total = len(chapter_ids)
-                    success_count = 0
-                    error_count = 0
-                    all_summaries = []
-
-                    for idx, chapter_id in enumerate(chapter_ids, 1):
-                        try:
-                            yield f"data: {json.dumps({'type': 'text', 'data': f'正在分析章节 {idx}/{total} (ID: {chapter_id})...'}, ensure_ascii=False)}\n\n"
-
-                            task = asyncio.create_task(book_analysis_service.component_data_insert_to_work(
-                                work_id=work_id,
-                                chapter_id=chapter_id,
-                                ai_service=ai_service,
-                                current_user_id=current_user_id,
-                                analysis_settings={
-                                    "model": analysis_settings.model,
-                                    "temperature": analysis_settings.temperature,
-                                    "max_tokens": analysis_settings.max_tokens,
-                                },
-                                build_text_summary=True,
-                            ))
-
-                            while not task.done():
-                                await asyncio.sleep(3)
-                                yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
-
-                            result = await task
-
-                            summary_text = result.get("summary_text", "")
-                            if summary_text:
-                                all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
-                                yield f"data: {json.dumps({'type': 'text', 'data': summary_text}, ensure_ascii=False)}\n\n"
-
-                            success_count += 1
-                            yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 分析完成'}, ensure_ascii=False)}\n\n"
-
-                        except Exception as e:
-                            error_count += 1
-                            error_msg = str(e)
-                            logger.error(f"分析章节 {chapter_id} 失败: {e}", exc_info=True)
-                            yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 分析失败: {error_msg}'}, ensure_ascii=False)}\n\n"
-
-                    await stream_db.commit()
-                    final_summary = f"\n章节组件信息分析完成：成功 {success_count}，失败 {error_count}，总计 {total}"
-                    if all_summaries:
-                        final_summary += "\n\n" + "\n\n".join(all_summaries)
-                    yield f"data: {json.dumps({'type': 'text', 'data': final_summary}, ensure_ascii=False)}\n\n"
-                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+                    success_count += 1
+                    summary_text = ""
+                    if chapter_summary_parts:
+                        summary_text = "\n".join(chapter_summary_parts)
+                        all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
+                        yield f"data: {json.dumps({'type': 'text', 'data': summary_text}, ensure_ascii=False)}\n\n"
+                    
+                    yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 分析完成'}, ensure_ascii=False)}\n\n"
 
                 except Exception as e:
-                    await stream_db.rollback()
-                    logger.error(f"Error in chapter info analysis stream: {e}", exc_info=True)
-                    error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
-                    yield error_data
+                    error_count += 1
+                    error_msg = str(e)
+                    logger.error(f"分析章节 {chapter_id} 失败: {e}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 分析失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+
+            final_summary = f"\n章节组件信息分析完成：成功 {success_count}，失败 {error_count}，总计 {total}"
+            if all_summaries:
+                final_summary += "\n\n" + "\n\n".join(all_summaries)
+            yield f"data: {json.dumps({'type': 'text', 'data': final_summary}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
         async def run_chapter_info_verification_stream():
             """调用章节信息校验服务并流式返回结果文本。流内使用独立 session。"""
-            work_id = _parse_work_id_from_user_id(chat_req.user_id)
-            if not work_id:
-                yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行章节信息校验'})}\n\n"
-                return
+            try:
+                work_id = _parse_work_id_from_user_id(chat_req.user_id)
+                if not work_id:
+                    yield f"data: {json.dumps({'type': 'error', 'content': '未能从 user_id 解析出 work_id，无法执行章节信息校验'})}\n\n"
+                    return
 
-            async with AsyncSessionLocal() as stream_db:
-                try:
-                    yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
+                chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
 
-                    work_service = WorkService(stream_db)
+                # 初始检查
+                async with AsyncSessionLocal() as check_db:
+                    work_service = WorkService(check_db)
                     work = await work_service.get_work_by_id(work_id)
                     if not work:
-                        raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+                        yield f"data: {json.dumps({'type': 'error', 'content': f'作品 {work_id} 不存在'})}\n\n"
+                        return
 
-                    chapter_service = ChapterService(stream_db)
+                    chapter_service = ChapterService(check_db)
                     if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
-                        raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
-
-                    chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+                        yield f"data: {json.dumps({'type': 'error', 'content': '没有编辑该作品的权限'})}\n\n"
+                        return
+                    
+                    # 如果没有指定章节，默认使用第一章
                     if not chapter_ids:
                         chapters, _ = await chapter_service.get_chapters(
                             filters={"work_id": work_id},
@@ -816,77 +970,148 @@ async def chat(chat_req: ChatRequest):
                         else:
                             yield f"data: {json.dumps({'type': 'error', 'content': '作品中没有章节，无法执行信息校验'})}\n\n"
                             return
-
-                    ai_service = get_ai_service()
-                    if not ai_service.is_healthy():
-                        raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-
-                    analysis_settings = AnalysisSettings()
-                    book_analysis_service = BookAnalysisService(stream_db)
+                    
                     current_user_id = work.owner_id
 
-                    total = len(chapter_ids)
-                    success_count = 0
-                    error_count = 0
-                    all_summaries = []
+                ai_service = get_ai_service()
+                if not ai_service.is_healthy():
+                    yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
+                    return
 
-                    for idx, chapter_id in enumerate(chapter_ids, 1):
-                        try:
-                            yield f"data: {json.dumps({'type': 'text', 'data': f'正在校验章节 {idx}/{total} (ID: {chapter_id})...'}, ensure_ascii=False)}\n\n"
+                analysis_settings = AnalysisSettings()
+                
+                yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
 
-                            task = asyncio.create_task(book_analysis_service.verify_chapter_info(
+                total = len(chapter_ids)
+                success_count = 0
+                error_count = 0
+                all_summaries = []
+
+                for idx, chapter_id in enumerate(chapter_ids, 1):
+                    try:
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'正在校验章节 {idx}/{total} (ID: {chapter_id})...'}, ensure_ascii=False)}\n\n"
+
+                        # Phase 1: Prepare (DB)
+                        tasks = []
+                        chapter_content = ""
+                        chapter_title = ""
+                        chapter_number = 0
+                        
+                        async with AsyncSessionLocal() as db_session:
+                            book_analysis_service = BookAnalysisService(db_session)
+                            tasks, chapter_content, chapter_obj = await book_analysis_service.prepare_verification_tasks(
                                 work_id=work_id,
                                 chapter_id=chapter_id,
-                                ai_service=ai_service,
-                                current_user_id=current_user_id,
-                                analysis_settings={
-                                    "model": analysis_settings.model,
-                                    "temperature": analysis_settings.temperature,
-                                    "max_tokens": analysis_settings.max_tokens,
-                                },
-                                build_text_summary=True,
-                            ))
+                            )
+                            if chapter_obj:
+                                chapter_title = chapter_obj.title
+                                chapter_number = chapter_obj.chapter_number
+                        
+                        if not tasks:
+                            yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 无需校验或未找到模板'}, ensure_ascii=False)}\n\n"
+                            continue
 
-                            while not task.done():
+                        # Phase 2: Run verification tasks (AI)
+                        verification_results = []
+                        for task_info in tasks:
+                            data_key = task_info["data_key"]
+                            prompt_name = task_info["prompt_name"]
+                            prompt = task_info["prompt"]
+                            system_prompt = task_info["system_prompt"]
+                            
+                            # 封装任务以便使用心跳
+                            async def _do_verification_call():
+                                return await ai_service.get_ai_response(
+                                    content=chapter_content,
+                                    prompt=prompt,
+                                    system_prompt=system_prompt,
+                                    model=analysis_settings.model,
+                                    temperature=analysis_settings.temperature,
+                                    max_tokens=analysis_settings.max_tokens,
+                                    use_json_format=False
+                                )
+
+                            ai_task = asyncio.create_task(_do_verification_call())
+                            while not ai_task.done():
                                 await asyncio.sleep(3)
                                 yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
+                            
+                            try:
+                                ai_response = await ai_task
+                                verification_results.append({
+                                    "data_key": data_key,
+                                    "prompt_name": prompt_name,
+                                    "result": ai_response
+                                })
+                            except Exception as e:
+                                logger.error(f"校验任务失败: {e}")
+                                verification_results.append({
+                                    "data_key": data_key,
+                                    "prompt_name": prompt_name,
+                                    "error": str(e)
+                                })
 
-                            result = await task
+                        # Phase 3: Generate Summary (AI)
+                        if verification_results:
+                            summary_prompt = ""
+                            sys_prompt = ""
+                            async with AsyncSessionLocal() as db_session:
+                                book_analysis_service = BookAnalysisService(db_session)
+                                summary_prompt, sys_prompt = book_analysis_service.prepare_verification_summary_prompt(
+                                    chapter_id=chapter_id,
+                                    chapter_title=chapter_title,
+                                    chapter_number=chapter_number,
+                                    verification_results=verification_results
+                                )
+                            
+                            async def _do_summary_call():
+                                return await ai_service.get_ai_response(
+                                    content=chapter_content,
+                                    prompt=summary_prompt,
+                                    system_prompt=sys_prompt,
+                                    model=analysis_settings.model,
+                                    temperature=analysis_settings.temperature,
+                                    max_tokens=analysis_settings.max_tokens,
+                                    use_json_format=False
+                                )
+                            
+                            ai_summary_task = asyncio.create_task(_do_summary_call())
+                            while not ai_summary_task.done():
+                                await asyncio.sleep(3)
+                                yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
+                            
+                            summary_text = await ai_summary_task
+                            
+                            all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
+                            yield f"data: {json.dumps({'type': 'text', 'data': summary_text}, ensure_ascii=False)}\n\n"
 
-                            summary_text = result.get("summary_text", "")
-                            if summary_text:
-                                all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
-                                yield f"data: {json.dumps({'type': 'text', 'data': summary_text}, ensure_ascii=False)}\n\n"
+                        success_count += 1
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 校验完成'}, ensure_ascii=False)}\n\n"
 
-                            success_count += 1
-                            yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 校验完成'}, ensure_ascii=False)}\n\n"
+                    except Exception as e:
+                        error_count += 1
+                        error_msg = str(e)
+                        logger.error(f"校验章节 {chapter_id} 失败: {e}", exc_info=True)
+                        yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 校验失败: {error_msg}'}, ensure_ascii=False)}\n\n"
 
-                        except Exception as e:
-                            error_count += 1
-                            error_msg = str(e)
-                            logger.error(f"校验章节 {chapter_id} 失败: {e}", exc_info=True)
-                            yield f"data: {json.dumps({'type': 'text', 'data': f'章节 {chapter_id} 校验失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+                final_summary = f"\n章节信息校验完成：成功 {success_count}，失败 {error_count}，总计 {total}"
+                if all_summaries:
+                    final_summary += "\n\n" + "\n\n".join(all_summaries)
+                yield f"data: {json.dumps({'type': 'text', 'data': final_summary}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'end'})}\n\n"
 
-                    await stream_db.commit()
-                    final_summary = f"\n章节信息校验完成：成功 {success_count}，失败 {error_count}，总计 {total}"
-                    if all_summaries:
-                        final_summary += "\n\n" + "\n\n".join(all_summaries)
-                    yield f"data: {json.dumps({'type': 'text', 'data': final_summary}, ensure_ascii=False)}\n\n"
-                    yield f"data: {json.dumps({'type': 'end'})}\n\n"
+            except Exception as e:
+                logger.error(f"Error in chapter info verification stream: {e}", exc_info=True)
+                error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
+                yield error_data
 
-                except Exception as e:
-                    await stream_db.rollback()
-                    logger.error(f"Error in chapter info verification stream: {e}", exc_info=True)
-                    error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
-                    yield error_data
-
-        async def generate_simple_stream():
+        async def generate_simple_stream(query: str, history: list):
             """流式直接调用大模型（无记忆检索）。"""
             try:
                 yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
                 # 构建消息列表（保留最多20条历史）
-                history_msgs = processed_history[-20:] if processed_history else []
-                messages = [*history_msgs, {"role": "user", "content": processed_query}]
+                history_msgs = history[-20:] if history else []
+                messages = [*history_msgs, {"role": "user", "content": query}]
 
                 backend = mos_product.config.chat_model.backend
                 if backend in ["huggingface", "vllm", "openai"]:
@@ -911,10 +1136,34 @@ async def chat(chat_req: ChatRequest):
                 error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
                 yield error_data
 
-        async def generate_chat_response():
-            """Generate chat response as SSE stream."""
+        async def main_response_generator():
+            """主生成器：负责初始化、鉴权、提及替换与路由分发。"""
             try:
+                # 1. 立即发送心跳 (TTFB优化)
+                yield f"data: {json.dumps({'type': 'ping', 'data': 'start'})}\n\n"
+
+                # 2. 初始化与鉴权
+                mos_product = get_mos_product_instance()
+                ensure_memos_user_exists(chat_req.user_id)
+
+                command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info", "/continue-chapter")
+                is_command = chat_req.query.strip().lower().startswith(command_prefixes)
+
+                # 3. 提及替换 (Async DB 操作)
+                # 对于指令类请求，不需要进行提及替换（指令解析直接使用原始 query），跳过耗时操作
+                processed_query = chat_req.query
+                processed_history = chat_req.history or []
+                
+                if not is_command:
+                    async with AsyncSessionLocal() as db:
+                        mention_service = MentionService(db)
+                        processed_query = await mention_service.replace_mentions_in_text(chat_req.query, chat_req.user_id)
+                        processed_history = await mention_service.replace_mentions_in_history(chat_req.history or [], chat_req.user_id)
+
+                disable_memory = not chat_req.use_memory or is_command
                 query_lower = processed_query.strip().lower()
+
+                # 4. 路由分发
                 if disable_memory and query_lower.startswith("/continue-chapter"):
                     async for chunk in run_continue_chapter_stream():
                         yield chunk
@@ -928,10 +1177,10 @@ async def chat(chat_req: ChatRequest):
                     async for chunk in run_generate_outlines_stream():
                         yield chunk
                 elif disable_memory:
-                    async for chunk in generate_simple_stream():
+                    async for chunk in generate_simple_stream(processed_query, processed_history):
                         yield chunk
                 else:
-                    # 同步生成器会阻塞事件循环，导致其他接口卡顿；放到线程中消费，通过队列传回
+                    # MemOS 聊天逻辑
                     chunk_queue = queue.Queue()
                     thread_exc = []
 
@@ -963,12 +1212,12 @@ async def chat(chat_req: ChatRequest):
                         raise thread_exc[0]
 
             except Exception as e:
-                logger.error(f"Error in chat stream: {e}")
+                logger.error(f"Error in chat stream: {e}", exc_info=True)
                 error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
                 yield error_data
 
         return StreamingResponse(
-            generate_chat_response(),
+            main_response_generator(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -999,10 +1248,15 @@ async def chat_complete(chat_req: ChatCompleteRequest):
         command_prefixes = ("/analysis-chapter", "/analysis-chapter-info", "/verification-chapter-info", "/continue-chapter")
         is_command = chat_req.query.strip().lower().startswith(command_prefixes)
 
-        async with AsyncSessionLocal() as _db:
-            mention_service = MentionService(_db)
-            processed_query = await mention_service.replace_mentions_in_text(chat_req.query, chat_req.user_id)
-            processed_history = await mention_service.replace_mentions_in_history(chat_req.history or [], chat_req.user_id)
+        # 优化：对于指令类请求，不需要进行提及替换
+        processed_query = chat_req.query
+        processed_history = chat_req.history or []
+
+        if not is_command:
+            async with AsyncSessionLocal() as _db:
+                mention_service = MentionService(_db)
+                processed_query = await mention_service.replace_mentions_in_text(chat_req.query, chat_req.user_id)
+                processed_history = await mention_service.replace_mentions_in_history(chat_req.history or [], chat_req.user_id)
 
         disable_memory = not chat_req.use_memory or is_command
 
@@ -1014,6 +1268,10 @@ async def chat_complete(chat_req: ChatCompleteRequest):
             chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
             previous_chapter_id = chapter_ids[0] if chapter_ids else None
             user_description = _parse_continue_chapter_user_description(chat_req.query)
+            
+            # Phase 1: Prepare (DB)
+            user_prompt = ""
+            ctx = {}
             async with AsyncSessionLocal() as db:
                 work_service = WorkService(db)
                 work = await work_service.get_work_by_id(work_id)
@@ -1022,36 +1280,63 @@ async def chat_complete(chat_req: ChatCompleteRequest):
                 chapter_service = ChapterService(db)
                 if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
-                ai_service = get_ai_service()
-                if not ai_service.is_healthy():
-                    raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-                analysis_settings = AnalysisSettings()
+                
                 book_analysis_service = BookAnalysisService(db)
                 try:
-                    result = await book_analysis_service.generate_continue_chapter_outlines(
+                    user_prompt, ctx = await book_analysis_service.prepare_continue_chapter_prompt(
                         work_id=work_id,
-                        ai_service=ai_service,
                         previous_chapter_id=previous_chapter_id,
-                        user_description=user_description,
-                        settings={
-                            "model": analysis_settings.model,
-                            "temperature": analysis_settings.temperature,
-                            "max_tokens": analysis_settings.max_tokens,
-                        },
+                        user_description=user_description
+                    )
+                except Exception as e:
+                    logger.error(f"准备续写数据失败: {e}")
+                    raise HTTPException(status_code=500, detail=f"准备续写数据失败: {str(e)}")
+
+            # Phase 2: AI (No DB)
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+            analysis_settings = AnalysisSettings()
+            
+            try:
+                full_response = await ai_service.get_ai_response(
+                    content=ctx.get("previous_chapter_content") or "",
+                    prompt=user_prompt,
+                    system_prompt=None,
+                    model=analysis_settings.model,
+                    temperature=analysis_settings.temperature,
+                    max_tokens=analysis_settings.max_tokens,
+                )
+            except Exception as e:
+                logger.error(f"AI生成失败: {e}")
+                raise HTTPException(status_code=500, detail=f"AI生成失败: {str(e)}")
+
+            # Phase 3: Process (DB)
+            async with AsyncSessionLocal() as db:
+                book_analysis_service = BookAnalysisService(db)
+                try:
+                    result = await book_analysis_service.process_continue_chapter_response(
+                        full_response, ctx, work_id, previous_chapter_id
                     )
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
-                payload = {
-                    "next_chapter_number": result.get("next_chapter_number"),
-                    "recommendations": result.get("recommendations", []),
-                }
-                return {"code": 200, "status": "success", "message": "续写推荐生成完成", "data": payload}
+                except Exception as e:
+                    logger.error(f"处理续写结果失败: {e}")
+                    raise HTTPException(status_code=500, detail=f"处理续写结果失败: {str(e)}")
+
+            payload = {
+                "next_chapter_number": result.get("next_chapter_number"),
+                "recommendations": result.get("recommendations", []),
+            }
+            return {"code": 200, "status": "success", "message": "续写推荐生成完成", "data": payload}
 
         if disable_memory and query_lower.startswith("/verification-chapter-info"):
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:
                 raise HTTPException(status_code=400, detail="未能从 user_id 解析 work_id，无法执行章节信息校验")
             chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+            
+            # Initial Check
             async with AsyncSessionLocal() as db:
                 if not chapter_ids:
                     chapter_service = ChapterService(db)
@@ -1066,6 +1351,7 @@ async def chat_complete(chat_req: ChatCompleteRequest):
                         chapter_ids = [chapters[0].id]
                     else:
                         raise HTTPException(status_code=400, detail="作品中没有章节，无法执行信息校验")
+                
                 work_service = WorkService(db)
                 work = await work_service.get_work_by_id(work_id)
                 if not work:
@@ -1073,52 +1359,112 @@ async def chat_complete(chat_req: ChatCompleteRequest):
                 chapter_service = ChapterService(db)
                 if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
-                ai_service = get_ai_service()
-                if not ai_service.is_healthy():
-                    raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-                analysis_settings = AnalysisSettings()
-                book_analysis_service = BookAnalysisService(db)
-                current_user_id = work.owner_id
-                all_summaries = []
-                success_count = 0
-                error_count = 0
-                for chapter_id in chapter_ids:
-                    try:
-                        result = await book_analysis_service.verify_chapter_info(
+            
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+            analysis_settings = AnalysisSettings()
+            
+            all_summaries = []
+            success_count = 0
+            error_count = 0
+            
+            for chapter_id in chapter_ids:
+                try:
+                    # Phase 1: Prepare (DB)
+                    tasks = []
+                    chapter_content = ""
+                    chapter_title = ""
+                    chapter_number = 0
+                    
+                    async with AsyncSessionLocal() as db:
+                        book_analysis_service = BookAnalysisService(db)
+                        tasks, chapter_content, chapter_obj = await book_analysis_service.prepare_verification_tasks(
                             work_id=work_id,
                             chapter_id=chapter_id,
-                            ai_service=ai_service,
-                            current_user_id=current_user_id,
-                            analysis_settings={
-                                "model": analysis_settings.model,
-                                "temperature": analysis_settings.temperature,
-                                "max_tokens": analysis_settings.max_tokens,
-                            },
-                            build_text_summary=True,
                         )
-                        summary_text = result.get("summary_text", "")
+                        if chapter_obj:
+                            chapter_title = chapter_obj.title
+                            chapter_number = chapter_obj.chapter_number
+                    
+                    if not tasks:
+                        continue
+
+                    # Phase 2: AI (No DB)
+                    verification_results = []
+                    for task_info in tasks:
+                        try:
+                            ai_response = await ai_service.get_ai_response(
+                                content=chapter_content,
+                                prompt=task_info["prompt"],
+                                system_prompt=task_info["system_prompt"],
+                                model=analysis_settings.model,
+                                temperature=analysis_settings.temperature,
+                                max_tokens=analysis_settings.max_tokens,
+                                use_json_format=False
+                            )
+                            verification_results.append({
+                                "data_key": task_info["data_key"],
+                                "prompt_name": task_info["prompt_name"],
+                                "result": ai_response
+                            })
+                        except Exception as e:
+                            logger.error(f"校验任务失败: {e}")
+                            verification_results.append({
+                                "data_key": task_info["data_key"],
+                                "prompt_name": task_info["prompt_name"],
+                                "error": str(e)
+                            })
+
+                    # Phase 3: Summary (DB + AI)
+                    if verification_results:
+                        summary_prompt = ""
+                        sys_prompt = ""
+                        async with AsyncSessionLocal() as db:
+                            book_analysis_service = BookAnalysisService(db)
+                            summary_prompt, sys_prompt = book_analysis_service.prepare_verification_summary_prompt(
+                                chapter_id=chapter_id,
+                                chapter_title=chapter_title,
+                                chapter_number=chapter_number,
+                                verification_results=verification_results
+                            )
+                        
+                        summary_text = await ai_service.get_ai_response(
+                            content=chapter_content,
+                            prompt=summary_prompt,
+                            system_prompt=sys_prompt,
+                            model=analysis_settings.model,
+                            temperature=analysis_settings.temperature,
+                            max_tokens=analysis_settings.max_tokens,
+                            use_json_format=False
+                        )
+                        
                         if summary_text:
                             all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
-                        success_count += 1
-                    except Exception as e:
-                        error_count += 1
-                        logger.error(f"校验章节 {chapter_id} 失败: {e}", exc_info=True)
-                        all_summaries.append(f"章节 {chapter_id} 校验失败: {str(e)}")
-                response_text = f"章节信息校验完成：成功 {success_count}，失败 {error_count}，总计 {len(chapter_ids)}"
-                if all_summaries:
-                    response_text += "\n\n" + "\n\n".join(all_summaries)
-                return {
-                    "code": 200,
-                    "status": "success",
-                    "message": "校验完成",
-                    "data": response_text,
-                }
+                    
+                    success_count += 1
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"校验章节 {chapter_id} 失败: {e}", exc_info=True)
+                    all_summaries.append(f"章节 {chapter_id} 校验失败: {str(e)}")
+            
+            response_text = f"章节信息校验完成：成功 {success_count}，失败 {error_count}，总计 {len(chapter_ids)}"
+            if all_summaries:
+                response_text += "\n\n" + "\n\n".join(all_summaries)
+            return {
+                "code": 200,
+                "status": "success",
+                "message": "校验完成",
+                "data": response_text,
+            }
 
         elif disable_memory and query_lower.startswith("/analysis-chapter-info"):
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:
                 raise HTTPException(status_code=400, detail="未能从 user_id 解析 work_id，无法执行章节组件信息分析")
             chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+            
+            # Initial Check
             async with AsyncSessionLocal() as db:
                 if not chapter_ids:
                     chapter_service = ChapterService(db)
@@ -1140,91 +1486,189 @@ async def chat_complete(chat_req: ChatCompleteRequest):
                 chapter_service = ChapterService(db)
                 if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
-                ai_service = get_ai_service()
-                if not ai_service.is_healthy():
-                    raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-                analysis_settings = AnalysisSettings()
-                book_analysis_service = BookAnalysisService(db)
+                
                 current_user_id = work.owner_id
-                all_summaries = []
-                success_count = 0
-                error_count = 0
-                for chapter_id in chapter_ids:
-                    try:
-                        result = await book_analysis_service.component_data_insert_to_work(
+
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+            analysis_settings = AnalysisSettings()
+            
+            all_summaries = []
+            success_count = 0
+            error_count = 0
+            
+            for chapter_id in chapter_ids:
+                try:
+                    # Phase 1: Prepare (DB)
+                    tasks = []
+                    chapter_content = ""
+                    async with AsyncSessionLocal() as db:
+                        book_analysis_service = BookAnalysisService(db)
+                        tasks, chapter_content, _ = await book_analysis_service.prepare_component_analysis_tasks(
                             work_id=work_id,
                             chapter_id=chapter_id,
-                            ai_service=ai_service,
-                            current_user_id=current_user_id,
-                            analysis_settings={
-                                "model": analysis_settings.model,
-                                "temperature": analysis_settings.temperature,
-                                "max_tokens": analysis_settings.max_tokens,
-                            },
-                            build_text_summary=True,
                         )
-                        summary_text = result.get("summary_text", "")
-                        if summary_text:
-                            all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
-                        success_count += 1
-                    except Exception as e:
-                        error_count += 1
-                        logger.error(f"分析章节 {chapter_id} 失败: {e}", exc_info=True)
-                        all_summaries.append(f"章节 {chapter_id} 分析失败: {str(e)}")
-                response_text = f"章节组件信息分析完成：成功 {success_count}，失败 {error_count}，总计 {len(chapter_ids)}"
-                if all_summaries:
-                    response_text += "\n\n" + "\n\n".join(all_summaries)
-                return {
-                    "code": 200,
-                    "status": "success",
-                    "message": "分析完成",
-                    "data": response_text,
-                }
+                    
+                    if not tasks:
+                        continue
+
+                    # Phase 2 & 3: Process each task
+                    chapter_summary_parts = []
+                    
+                    for task_info in tasks:
+                        data_key = task_info["data_key"]
+                        prompt = task_info["prompt"]
+                        system_prompt = task_info["system_prompt"]
+                        
+                        # Phase 2: AI (No DB)
+                        try:
+                            ai_response = await ai_service.get_ai_response(
+                                content=chapter_content,
+                                prompt=prompt,
+                                system_prompt=system_prompt,
+                                model=analysis_settings.model,
+                                temperature=analysis_settings.temperature,
+                                max_tokens=analysis_settings.max_tokens,
+                                use_json_format=True
+                            )
+                            
+                            # Phase 3: Process (DB)
+                            async with AsyncSessionLocal() as db:
+                                book_analysis_service = BookAnalysisService(db)
+                                stats = await book_analysis_service.process_component_analysis_result(
+                                    work_id, chapter_id, data_key, ai_response, current_user_id
+                                )
+                                await db.commit()
+                            
+                            if stats["processed"] > 0:
+                                chapter_summary_parts.append(f"- {data_key}: 提取 {stats['processed']} 条，更新 {stats['updated']} 条")
+                        except Exception as e:
+                            logger.error(f"分析章节 {chapter_id} 组件 {data_key} 失败: {e}")
+                            chapter_summary_parts.append(f"- {data_key}: 失败 {str(e)}")
+
+                    if chapter_summary_parts:
+                        summary_text = "\n".join(chapter_summary_parts)
+                        all_summaries.append(f"章节 {chapter_id}:\n{summary_text}")
+                    success_count += 1
+                    
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"分析章节 {chapter_id} 失败: {e}", exc_info=True)
+                    all_summaries.append(f"章节 {chapter_id} 分析失败: {str(e)}")
+            
+            response_text = f"章节组件信息分析完成：成功 {success_count}，失败 {error_count}，总计 {len(chapter_ids)}"
+            if all_summaries:
+                response_text += "\n\n" + "\n\n".join(all_summaries)
+            return {
+                "code": 200,
+                "status": "success",
+                "message": "分析完成",
+                "data": response_text,
+            }
 
         elif disable_memory and query_lower.startswith("/analysis-chapter"):
             work_id = _parse_work_id_from_user_id(chat_req.user_id)
             if not work_id:
                 raise HTTPException(status_code=400, detail="未能从 user_id 解析 work_id，无法执行章节分析")
-            ids = _parse_chapter_ids_from_command(chat_req.query) if chat_req.query.strip().lower().startswith("/analysis-chapter") else None
-            chapter_id_list = ids if ids else None
+            
+            # Phase 0: Initial Check & Get Chapters (DB)
+            chapter_info_list = []
             async with AsyncSessionLocal() as db:
                 work_service = WorkService(db)
                 work = await work_service.get_work_by_id(work_id)
                 if not work:
                     raise HTTPException(status_code=404, detail=f"作品 {work_id} 不存在")
+                
                 chapter_service = ChapterService(db)
                 if not await chapter_service.can_edit_work(user_id=work.owner_id, work_id=work_id):
                     raise HTTPException(status_code=403, detail="没有编辑该作品的权限")
-                ai_service = get_ai_service()
-                if not ai_service.is_healthy():
-                    raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-                analysis_settings = AnalysisSettings()
-                book_analysis_service = BookAnalysisService(db)
-                success_count = 0
-                error_count = 0
-                total = 0
-                messages_log = []
-                async for result in book_analysis_service.generate_outlines_for_all_chapters(
-                    work_id=work_id,
-                    ai_service=ai_service,
-                    prompt=None,
-                    settings={
-                        "model": analysis_settings.model,
-                        "temperature": analysis_settings.temperature,
-                        "max_tokens": analysis_settings.max_tokens,
-                    },
-                    chapter_ids=chapter_id_list,
-                ):
-                    total += 1
-                    if "error" in result:
-                        error_count += 1
-                        messages_log.append(f"章节 {result.get('chapter_number') or result.get('chapter_id')} 失败: {result.get('error')}")
-                    else:
-                        success_count += 1
-                        messages_log.append(f"章节 {result.get('chapter_number') or result.get('chapter_id')} 完成")
-                summary = f"章节大纲生成完成：成功 {success_count}，失败 {error_count}，总计 {total}"
-                content = "\n".join(messages_log + [summary])
-                references = []
+                
+                ids = _parse_chapter_ids_from_command(chat_req.query)
+                if ids:
+                    for chapter_id in ids:
+                        chapter = await chapter_service.get_chapter_by_id(chapter_id)
+                        if chapter and chapter.work_id == work_id:
+                            chapter_info_list.append({
+                                "id": chapter.id,
+                                "chapter_number": chapter.chapter_number
+                            })
+                else:
+                    chapters, _ = await chapter_service.get_chapters(
+                        filters={"work_id": work_id},
+                        page=1,
+                        size=1000,
+                        sort_by="chapter_number",
+                        sort_order="asc"
+                    )
+                    for c in chapters:
+                        chapter_info_list.append({
+                            "id": c.id,
+                            "chapter_number": c.chapter_number
+                        })
+
+            if not chapter_info_list:
+                 return {
+                    "code": 200,
+                    "status": "success", 
+                    "message": "没有找到可分析的章节", 
+                    "data": {"response": "没有找到可分析的章节", "references": []}
+                }
+
+            ai_service = get_ai_service()
+            if not ai_service.is_healthy():
+                raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
+            analysis_settings = AnalysisSettings()
+            
+            success_count = 0
+            error_count = 0
+            messages_log = []
+            
+            for info in chapter_info_list:
+                chapter_id = info["id"]
+                chapter_number = info["chapter_number"]
+                
+                try:
+                    # Phase 1: Prepare (DB)
+                    enhanced_prompt = ""
+                    chapter_content = ""
+                    async with AsyncSessionLocal() as db:
+                        book_analysis_service = BookAnalysisService(db)
+                        enhanced_prompt, chapter_content, _ = await book_analysis_service.prepare_chapter_outline_prompt(
+                            work_id=work_id,
+                            chapter_id=chapter_id,
+                            prompt=None
+                        )
+                    
+                    # Phase 2: AI (No DB)
+                    full_response = await ai_service.get_ai_response(
+                        content=chapter_content,
+                        prompt=enhanced_prompt,
+                        system_prompt=None,
+                        model=analysis_settings.model,
+                        temperature=analysis_settings.temperature,
+                        max_tokens=analysis_settings.max_tokens,
+                    )
+                    
+                    # Phase 3: Process (DB)
+                    async with AsyncSessionLocal() as db:
+                        book_analysis_service = BookAnalysisService(db)
+                        await book_analysis_service.process_chapter_outline_response(
+                            full_response, chapter_id
+                        )
+                        await db.commit()
+                    
+                    success_count += 1
+                    messages_log.append(f"章节 {chapter_number} 完成")
+                    
+                except Exception as e:
+                    error_count += 1
+                    logger.error(f"分析章节 {chapter_id} 失败: {e}", exc_info=True)
+                    messages_log.append(f"章节 {chapter_number} 失败: {str(e)}")
+
+            summary = f"章节大纲生成完成：成功 {success_count}，失败 {error_count}，总计 {len(chapter_info_list)}"
+            content = "\n".join(messages_log + [summary])
+            references = []
         elif disable_memory:
             # 无记忆模式：直接调用大模型（同步调用会阻塞事件循环，放线程池执行）
             history_msgs = processed_history[-20:] if processed_history else []

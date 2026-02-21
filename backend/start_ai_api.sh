@@ -45,6 +45,7 @@ fi
 # 设置默认端口和主机
 PORT=${PORT:-8001}
 HOST=${HOST:-0.0.0.0}
+WORKERS=${WORKERS:-1}
 
 # 设置热部署选项（默认启用，可通过环境变量 RELOAD=false 禁用）
 RELOAD=${RELOAD:-true}
@@ -58,19 +59,25 @@ echo "  - 端口: $PORT"
 echo "  - 热部署: $RELOAD"
 echo "  - API基础URL: http://$HOST:$PORT"
 echo "  - API文档: http://$HOST:$PORT/docs"
-echo ""
 
 # 构建 uvicorn 命令（不用数组以兼容 sh/dash）
 UVICORN_APP="memos.api.ai_api:app"
 UVICORN_BASE="--host $HOST --port $PORT"
+
 if [ "$RELOAD" = "true" ]; then
+    if [ "$WORKERS" -gt 1 ]; then
+        echo "⚠️  注意: 热部署模式(RELOAD=true)下只能使用1个Worker，已忽略 WORKERS=$WORKERS 设置"
+        WORKERS=1
+    fi
     UVICORN_EXTRA="--reload --reload-dir $SRC_DIR"
     echo "✅ 热部署已启用 - 代码变更将自动重新加载"
     echo "   监控目录: $SRC_DIR"
-    echo ""
 else
-    UVICORN_EXTRA=""
+    UVICORN_EXTRA="--workers $WORKERS"
+    echo "✅ 生产模式运行 (RELOAD=false)"
+    echo "   工作进程数: $WORKERS"
 fi
+echo ""
 
 # 确保 src 目录在 PYTHONPATH 中
 export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$SRC_DIR"

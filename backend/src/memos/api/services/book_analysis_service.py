@@ -5,7 +5,7 @@
 
 import json
 import re
-from typing import Dict, Any, List, Optional, AsyncGenerator
+from typing import Dict, Any, List, Optional, AsyncGenerator, Tuple
 from sqlalchemy import and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -413,6 +413,151 @@ class BookAnalysisService:
             logger.error(f"获取章节内容失败: {e}")
             return ""
     
+    async def prepare_chapter_outline_prompt(
+        self,
+        work_id: int,
+        chapter_id: int,
+        prompt: Optional[str] = None,
+    ) -> Tuple[str, str, Any]:
+        """
+        准备章节大纲生成的 prompt 和相关数据。
+        返回 (enhanced_prompt, chapter_content, chapter_obj)
+        """
+        # 获取章节信息
+        chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter:
+            raise ValueError(f"章节 {chapter_id} 不存在")
+        
+        if chapter.work_id != work_id:
+            raise ValueError(f"章节 {chapter_id} 不属于作品 {work_id}")
+        
+        # 获取章节内容
+        chapter_content = await self.get_chapter_content(chapter_id)
+        if not chapter_content:
+            raise ValueError(f"章节 {chapter_id} 内容为空")
+        
+        # 获取作品的角色和地点信息
+        characters, locations = await self.get_work_characters_and_locations(work_id)
+        
+        # 获取或构建prompt
+        if prompt:
+            prompt_template = prompt
+        else:
+            # 尝试从数据库获取模板对象
+            template_obj = await self.get_default_prompt_template("chapter_analysis")
+            if template_obj:
+                prompt_template = template_obj.prompt_content
+            else:
+                # 使用内置模板
+                prompt_template = self._get_builtin_chapter_analysis_prompt()
+        
+        # 如果有角色和地点信息，可以增强prompt
+        if characters or locations:
+            context_info = []
+            if characters:
+                # 只取前几个角色的关键信息，避免prompt过长
+                chars_summary = []
+                for char in characters[:5]:  # 最多5个角色
+                    if isinstance(char, dict):
+                        name = char.get("name", char.get("display_name", ""))
+                        if name:
+                            chars_summary.append(name)
+                if chars_summary:
+                    context_info.append(f"主要角色：{', '.join(chars_summary)}")
+            
+            if locations:
+                # 只取前几个地点的关键信息
+                locs_summary = []
+                for loc in locations[:5]:  # 最多5个地点
+                    if isinstance(loc, dict):
+                        name = loc.get("name", loc.get("display_name", ""))
+                        if name:
+                            locs_summary.append(name)
+                if locs_summary:
+                    context_info.append(f"主要地点：{', '.join(locs_summary)}")
+            
+            if context_info:
+                # 统一由 render_prompt 按占位符加载上下文并生成 prompt
+                base_prompt = await render_prompt(
+                    prompt_template,
+                    self.db,
+                    self.sharedb_service,
+                    work_id=str(work_id),
+                    chapter_id=chapter_id,
+                )
+                enhanced_prompt = f"""{base_prompt}
+
+# 上下文信息
+{chr(10).join(context_info)}
+
+# 开始分析
+请严格按照上述JSON格式输出分析结果："""
+            else:
+                enhanced_prompt = await render_prompt(
+                    prompt_template,
+                    self.db,
+                    self.sharedb_service,
+                    work_id=str(work_id),
+                    chapter_id=chapter_id,
+                )
+        else:
+            enhanced_prompt = await render_prompt(
+                prompt_template,
+                self.db,
+                self.sharedb_service,
+                work_id=str(work_id),
+                chapter_id=chapter_id,
+            )
+            
+        return enhanced_prompt, chapter_content, chapter
+
+    async def process_chapter_outline_response(
+        self,
+        full_response: str,
+        chapter_id: int,
+    ) -> Dict[str, Any]:
+        """
+        处理 AI 返回的章节大纲结果，更新数据库并返回结果。
+        """
+        # 解析AI响应
+        parsed_data = self.parse_single_chapter_response(full_response)
+        if not parsed_data:
+            raise ValueError("无法解析AI响应，可能返回的不是有效的JSON格式")
+        
+        # 获取章节对象以更新
+        chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter:
+             raise ValueError(f"章节 {chapter_id} 不存在")
+
+        # 更新章节的metadata
+        chapter_metadata = chapter.chapter_metadata or {}
+        chapter_metadata["outline"] = parsed_data.get("outline", {})
+        chapter_metadata["detailed_outline"] = parsed_data.get("detailed_outline", {})
+        
+        # 如果AI返回了summary，也更新章节的summary字段
+        if parsed_data.get("summary"):
+            await self.chapter_service.update_chapter(
+                chapter_id,
+                chapter_metadata=chapter_metadata,
+                summary=parsed_data.get("summary")
+            )
+        else:
+            await self.chapter_service.update_chapter(
+                chapter_id,
+                chapter_metadata=chapter_metadata
+            )
+        
+        logger.info(f"成功为章节 {chapter_id} 生成大纲和细纲")
+        
+        return {
+            "chapter_id": chapter_id,
+            "chapter_number": chapter.chapter_number,
+            "title": parsed_data.get("title", chapter.title),
+            "summary": parsed_data.get("summary", chapter.summary),
+            "outline": parsed_data.get("outline", {}),
+            "detailed_outline": parsed_data.get("detailed_outline", {}),
+        }
+
     async def generate_chapter_outline_and_detailed_outline(
         self,
         work_id: int,
@@ -435,100 +580,17 @@ class BookAnalysisService:
             包含大纲和细纲的字典
         """
         try:
-            # 获取章节信息
-            chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
-            if not chapter:
-                raise ValueError(f"章节 {chapter_id} 不存在")
+            # 1. 准备阶段
+            enhanced_prompt, chapter_content, _ = await self.prepare_chapter_outline_prompt(
+                work_id, chapter_id, prompt
+            )
             
-            if chapter.work_id != work_id:
-                raise ValueError(f"章节 {chapter_id} 不属于作品 {work_id}")
-            
-            # 获取章节内容
-            chapter_content = await self.get_chapter_content(chapter_id)
-            if not chapter_content:
-                raise ValueError(f"章节 {chapter_id} 内容为空")
-            
-            # 获取作品的角色和地点信息
-            characters, locations = await self.get_work_characters_and_locations(work_id)
-            
-            # 获取或构建prompt
-            if prompt:
-                prompt_template = prompt
-            else:
-                # 尝试从数据库获取模板对象
-                template_obj = await self.get_default_prompt_template("chapter_analysis")
-                if template_obj:
-                    prompt_template = template_obj.prompt_content
-                else:
-                    # 使用内置模板
-                    prompt_template = self._get_builtin_chapter_analysis_prompt()
-            
-            # 如果有角色和地点信息，可以增强prompt
-            if characters or locations:
-                context_info = []
-                if characters:
-                    # 只取前几个角色的关键信息，避免prompt过长
-                    chars_summary = []
-                    for char in characters[:5]:  # 最多5个角色
-                        if isinstance(char, dict):
-                            name = char.get("name", char.get("display_name", ""))
-                            if name:
-                                chars_summary.append(name)
-                    if chars_summary:
-                        context_info.append(f"主要角色：{', '.join(chars_summary)}")
-                
-                if locations:
-                    # 只取前几个地点的关键信息
-                    locs_summary = []
-                    for loc in locations[:5]:  # 最多5个地点
-                        if isinstance(loc, dict):
-                            name = loc.get("name", loc.get("display_name", ""))
-                            if name:
-                                locs_summary.append(name)
-                    if locs_summary:
-                        context_info.append(f"主要地点：{', '.join(locs_summary)}")
-                
-                if context_info:
-                    # 统一由 render_prompt 按占位符加载上下文并生成 prompt
-                    base_prompt = await render_prompt(
-                        prompt_template,
-                        self.db,
-                        self.sharedb_service,
-                        work_id=str(work_id),
-                        chapter_id=chapter_id,
-                    )
-                    enhanced_prompt = f"""{base_prompt}
-
-# 上下文信息
-{chr(10).join(context_info)}
-
-# 开始分析
-请严格按照上述JSON格式输出分析结果："""
-                else:
-                    enhanced_prompt = await render_prompt(
-                        prompt_template,
-                        self.db,
-                        self.sharedb_service,
-                        work_id=str(work_id),
-                        chapter_id=chapter_id,
-                    )
-            else:
-                enhanced_prompt = await render_prompt(
-                    prompt_template,
-                    self.db,
-                    self.sharedb_service,
-                    work_id=str(work_id),
-                    chapter_id=chapter_id,
-                )
-            
-            # 调用AI服务进行分析
+            # 2. AI 调用阶段
             settings = settings or {}
-            # 如果没有指定模型，使用AI服务的默认模型（从环境变量读取）
-            model = settings.get("model")  # 如果为None，AI服务会使用默认模型
+            model = settings.get("model")
             temperature = settings.get("temperature", 0.7)
             max_tokens = settings.get("max_tokens", 4000)
             
-            # 直接获取完整AI响应
             full_response = await ai_service.get_ai_response(
                 content=chapter_content,
                 prompt=enhanced_prompt,
@@ -538,39 +600,8 @@ class BookAnalysisService:
                 max_tokens=max_tokens
             )
             
-            # 解析AI响应
-            parsed_data = self.parse_single_chapter_response(full_response)
-            if not parsed_data:
-                raise ValueError("无法解析AI响应，可能返回的不是有效的JSON格式")
-            
-            # 更新章节的metadata
-            chapter_metadata = chapter.chapter_metadata or {}
-            chapter_metadata["outline"] = parsed_data.get("outline", {})
-            chapter_metadata["detailed_outline"] = parsed_data.get("detailed_outline", {})
-            
-            # 如果AI返回了summary，也更新章节的summary字段
-            if parsed_data.get("summary"):
-                await self.chapter_service.update_chapter(
-                    chapter_id,
-                    chapter_metadata=chapter_metadata,
-                    summary=parsed_data.get("summary")
-                )
-            else:
-                await self.chapter_service.update_chapter(
-                    chapter_id,
-                    chapter_metadata=chapter_metadata
-                )
-            
-            logger.info(f"成功为章节 {chapter_id} 生成大纲和细纲")
-            
-            return {
-                "chapter_id": chapter_id,
-                "chapter_number": chapter.chapter_number,
-                "title": parsed_data.get("title", chapter.title),
-                "summary": parsed_data.get("summary", chapter.summary),
-                "outline": parsed_data.get("outline", {}),
-                "detailed_outline": parsed_data.get("detailed_outline", {}),
-            }
+            # 3. 处理结果阶段
+            return await self.process_chapter_outline_response(full_response, chapter_id)
             
         except Exception as e:
             logger.error(f"生成章节大纲和细纲失败: {e}")
@@ -759,33 +790,16 @@ class BookAnalysisService:
 
 请直接输出 JSON："""
 
-    async def generate_continue_chapter_outlines(
+    async def prepare_continue_chapter_prompt(
         self,
         work_id: str,
-        ai_service,
         previous_chapter_id: Optional[int] = None,
         user_description: Optional[str] = None,
-        settings: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[str, Dict[str, Any]]:
         """
-        续写章节：根据「当前（下一章）的前 3 章」的大纲和细纲、以及前一章的章节内容，生成下一章的 3 个推荐大纲和细纲。
-        例如续写第 10 章时，前 3 章指第 7、8、9 章。可选传入用户对下一章的语言描述，会加入 prompt 供模型参考。
-
-        Args:
-            work_id: 作品ID
-            ai_service: AI 服务实例
-            previous_chapter_id: 前一章章节 ID（即要续写的「下一章」的上一章）。不传则使用作品最后一章。
-            user_description: 用户对下一章的大致描述（如「主角发现了一个秘密」），会追加到 prompt 中。
-            settings: AI 设置（可选）
-
-        Returns:
-            包含 recommendations 列表的字典，每项为 {"title", "outline", "detailed_outline"}
+        准备续写章节的 prompt，包含上下文查找等数据库操作。
+        返回 (user_prompt, ctx)
         """
-        settings = settings or {}
-        model = settings.get("model")
-        temperature = settings.get("temperature", 0.7)
-        max_tokens = settings.get("max_tokens", 8000)
-
         # 统一由 render_prompt 按占位符需求加载上下文并生成完整 prompt
         template_obj = await self.get_default_prompt_template("continue_chapter")
         prompt_content = template_obj.prompt_content if template_obj else self._get_builtin_continue_chapter_prompt()
@@ -824,17 +838,20 @@ class BookAnalysisService:
         # 若有用户对下一章的语言描述，追加到 prompt 中
         if user_description and user_description.strip():
             user_prompt = user_prompt.rstrip() + "\n\n## 用户对下一章的描述（请在设计方案时参考以下方向）\n" + user_description.strip() + "\n"
+        
+        return user_prompt, ctx
 
-        full_response = await ai_service.get_ai_response(
-            content=ctx.get("previous_chapter_content") or "",
-            prompt=user_prompt,
-            system_prompt=None,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        # 5) 解析 AI 返回的 3 个推荐（支持 ```json ... ``` 或裸 JSON）
+    async def process_continue_chapter_response(
+        self,
+        full_response: str,
+        ctx: Dict[str, Any],
+        work_id: str,
+        previous_chapter_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        处理 AI 返回的续写结果，提取 JSON 并计算下一章章节号。
+        """
+        # 解析 AI 返回的 3 个推荐（支持 ```json ... ``` 或裸 JSON）
         data = self._extract_json_from_ai_response(full_response, required_key="recommendations")
 
         if not data:
@@ -889,8 +906,38 @@ class BookAnalysisService:
             "recommendations": result_list,
             "raw_response": full_response,
         }
-        logger.info(f"generate_continue_chapter_outlines 完成: next_chapter_number={result_dict.get('next_chapter_number')}, recommendations_count={len(result_list)}")
         return result_dict
+
+    async def generate_continue_chapter_outlines(
+        self,
+        work_id: str,
+        ai_service,
+        previous_chapter_id: Optional[int] = None,
+        user_description: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        续写章节：根据「当前（下一章）的前 3 章」的大纲和细纲、以及前一章的章节内容，生成下一章的 3 个推荐大纲和细纲。
+        (保留此方法以兼容旧调用，但建议使用流式分离调用)
+        """
+        settings = settings or {}
+        model = settings.get("model")
+        temperature = settings.get("temperature", 0.7)
+        max_tokens = settings.get("max_tokens", 8000)
+
+        user_prompt, ctx = await self.prepare_continue_chapter_prompt(work_id, previous_chapter_id, user_description)
+
+        full_response = await ai_service.get_ai_response(
+            content=ctx.get("previous_chapter_content") or "",
+            prompt=user_prompt,
+            system_prompt=None,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        return await self.process_continue_chapter_response(full_response, ctx, work_id, previous_chapter_id)
+
 
     async def incremental_insert_to_work(
         self,
@@ -1553,4 +1600,372 @@ class BookAnalysisService:
             创建结果（返回错误，因为不再支持创建work）
         """
         raise NotImplementedError("不再支持从分析结果创建作品，请使用现有的work并调用 incremental_insert_to_work 方法")
+
+    async def prepare_component_analysis_tasks(
+        self,
+        work_id: int,
+        chapter_id: int,
+    ) -> Tuple[List[Dict[str, Any]], str, Any]:
+        """
+        准备组件分析任务列表。
+        返回 (tasks, chapter_content, chapter_obj)
+        tasks list: [{ "data_key": ..., "prompt": ..., "system_prompt": ..., "template_id": ... }]
+        """
+        # 获取章节与内容
+        chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter or chapter.work_id != work_id:
+            raise ValueError(f"章节 {chapter_id} 不存在或不属于作品 {work_id}")
+
+        chapter_content = await self.get_chapter_content(chapter_id)
+        if not chapter_content:
+            logger.warning(f"章节 {chapter_id} 内容为空，跳过组件数据提取")
+            return [], "", chapter
+
+        # 获取模板ID
+        template_id = None
+        try:
+            from memos.api.services.work_service import WorkService
+            work_service = WorkService(self.db)
+            work = await work_service.get_work_by_id(work_id)
+            if work:
+                work_metadata = work.work_metadata or {}
+                template_config = work_metadata.get("template_config")
+                if template_config and isinstance(template_config, dict):
+                    template_id_str = template_config.get("templateId")
+                    if template_id_str:
+                        if isinstance(template_id_str, str) and template_id_str.startswith("db-"):
+                            try:
+                                template_id = int(template_id_str.replace("db-", ""))
+                            except ValueError:
+                                pass
+                        elif isinstance(template_id_str, (int, str)):
+                            try:
+                                template_id = int(template_id_str)
+                            except (ValueError, TypeError):
+                                pass
+        except Exception as e:
+            logger.error(f"获取 template_id 失败: {e}")
+
+        if not template_id:
+            logger.warning(f"作品 {work_id} 没有关联的 template_id，跳过组件数据提取")
+            return [], chapter_content, chapter
+
+        # 查询 PromptTemplate
+        try:
+            prompt_stmt = select(PromptTemplate).where(
+                and_(
+                    PromptTemplate.work_template_id == template_id,
+                    PromptTemplate.prompt_category == "analysis",
+                    PromptTemplate.is_active.is_(True),
+                )
+            )
+            prompt_result = await self.db.execute(prompt_stmt)
+            prompt_templates = prompt_result.scalars().all()
+        except Exception as e:
+            logger.error(f"查询 PromptTemplate 失败: {e}")
+            prompt_templates = []
+
+        if not prompt_templates:
+            return [], chapter_content, chapter
+
+        # 准备 work metadata / component_data
+        work_obj_stmt = select(Work).where(Work.id == work_id)
+        work_obj_res = await self.db.execute(work_obj_stmt)
+        work_obj = work_obj_res.scalar_one_or_none()
+        if not work_obj:
+            raise ValueError(f"作品 {work_id} 不存在")
+        work_metadata = work_obj.work_metadata or {}
+        component_data = work_metadata.get("component_data", {})
+
+        tasks = []
+        for prompt_template in prompt_templates:
+            data_key = prompt_template.data_key
+            analysis_prompt = prompt_template.prompt_content
+            if not data_key or not analysis_prompt:
+                continue
+
+            existing_data = component_data.get(data_key, [])
+            existing_data_context = ""
+            if existing_data and isinstance(existing_data, list):
+                example_data = existing_data[:3]
+                existing_data_context = (
+                    "# 现有作品数据结构参考\n"
+                    f"以下是该作品已有的 {data_key} 数据结构示例（请参考此结构生成新数据）：\n\n"
+                    f"```json\n{json.dumps(example_data, ensure_ascii=False, indent=2)}\n```\n"
+                    "**重要提示：**\n"
+                    "1. 新提取的数据应与上述结构一致\n"
+                    "2. 若匹配到已存在数据（如 name/id/title），保持结构，仅补充/更新\n"
+                    "3. 若有新数据，按照示例结构生成完整信息\n"
+                )
+
+            user_prompt = await render_prompt(
+                analysis_prompt,
+                self.db,
+                self.sharedb_service,
+                work_id=str(work_id),
+                chapter_id=chapter_id,
+            )
+            if existing_data_context:
+                user_prompt = existing_data_context + "\n\n" + user_prompt
+
+            system_prompt = f"你是一位专业的小说分析专家，请从章节内容中提取 {data_key} 相关的数据，返回 JSON。"
+            
+            tasks.append({
+                "data_key": data_key,
+                "prompt": user_prompt,
+                "system_prompt": system_prompt,
+                "template_id": prompt_template.id
+            })
+            
+        return tasks, chapter_content, chapter
+
+    async def process_component_analysis_result(
+        self,
+        work_id: int,
+        chapter_id: int,
+        data_key: str,
+        ai_response: str,
+        current_user_id: int,
+    ) -> Dict[str, Any]:
+        """
+        处理单个组件分析结果，更新 DB。
+        """
+        parsed_data = self.parse_single_chapter_response(ai_response)
+        if not parsed_data or data_key not in parsed_data or not isinstance(parsed_data[data_key], list):
+            logger.warning(f"章节 {chapter_id} 未提取到 {data_key} 数据")
+            return {"processed": 0, "updated": 0, "total": 0}
+
+        data_list = parsed_data[data_key]
+        
+        # 获取章节以更新 component_data
+        chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter:
+             raise ValueError(f"章节 {chapter_id} 不存在")
+
+        # 写入作品 metadata（合并去重）
+        save_result = await self.incremental_insert_to_work(
+            work_id=work_id,
+            analysis_data={data_key: data_list},
+            user_id=current_user_id,
+            chapter_index=None,
+            build_text_summary=False,
+        )
+        
+        stats = {
+            "processed": save_result.get(f"{data_key}_processed", 0),
+            "updated": save_result.get(f"{data_key}_updated", 0),
+            "total": save_result.get(f"{data_key}_total", 0),
+        }
+
+        # 写回章节 metadata.component_data
+        chapter_metadata = chapter.chapter_metadata or {}
+        if "component_data" not in chapter_metadata:
+            chapter_metadata["component_data"] = {}
+            
+        chapter_component_data = chapter_metadata["component_data"]
+        existing = chapter_component_data.get(data_key, [])
+        if not isinstance(existing, list):
+            existing = []
+            
+        existing_set = {json.dumps(item, sort_keys=True, ensure_ascii=False) for item in existing if isinstance(item, dict)}
+        for item in data_list:
+            if isinstance(item, dict):
+                item_str = json.dumps(item, sort_keys=True, ensure_ascii=False)
+                if item_str not in existing_set:
+                    existing_set.add(item_str)
+                    existing.append(item)
+                    
+        chapter_component_data[data_key] = existing
+        chapter.chapter_metadata = chapter_metadata
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(chapter, "chapter_metadata")
+        
+        return stats
+
+    async def prepare_verification_tasks(
+        self,
+        work_id: int,
+        chapter_id: int,
+    ) -> Tuple[List[Dict[str, Any]], str, Any]:
+        """
+        准备校验任务列表。
+        返回 (tasks, chapter_content, chapter_obj)
+        """
+        # 获取章节与内容
+        chapter = await self.chapter_service.get_chapter_by_id(chapter_id)
+        if not chapter or chapter.work_id != work_id:
+            raise ValueError(f"章节 {chapter_id} 不存在或不属于作品 {work_id}")
+
+        chapter_content = await self.get_chapter_content(chapter_id)
+        if not chapter_content:
+            logger.warning(f"章节 {chapter_id} 内容为空，跳过信息校验")
+            return [], "", chapter
+
+        # 获取模板ID
+        template_id = None
+        try:
+            from memos.api.services.work_service import WorkService
+            work_service = WorkService(self.db)
+            work = await work_service.get_work_by_id(work_id)
+            if work:
+                work_metadata = work.work_metadata or {}
+                template_config = work_metadata.get("template_config")
+                if template_config and isinstance(template_config, dict):
+                    template_id_str = template_config.get("templateId")
+                    if template_id_str:
+                        if isinstance(template_id_str, str) and template_id_str.startswith("db-"):
+                            try:
+                                template_id = int(template_id_str.replace("db-", ""))
+                            except ValueError:
+                                pass
+                        elif isinstance(template_id_str, (int, str)):
+                            try:
+                                template_id = int(template_id_str)
+                            except (ValueError, TypeError):
+                                pass
+        except Exception as e:
+            logger.error(f"获取 template_id 失败: {e}")
+
+        if not template_id:
+            logger.warning(f"作品 {work_id} 没有关联的 template_id，跳过信息校验")
+            return [], chapter_content, chapter
+
+        # 查询 PromptTemplate
+        try:
+            prompt_stmt = select(PromptTemplate).where(
+                and_(
+                    PromptTemplate.work_template_id == template_id,
+                    PromptTemplate.prompt_category == "validate",
+                    PromptTemplate.is_active.is_(True),
+                )
+            )
+            prompt_result = await self.db.execute(prompt_stmt)
+            prompt_templates = prompt_result.scalars().all()
+        except Exception as e:
+            logger.error(f"查询 PromptTemplate 失败: {e}")
+            prompt_templates = []
+
+        if not prompt_templates:
+            return [], chapter_content, chapter
+
+        # 获取作品 metadata / component_data
+        work_obj_stmt = select(Work).where(Work.id == work_id)
+        work_obj_res = await self.db.execute(work_obj_stmt)
+        work_obj = work_obj_res.scalar_one_or_none()
+        if not work_obj:
+            raise ValueError(f"作品 {work_id} 不存在")
+        work_metadata = work_obj.work_metadata or {}
+        component_data = work_metadata.get("component_data", {})
+
+        # 构建所有组件数据的上下文
+        all_component_data_context = ""
+        if component_data:
+            component_data_summary = {}
+            for key, value_list in component_data.items():
+                if isinstance(value_list, list) and len(value_list) > 0:
+                    component_data_summary[key] = value_list[:10]
+            
+            if component_data_summary:
+                all_component_data_context = (
+                    "# 作品中的所有组件数据参考\n"
+                    "以下是该作品已有的所有组件数据（用于校验参考）：\n\n"
+                    f"```json\n{json.dumps(component_data_summary, ensure_ascii=False, indent=2)}\n```\n\n"
+                    "**重要提示：**\n"
+                    "1. 请参考上述所有组件数据来校验章节内容\n"
+                    "2. 检查章节内容是否与已有组件数据一致\n"
+                    "3. 识别可能的不一致、矛盾或遗漏\n\n"
+                )
+
+        tasks = []
+        for prompt_template in prompt_templates:
+            data_key = prompt_template.data_key
+            verification_prompt = prompt_template.prompt_content
+            if not verification_prompt:
+                continue
+
+            current_data_key_context = ""
+            if data_key and data_key in component_data:
+                existing_data = component_data.get(data_key, [])
+                if existing_data and isinstance(existing_data, list):
+                    current_data_key_context = (
+                        f"# 当前验证组件：{data_key}\n"
+                        f"以下是该作品已有的 {data_key} 完整数据（用于详细校验）：\n\n"
+                        f"```json\n{json.dumps(existing_data, ensure_ascii=False, indent=2)}\n```\n\n"
+                    )
+
+            user_prompt = await render_prompt(
+                verification_prompt,
+                self.db,
+                self.sharedb_service,
+                work_id=str(work_id),
+                chapter_id=chapter_id,
+            )
+
+            full_prompt_parts = []
+            if all_component_data_context:
+                full_prompt_parts.append(all_component_data_context)
+            if current_data_key_context:
+                full_prompt_parts.append(current_data_key_context)
+            full_prompt_parts.append(user_prompt)
+            final_user_prompt = "\n".join(full_prompt_parts)
+
+            system_prompt = "你是一位专业的小说内容校验专家，请仔细检查章节内容，识别问题并提供改进建议。"
+            
+            tasks.append({
+                "data_key": data_key or "general",
+                "prompt_name": prompt_template.name or "未命名",
+                "prompt": final_user_prompt,
+                "system_prompt": system_prompt
+            })
+            
+        return tasks, chapter_content, chapter
+
+    def prepare_verification_summary_prompt(
+        self,
+        chapter_id: int,
+        chapter_title: str,
+        chapter_number: int,
+        verification_results: List[Dict[str, Any]],
+    ) -> Tuple[str, str]:
+        """
+        准备校验总结的 prompt。
+        返回 (prompt, system_prompt)
+        """
+        verification_summary_text = "以下是各个组件的验证结果：\n\n"
+        for idx, vr in enumerate(verification_results, 1):
+            prompt_name = vr.get("prompt_name", "未命名")
+            data_key = vr.get("data_key", "general")
+            
+            if "error" in vr:
+                verification_summary_text += f"## {idx}. 【{prompt_name}】({data_key})\n"
+                verification_summary_text += f"校验失败: {vr['error']}\n\n"
+            else:
+                result_data = vr.get("result", "")
+                verification_summary_text += f"## {idx}. 【{prompt_name}】({data_key})\n"
+                verification_summary_text += f"{result_data}\n\n"
+        
+        summary_prompt = f"""你是一位专业的小说内容校验总结专家。请对以下各个组件的验证结果进行综合分析，生成一份清晰的总结报告。
+
+# 章节信息
+- 章节ID: {chapter_id}
+- 章节标题: {chapter_title or '未命名'}
+- 章节号: {chapter_number or '未知'}
+
+# 各组件验证结果
+
+{verification_summary_text}
+
+# 任务要求
+请对以上所有组件的验证结果进行综合分析，生成一份总结报告，包括：
+1. **总体评估**：章节内容的整体质量评估
+2. **主要问题**：汇总所有组件发现的关键问题，按优先级排序
+3. **改进建议**：提供综合性的改进建议，优先处理最重要的问题
+4. **一致性检查**：检查各组件验证结果之间是否存在矛盾或不一致
+5. **优先级排序**：将问题和建议按重要性和紧急程度排序
+
+请以清晰、结构化的格式输出总结报告。"""
+
+        system_prompt = "你是一位专业的小说内容校验总结专家，擅长综合分析多个验证结果并生成清晰的总结报告。"
+        
+        return summary_prompt, system_prompt
 

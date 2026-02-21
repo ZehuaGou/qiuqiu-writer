@@ -46,11 +46,13 @@ def main():
 
     # 生产环境配置
     if not settings.DEBUG:
+        workers = int(os.getenv("WORKERS", "4"))
         uvicorn_config.update({
-            "workers": 4,
+            "workers": workers,
             "worker_class": "uvicorn.workers.UvicornWorker",
             "loop": "uvloop",
         })
+        print(f"✅ 生产模式: 使用 {workers} 个工作进程")
 
     try:
         # 启动服务器
