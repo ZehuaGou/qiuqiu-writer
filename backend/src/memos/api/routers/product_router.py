@@ -554,7 +554,8 @@ async def chat(chat_req: ChatRequest):
                     logger.info(f"开始生成续写章节推荐: work_id={work_id}, previous_chapter_id={previous_chapter_id}, user_description={user_description}")
                     
                     try:
-                        result = await book_analysis_service.generate_continue_chapter_outlines(
+                        # 使用 asyncio.create_task 包装耗时任务，以便发送心跳
+                        task = asyncio.create_task(book_analysis_service.generate_continue_chapter_outlines(
                             work_id=work_id,
                             ai_service=ai_service,
                             previous_chapter_id=previous_chapter_id,
@@ -564,7 +565,15 @@ async def chat(chat_req: ChatRequest):
                                 "temperature": analysis_settings.temperature,
                                 "max_tokens": analysis_settings.max_tokens,
                             },
-                        )
+                        ))
+
+                        # 循环等待任务完成，期间发送心跳保持连接
+                        while not task.done():
+                            await asyncio.sleep(3)
+                            yield f"data: {json.dumps({'type': 'ping', 'data': 'keep-alive'})}\n\n"
+
+                        # 获取任务结果
+                        result = await task
                         await stream_db.commit()
 
                         payload = {

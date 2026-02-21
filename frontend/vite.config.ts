@@ -61,6 +61,8 @@ export default defineConfig({
         ws: true,
         secure: false,
         xfwd: true,
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000, // 5 minutes
       },
       '/ai': {
         target: 'http://127.0.0.1:8001',
@@ -68,6 +70,8 @@ export default defineConfig({
         ws: true,
         secure: false,
         xfwd: true,
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000, // 5 minutes
       },
       '/v1': {
         target: 'http://127.0.0.1:8001',
@@ -75,6 +79,8 @@ export default defineConfig({
         ws: true,
         secure: false,
         xfwd: true,
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000, // 5 minutes
       },
     },
   },
@@ -89,6 +95,8 @@ export default defineConfig({
         ws: true, // 支持 WebSocket 代理
         secure: false,
         xfwd: true,
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000, // 5 minutes
       },
       '/ai': {
         target: 'http://127.0.0.1:8001',
@@ -96,13 +104,17 @@ export default defineConfig({
         ws: true, // 支持 WebSocket 代理
         secure: false,
         xfwd: true,
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000, // 5 minutes
       },
       '/v1': {
         target: 'http://127.0.0.1:8001',
         changeOrigin: true,
-        ws: true, // 支持 WebSocket 代理
+        ws: true,
         secure: false,
         xfwd: true,
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000, // 5 minutes
       },
     },
   },
