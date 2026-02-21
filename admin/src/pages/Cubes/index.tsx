@@ -20,7 +20,7 @@ const Cubes: React.FC = () => {
         total: res.total,
       });
     } catch (error) {
-      console.error(error);
+      
     } finally {
       setLoading(false);
     }
@@ -32,7 +32,7 @@ const Cubes: React.FC = () => {
       message.success('Cube deleted successfully');
       fetchCubes(pagination.current, pagination.pageSize);
     } catch (error) {
-      console.error(error);
+      
       message.error('Failed to delete cube');
     }
   };

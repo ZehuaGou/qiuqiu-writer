@@ -215,7 +215,7 @@ export const loadFromCache = (workId: string | null, templateId?: string): Cache
         return data;
       }
     } catch (e) {
-      console.warn('Failed to load template-specific cache:', e);
+      
     }
   }
   
@@ -227,7 +227,7 @@ export const loadFromCache = (workId: string | null, templateId?: string): Cache
       return JSON.parse(cached);
     }
   } catch (e) {
-    console.warn('Failed to load cache:', e);
+    
   }
   return null;
 };
@@ -243,6 +243,6 @@ export const saveToCache = (data: CacheData, workId: string | null, templateId?:
       localStorage.setItem(templateKey, JSON.stringify(data));
     }
   } catch (e) {
-    console.warn('Failed to save to cache:', e);
+    
   }
 };

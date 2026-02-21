@@ -95,7 +95,7 @@ class AuthApiClient extends BaseApiClient {
     try {
       await this.post('/api/v1/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
     } catch (error) {
-      console.error('登出请求失败:', error);
+      
     } finally {
       this.clearToken();
     }

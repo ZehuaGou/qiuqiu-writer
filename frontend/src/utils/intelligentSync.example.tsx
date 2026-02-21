@@ -36,11 +36,11 @@ export function ExampleEditor({ documentId }: { documentId: string }) {
       enablePolling: true,          // 启用轮询
       onSyncSuccess: () => {},
       onSyncError: (error) => {
-        console.error('同步失败:', error);
+        
       },
       onCollaborativeUpdate: (hasUpdates) => {
         if (hasUpdates) {
-          console.log('有协作更新');
+          
         }
       },
       onContentChange: (synced) => {
@@ -98,7 +98,7 @@ export function ExampleLexicalEditor({ documentId }: { documentId: string }) {
         const editorStateJSON = editorRef.current.getEditorState().toJSON();
         content = JSON.stringify(editorStateJSON);
       } catch (error) {
-        console.error('Failed to serialize editor state:', error);
+        
         const root = editorRef.current.getEditorState().read(() => {
           return editorRef.current.getEditorState().read(() => {
             return editorRef.current.getEditorState().read(() => {

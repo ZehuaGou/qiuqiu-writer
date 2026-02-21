@@ -18,7 +18,7 @@ export default function Sidebar({ isOpen, currentDoc, onSelectDoc }: SidebarProp
       const newDoc = await createDocument('未命名文档', '');
       onSelectDoc(newDoc.id);
     } catch (err) {
-      console.error('Failed to create document:', err);
+      
     }
   };
 

@@ -92,7 +92,7 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
 
         scrollContainer.scrollTo({ top: clamped, behavior: 'smooth' });
       } catch (err) {
-        console.warn('滚动到匹配项失败:', err);
+        
       }
     };
 
@@ -147,7 +147,7 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
         setCurrentMatchIndex(-1);
       }
     } catch (err) {
-      console.error('查找失败:', err);
+      
       setMatches([]);
       setCurrentMatchIndex(-1);
     }
@@ -200,7 +200,7 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
       
       setTimeout(() => findMatches(), 50);
     } catch (err) {
-      console.error('替换失败:', err);
+      
     }
   }, [editor, matches, currentMatchIndex, replaceText, findMatches]);
   
@@ -223,7 +223,7 @@ export function useFindReplace(options: UseFindReplaceOptions): UseFindReplaceRe
       setCurrentMatchIndex(-1);
       setFindText('');
     } catch (err) {
-      console.error('替换失败:', err);
+      
       onMessage?.('替换失败，请重试', 'error');
     }
   }, [editor, findText, matchCase, replaceText, matches, onMessage]);

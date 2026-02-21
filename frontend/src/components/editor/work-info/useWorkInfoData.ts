@@ -77,7 +77,7 @@ export const useWorkInfoData = (
         }
       }
     } catch (error) {
-      console.warn('加载默认模板失败:', error);
+      
     }
     return null;
   }, []);
@@ -216,7 +216,7 @@ export const useWorkInfoData = (
       }
 
     } catch (err) {
-      console.error('加载作品信息失败:', err);
+      
       setError(err instanceof Error ? err.message : '加载失败');
     } finally {
       setIsLoading(false);
@@ -307,13 +307,13 @@ export const useWorkInfoData = (
         ...componentData
       };
 
-      console.log('正在手动保存作品信息到后端:', workId);
+      
       await worksApi.updateWork(workId, {
         metadata: metadataToSave
       });
-      console.log('手动保存成功');
+      
     } catch (err) {
-      console.error('保存作品信息失败:', err);
+      
       throw err;
     } finally {
       setIsSaving(false);
@@ -352,13 +352,13 @@ export const useWorkInfoData = (
           ...componentData
         };
 
-        console.log('正在保存作品信息到后端:', workId);
+        
         await worksApi.updateWork(workId, {
           metadata: metadataToSave
         });
-        console.log('作品信息保存成功');
+        
       } catch (err) {
-        console.error('保存作品信息失败:', err);
+        
       }
     }, 2000);
 

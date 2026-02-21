@@ -67,7 +67,7 @@ export default function WorksPage() {
       setTotal(response.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载作品失败');
-      console.error('Error loading works:', err);
+      
     } finally {
       setLoading(false);
     }
@@ -133,13 +133,8 @@ export default function WorksPage() {
             await loadWorks();
           }
         } catch (err) {
-          console.error('删除作品失败:', err);
-          console.error('错误详情:', {
-            message: err instanceof Error ? err.message : String(err),
-            stack: err instanceof Error ? err.stack : undefined,
-            workId,
-          });
-          const errorMessage = err instanceof Error ? err.message : '删除作品失败，请稍后重试';
+          
+                    const errorMessage = err instanceof Error ? err.message : '删除作品失败，请稍后重试';
           setError(errorMessage);
           showMessage(`删除失败：${errorMessage}`, 'error');
         } finally {
@@ -189,15 +184,9 @@ export default function WorksPage() {
               showMessage('❌ 不支持的导出格式', 'error');
             }
           } catch (err) {
-            console.error('❌ 导出失败:', err);
+            
             const errorMessage = err instanceof Error ? err.message : '导出失败，请稍后重试';
-            console.error('错误详情:', {
-              message: errorMessage,
-              stack: err instanceof Error ? err.stack : undefined,
-              format,
-              workId,
-            });
-            showMessage(`❌ 导出失败\n\n错误：${errorMessage}\n\n请查看浏览器控制台（F12）获取更多信息。`, 'error');
+                        showMessage(`❌ 导出失败\n\n错误：${errorMessage}\n\n请查看浏览器控制台（F12）获取更多信息。`, 'error');
             throw err; // 重新抛出错误，让调用者知道失败了
           } finally {
             setLoading(false);
@@ -215,7 +204,7 @@ export default function WorksPage() {
               showMessage('链接已复制到剪贴板', 'success');
             } catch (clipboardErr) {
               // 如果 Clipboard API 不可用，使用备用方法
-              console.warn('Clipboard API 不可用，使用备用方法:', clipboardErr);
+              
               
               // 创建临时文本区域
               const textArea = document.createElement('textarea');
@@ -259,7 +248,7 @@ export default function WorksPage() {
           
       }
     } catch (err) {
-      console.error('操作失败:', err);
+      
       showMessage(err instanceof Error ? err.message : '操作失败', 'error');
     }
   };
@@ -267,7 +256,7 @@ export default function WorksPage() {
   // 处理创建作品
   const handleCreateWork = async () => {
     try {
-      console.log('📝 [handleCreateWork] 开始创建作品...');
+      
       setLoading(true);
       
       const workData = {
@@ -276,11 +265,11 @@ export default function WorksPage() {
         is_public: false,
       };
       
-      console.log('📝 [handleCreateWork] 准备发送请求，数据:', workData);
+      
       
       const newWork = await worksApi.createWork(workData);
       
-      console.log('✅ [handleCreateWork] 作品创建成功:', newWork);
+      
       
       if (!newWork || !newWork.id) {
         throw new Error('创建作品成功，但未返回作品ID');
@@ -292,7 +281,7 @@ export default function WorksPage() {
       // 跳转到编辑器
       navigate(`/novel/editor?workId=${newWork.id}`);
     } catch (err) {
-      console.error('❌ [handleCreateWork] 创建作品失败:', err);
+      
       const errorMessage = err instanceof Error ? err.message : '创建作品失败';
       showMessage(`创建作品失败: ${errorMessage}`, 'error');
       setError(errorMessage);
@@ -476,15 +465,9 @@ export default function WorksPage() {
                                 showMessage(`✅ 导出成功！\n\n文件：${workData.title}.txt\n\n文件已开始下载，请查看浏览器下载文件夹。`, 'success');
                                 
                               } catch (err) {
-                                console.error('❌ [Text] 导出失败:', err);
+                                
                                 const errorMsg = err instanceof Error ? err.message : '未知错误';
-                                console.error('❌ [Text] 错误详情:', {
-                                  message: errorMsg,
-                                  stack: err instanceof Error ? err.stack : undefined,
-                                  error: err,
-                                  name: err instanceof Error ? err.name : 'Unknown'
-                                });
-                                showMessage(`❌ 导出失败\n\n错误：${errorMsg}\n\n请查看浏览器控制台（F12）获取更多信息。`, 'error');
+                                                                showMessage(`❌ 导出失败\n\n错误：${errorMsg}\n\n请查看浏览器控制台（F12）获取更多信息。`, 'error');
                               } finally {
                                 setLoading(false);
                                 
@@ -506,7 +489,7 @@ export default function WorksPage() {
                               await handleMenuAction('export', String(work.id), 'word');
                               
                             } catch (err) {
-                              console.error('❌ 导出失败（外层捕获）:', err);
+                              
                               showMessage(`导出失败：${err instanceof Error ? err.message : '未知错误'}`, 'error');
                             }
                           }}

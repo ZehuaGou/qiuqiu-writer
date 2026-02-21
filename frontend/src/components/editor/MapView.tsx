@@ -203,7 +203,7 @@ export default function MapView() {
         try {
           graphRef.current.destroy();
         } catch (e) {
-          console.warn('Error destroying existing graph:', e);
+          
         }
         graphRef.current = null;
       }
@@ -302,7 +302,7 @@ export default function MapView() {
         try {
           graphRef.current.destroy();
         } catch (e) {
-          console.warn('Error destroying graph:', e);
+          
         }
         graphRef.current = null;
       }

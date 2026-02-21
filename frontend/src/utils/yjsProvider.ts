@@ -62,7 +62,7 @@ export class RestfulYjsProvider {
 
     // 等待 IndexedDB 加载完成
     this.indexeddbProvider.on('synced', () => {
-      console.log('📦 [YjsProvider] IndexedDB 已加载:', this.documentId);
+      
       this.setStatus('connected');
       
       // 首次加载后立即同步到服务器
@@ -90,7 +90,7 @@ export class RestfulYjsProvider {
     }
 
     // 标记有待同步的更改
-    console.log('✏️ [YjsProvider] 文档已更新，待同步');
+    
   };
 
   /**
@@ -159,16 +159,12 @@ export class RestfulYjsProvider {
         return;
       }
 
-      console.log('🔄 [YjsProvider] 同步到服务器:', {
-        documentId: this.documentId,
-        contentLength: content.length,
-      });
-
+      
       // 调用现有的同步 API
       const result = await documentCache.syncDocumentState(this.documentId, content);
 
       if (result.success) {
-        console.log('✅ [YjsProvider] 同步成功:', result.version);
+        
         
         // 更新最后同步的状态向量
         this.lastSyncStateVector = Y.encodeStateVector(this.ydoc);
@@ -179,7 +175,7 @@ export class RestfulYjsProvider {
         throw new Error(result.error || '同步失败');
       }
     } catch (error) {
-      console.error('❌ [YjsProvider] 同步失败:', error);
+      
       this.onSyncError?.(error instanceof Error ? error : new Error('同步失败'));
       this.setStatus('disconnected');
     } finally {
@@ -204,10 +200,10 @@ export class RestfulYjsProvider {
           this.htmlToXml(content, xmlFragment);
         }, this);
 
-        console.log('📥 [YjsProvider] 从服务器加载内容完成');
+        
       }
     } catch (error) {
-      console.error('❌ [YjsProvider] 从服务器加载失败:', error);
+      
       this.onSyncError?.(error instanceof Error ? error : new Error('加载失败'));
     }
   }
@@ -241,7 +237,7 @@ export class RestfulYjsProvider {
     this.ydoc.off('update', this.handleUpdate);
     this.indexeddbProvider.destroy();
     this.setStatus('disconnected');
-    console.log('🗑️ [YjsProvider] 已销毁:', this.documentId);
+    
   }
 
   // ========== 辅助方法 ==========

@@ -90,7 +90,7 @@ export async function getCachedWorkInfo(workId: string): Promise<{
   for (const key of possibleKeys) {
     workDoc = await localCacheManager.get<CachedWorkDoc>(key);
     if (workDoc) {
-      console.log(`✅ [WorkRecovery] 从缓存键 ${key} 获取作品信息: ${workId}`);
+      
       break;
     }
   }
@@ -418,7 +418,7 @@ export async function recoverWorkFromCache(
             create_version: true,
           });
         } catch (syncError) {
-          console.warn(`章节 ${chapter.chapterId} 同步到 ShareDB 失败:`, syncError);
+          
           // 继续处理下一个章节
         }
         
@@ -426,7 +426,7 @@ export async function recoverWorkFromCache(
         const errorWithMessage = error as { message?: string };
         const errorMsg = `章节 ${chapter.chapterNumber} (${chapter.title}) 恢复失败: ${errorWithMessage?.message || String(error)}`;
         errors.push(errorMsg);
-        console.error(errorMsg, error);
+        
         // 继续处理下一个章节
       }
     }
@@ -523,7 +523,7 @@ export async function getRecoverableWorks(): Promise<Array<{
         needsRecovery,
       });
     } catch (error) {
-      console.warn(`检查作品 ${workId} 失败:`, error);
+      
       // 继续处理下一个
     }
   }

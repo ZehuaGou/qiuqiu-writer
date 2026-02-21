@@ -110,9 +110,9 @@ class ChaptersApiClient extends BaseApiClient {
     if (!skipCache) {
       const cached = await localCacheManager.get<ChapterListResponse>(cacheKey);
       if (cached) {
-        console.log('✅ [ChaptersApi] 从缓存加载章节列表（本地优先）:', cacheKey);
+        
         this.listChaptersFromServer(params, cacheKey).catch(err => {
-          console.warn('⚠️ [ChaptersApi] 后台刷新章节列表失败:', err);
+          
         });
         return cached;
       }
@@ -123,14 +123,10 @@ class ChaptersApiClient extends BaseApiClient {
       return await this.listChaptersFromServer(params, cacheKey, skipCache);
     } catch (error) {
       // 服务器请求失败，尝试从缓存加载（降级）
-      console.warn('⚠️ [ChaptersApi] 服务器请求失败，尝试从缓存加载:', {
-        workId: params.work_id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      
+            
       const fallbackCache = await localCacheManager.get<ChapterListResponse>(cacheKey);
       if (fallbackCache) {
-        console.log('✅ [ChaptersApi] 从缓存加载章节列表（降级）:', cacheKey);
+        
         return {
           ...fallbackCache,
           _fromCache: true, // 标记为缓存数据
@@ -171,7 +167,7 @@ class ChaptersApiClient extends BaseApiClient {
           ...response,
           cached_at: new Date().toISOString(),
         }, 1, { synced: true });
-        console.log('✅ [ChaptersApi] 已缓存章节列表:', cacheKey);
+        
 
         for (const chapter of response.chapters) {
           const chapterCacheKey = `chapter_info_${chapter.id}`;
@@ -180,9 +176,9 @@ class ChaptersApiClient extends BaseApiClient {
             cached_at: new Date().toISOString(),
           }, 1, { synced: true });
         }
-        console.log(`✅ [ChaptersApi] 已缓存 ${response.chapters.length} 个章节详情`);
+        
       } catch (error) {
-        console.warn('⚠️ [ChaptersApi] 缓存章节列表失败:', error);
+        
       }
     }
 
@@ -202,10 +198,10 @@ class ChaptersApiClient extends BaseApiClient {
     // 1. 优先从本地缓存获取（立即响应）
     const cached = await localCacheManager.get<Chapter>(cacheKey);
     if (cached) {
-      console.log('✅ [ChaptersApi] 从缓存加载章节详情（本地优先）:', cacheKey);
+      
       // 后台异步刷新（不阻塞用户）
       this.getChapterFromServer(chapterId, include_versions, cacheKey).catch(err => {
-        console.warn('⚠️ [ChaptersApi] 后台刷新章节详情失败:', err);
+        
       });
       return cached;
     }
@@ -215,14 +211,10 @@ class ChaptersApiClient extends BaseApiClient {
       return await this.getChapterFromServer(chapterId, include_versions, cacheKey);
     } catch (error) {
       // 服务器请求失败，尝试从缓存加载（降级）
-      console.warn('⚠️ [ChaptersApi] 服务器请求失败，尝试从缓存加载:', {
-        chapterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      
+            
       const fallbackCache = await localCacheManager.get<Chapter>(cacheKey);
       if (fallbackCache) {
-        console.log('✅ [ChaptersApi] 从缓存加载章节详情（降级）:', cacheKey);
+        
         return {
           ...fallbackCache,
           _fromCache: true, // 标记为缓存数据
@@ -254,9 +246,9 @@ class ChaptersApiClient extends BaseApiClient {
           ...response,
           cached_at: new Date().toISOString(),
         }, 1, { synced: true });
-        console.log('✅ [ChaptersApi] 已缓存章节详情:', key);
+        
       } catch (error) {
-        console.warn('⚠️ [ChaptersApi] 缓存章节详情失败:', error);
+        
       }
     }
     
@@ -300,7 +292,7 @@ class ChaptersApiClient extends BaseApiClient {
     if (!skipCache) {
       const cached = await localCacheManager.get<{ snapshots: YjsSnapshotMeta[]; total: number; page: number; size: number }>(cacheKey);
       if (cached) {
-        console.log('✅ [ChaptersApi] 从缓存加载快照列表:', cacheKey);
+        
         // 后台刷新
         this.get<{ snapshots: YjsSnapshotMeta[]; total: number; page: number; size: number }>(`/api/v1/chapters/${chapterId}/yjs-snapshots`, { page, size }).then(res => {
           localCacheManager.set(cacheKey, res, 1, { synced: true });
@@ -342,7 +334,7 @@ class ChaptersApiClient extends BaseApiClient {
     
     const cached = await localCacheManager.get<YjsSnapshotMeta & { snapshot: string }>(cacheKey);
     if (cached) {
-      console.log('✅ [ChaptersApi] 从缓存加载快照详情:', cacheKey);
+      
       return cached;
     }
 

@@ -267,7 +267,7 @@ async function analyzeChapter(content: string) {
             
             break;
           case 'error':
-            console.error('错误:', data.message);
+            
             break;
         }
       }

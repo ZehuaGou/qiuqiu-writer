@@ -150,7 +150,7 @@ export default function AIAssistant({
         const charactersFromComponentData = (componentData as any).characters || [];
         setCharacters(charactersFromComponentData);
       } catch (err) {
-        console.error('加载章节/作品信息失败:', err);
+        
       }
     };
 
@@ -644,7 +644,7 @@ export default function AIAssistant({
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch (err) {
-      console.error('复制失败:', err);
+      
     }
   };
 
@@ -841,12 +841,12 @@ export default function AIAssistant({
 
     // 检查登录状态和作品ID
     if (!isAuthenticated) {
-      console.warn('[AIAssistant] 未登录，无法使用聊天功能');
+      
       return;
     }
 
     if (!workId) {
-      console.warn('[AIAssistant] 未选择作品，无法使用聊天功能');
+      
       return;
     }
     setShowMentionMenu(false);
@@ -892,16 +892,16 @@ export default function AIAssistant({
       let assistantBuffer = '';
 
       // 调试日志
-      console.log('[AIAssistant] 发送消息，workId:', workId, 'isAuthenticated:', isAuthenticated);
+      
 
       await streamChatMessage(
         content,
         [...messages, userMsg],
         (event) => {
-          console.log('[AIAssistant] 收到事件:', event.type, event.data);
+          
           
           if (event.type === 'continue_chapter_result' && event.data) {
-            console.log('[AIAssistant] 处理 continue_chapter_result:', event.data);
+            
             const result = event.data as ContinueChapterResult;
             setMessages(prev => {
               const next = [...prev];
@@ -943,7 +943,7 @@ export default function AIAssistant({
             });
           } else if (event.type === 'error') {
             const msg = typeof event.data === 'string' ? event.data : '对话出错';
-            console.error('[AIAssistant] 对话错误:', msg);
+            
             // 显示错误给用户
             setMessages(prev => {
               const next = [...prev];
@@ -962,7 +962,7 @@ export default function AIAssistant({
             });
             setIsSending(false);
           } else if (event.type === 'end') {
-            console.log('[AIAssistant] 收到 end 事件');
+            
             setIsSending(false);
           }
         },
@@ -973,7 +973,7 @@ export default function AIAssistant({
       setIsSending(false);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : '发送失败';
-      console.error('[AIAssistant] 对话发送失败:', e);
+      
       setMessages(prev => [
         ...prev,
         { 

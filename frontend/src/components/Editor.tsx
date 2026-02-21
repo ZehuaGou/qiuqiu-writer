@@ -42,7 +42,7 @@ export default function Editor({ docId }: EditorProps) {
         editor.commands.setContent(doc.content);
       }
     } catch (error) {
-      console.error('Failed to load document:', error);
+      
     }
   };
 
@@ -50,7 +50,7 @@ export default function Editor({ docId }: EditorProps) {
     try {
       await apiClient.updateDocument(id, DEFAULT_USER_ID, { content });
     } catch (error) {
-      console.error('Failed to save document:', error);
+      
     }
   };
 

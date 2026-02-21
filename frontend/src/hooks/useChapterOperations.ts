@@ -118,7 +118,7 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
         onSuccess?.('章节已创建');
       }
     } catch (err) {
-      console.error('保存章节失败:', err);
+      
       onError?.(err instanceof Error ? err.message : '保存章节失败');
     }
   }, [workId, onSuccess, onError, onUpdateTrigger, onSuccessEdit]);
@@ -138,7 +138,7 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
       }
       onSuccess?.('章节已删除');
     } catch (err) {
-      console.error('删除章节失败:', err);
+      
       onError?.(err instanceof Error ? err.message : '删除章节失败');
     }
   }, [onSuccess, onError, onUpdateTrigger]);
@@ -155,7 +155,7 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
       onUpdateTrigger?.();
       onSuccess?.('章节已恢复');
     } catch (err) {
-      console.error('恢复章节失败:', err);
+      
       onError?.(err instanceof Error ? err.message : '恢复章节失败');
     }
   }, [onSuccess, onError, onUpdateTrigger]);

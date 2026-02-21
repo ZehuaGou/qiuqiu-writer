@@ -323,7 +323,7 @@
 .works-search {
   flex: 1;
   min-width: 180px;
-  max-width: 360px;
+  max-width: 640px;
 }
 
 .works-search-input {
@@ -360,8 +360,18 @@
   align-items: center;
 }
 
-.works-sort-trigger {
+.header-btn.icon-only.works-sort-trigger {
   background: var(--bg-primary);
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.works-sort-trigger svg {
+  width: 14px;
+  height: 14px;
 }
 
 .works-sort-dropdown {
@@ -415,6 +425,16 @@
 
 .works-create-trigger {
   background: var(--bg-primary);
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  gap: 4px;
+}
+
+.works-create-trigger svg {
+  width: 14px;
+  height: 14px;
 }
 
 .works-create-dropdown {
@@ -485,16 +505,27 @@
   border-radius: var(--radius-sm);
   padding: 2px;
   background: var(--bg-secondary);
+  height: 36px;
+  align-items: center;
 }
 
 .view-btn {
-  padding: 6px 10px;
+  padding: 0 6px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-tertiary);
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
+}
+
+.view-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .view-btn:hover {

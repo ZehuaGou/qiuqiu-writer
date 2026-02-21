@@ -281,7 +281,7 @@ export default function ChapterSettingsModal({
   const normalizeSelectedCharacters = (savedIds: any[], available: Character[]): string[] => {
     if (!savedIds || savedIds.length === 0) return [];
     
-    console.log('🔄 [ChapterSettingsModal] Normalizing characters:', { savedIds, availableCount: available.length });
+    
 
     const normalized = savedIds.map(savedItem => {
       // 处理 savedItem 可能是对象的情况
@@ -313,7 +313,7 @@ export default function ChapterSettingsModal({
       return lookupKey;
     }).filter((id): id is string => id !== null);
 
-    console.log('✅ [ChapterSettingsModal] Normalized result:', normalized);
+    
     return normalized;
   };
 
@@ -324,7 +324,7 @@ export default function ChapterSettingsModal({
       try {
         return JSON.stringify(val, null, 2);
       } catch (e) {
-        console.warn('Failed to stringify object:', e);
+        
         return String(val);
       }
     }
@@ -414,15 +414,9 @@ export default function ChapterSettingsModal({
                 setIsLoading(true);
                 lastFetchedChapterIdRef.current = chapterIdStr;
                 const response = await chaptersApi.getChapterDocument(chapterId);
-                console.log('📝 [ChapterSettingsModal] Fetched chapter info:', response);
-                const info = response.chapter_info;
-                console.log('📝 [ChapterSettingsModal] Chapter info details:', {
-                  title: info.title,
-                  outline: info.outline,
-                  detailed_outline: info.detailed_outline,
-                  metadata: info.metadata
-                });
                 
+                const info = response.chapter_info;
+                                
                 setTitle(ensureString(info.title));
                 setChapterNumber(info.chapter_number);
                 setSelectedVolumeId(initialData.volumeId || volumeId);
@@ -465,13 +459,13 @@ export default function ChapterSettingsModal({
 
                 // 从 metadata.component_data 获取角色列表
                 const componentData = meta.component_data || {};
-                console.log('📦 [ChapterSettingsModal] Metadata component_data:', componentData);
+                
                 
                 if (componentData.characters && Array.isArray(componentData.characters)) {
                   // 直接传递原始数组，由 normalizeSelectedCharacters 处理对象或字符串
                   setSelectedCharacters(normalizeSelectedCharacters(componentData.characters, availableCharacters || []));
                 } else {
-                  console.log('⚠️ [ChapterSettingsModal] No characters in component_data, falling back to initialData');
+                  
                   setSelectedCharacters(normalizeSelectedCharacters(initialData.characters || [], availableCharacters || []));
                 }
 
@@ -485,7 +479,7 @@ export default function ChapterSettingsModal({
                 initFromProps();
               }
             } catch (error) {
-              console.error('Failed to fetch chapter info:', error);
+              
               initFromProps();
             } finally {
               setIsLoading(false);
@@ -893,7 +887,7 @@ export default function ChapterSettingsModal({
 
                         showMessage('章节内容生成完成！已流式填充到编辑器中。', 'success', '生成完成', onClose);
                       } catch (error) {
-                        console.error('生成内容失败:', error);
+                        
                         showMessage(error instanceof Error ? error.message : '生成内容失败', 'error');
                       } finally {
                         setIsGeneratingContent(false);

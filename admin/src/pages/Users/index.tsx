@@ -28,7 +28,7 @@ const Users: React.FC = () => {
         total: res.total,
       });
     } catch (error) {
-      console.error(error);
+      
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ const Users: React.FC = () => {
       setIsModalVisible(false);
       fetchUsers(pagination.current, pagination.pageSize, keyword);
     } catch (error) {
-      console.error(error);
+      
       message.error('Failed to update user');
     }
   };
@@ -80,7 +80,7 @@ const Users: React.FC = () => {
           message.success('Status updated successfully');
           fetchUsers(pagination.current, pagination.pageSize, keyword);
         } catch (error) {
-          console.error(error);
+          
         }
       },
     });

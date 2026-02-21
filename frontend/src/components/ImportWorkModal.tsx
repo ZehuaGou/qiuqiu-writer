@@ -326,7 +326,7 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
       }, 2000);
 
     } catch (error) {
-      console.error('导入失败:', error);
+      
       setStatus('error');
       setErrorMessage(error instanceof Error ? error.message : '导入失败，请重试');
     }

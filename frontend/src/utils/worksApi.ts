@@ -128,29 +128,25 @@ class WorksApiClient extends BaseApiClient {
       work_type: mapWorkTypeToBackend(workData.work_type),
     };
     
-    console.log('📤 [worksApi.createWork] 发送创建作品请求:', {
-      endpoint: '/api/v1/works/',
-      data: backendData,
-    });
-    
+        
     try {
       const response = await this.post<BackendWorkResponse>('/api/v1/works/', backendData);
       
-      console.log('📥 [worksApi.createWork] 收到响应:', response);
+      
       
       if (!response || !response.id) {
-        console.error('❌ [worksApi.createWork] 响应中没有作品ID:', response);
+        
         throw new Error('创建作品失败：服务器未返回作品ID');
       }
       
       // 将后端类型转换为前端类型
       const work = this.mapBackendWork(response);
       
-      console.log('✅ [worksApi.createWork] 作品创建成功，转换后的作品:', work);
+      
       
       return work;
     } catch (error) {
-      console.error('❌ [worksApi.createWork] 请求失败:', error);
+      
       throw error;
     }
   }
@@ -282,16 +278,12 @@ class WorksApiClient extends BaseApiClient {
       return work;
     } catch (error) {
       // 数据库查询失败，尝试从缓存加载
-      console.warn('⚠️ [WorksApi] 数据库查询失败，尝试从缓存加载:', {
-        workId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      
+            
       const cacheKey = `work_${workId}_info`;
       const cachedWork = await localCacheManager.get<Work>(cacheKey);
       
       if (cachedWork) {
-        console.log('✅ [WorksApi] 从缓存加载作品数据:', cacheKey);
+        
         // 标记为缓存数据，以便调用方知道这是缓存数据
         return {
           ...cachedWork,
@@ -300,7 +292,7 @@ class WorksApiClient extends BaseApiClient {
       }
       
       // 缓存也没有，抛出原始错误
-      console.error('❌ [WorksApi] 数据库查询失败且缓存中无数据:', workId);
+      
       throw error;
     }
   }
@@ -316,9 +308,9 @@ class WorksApiClient extends BaseApiClient {
           ...work,
           cached_at: new Date().toISOString(),
         }, 1, { synced: true });
-        console.log(`✅ [WorksApi] 已缓存作品信息: ${cacheKey}`);
+        
       } catch (error) {
-        console.warn(`⚠️ [WorksApi] 缓存作品信息失败: ${error}`);
+        
       }
     }
   }

@@ -53,7 +53,7 @@ class SyncManager {
    */
   setActiveDocumentId(id: string | null): void {
     this.activeDocumentId = id;
-    // console.log('📝 [syncManager] 设置当前活动文档:', id);
+    // 
   }
 
   /**
@@ -113,7 +113,7 @@ class SyncManager {
       this.error = null;
     } catch (error) {
       this.error = error instanceof Error ? error.message : '同步失败';
-      console.error('同步失败:', error);
+      
     } finally {
       this.isSyncing = false;
       this.notifyStatusChange();
@@ -149,7 +149,7 @@ class SyncManager {
       // 但为了保险起见，这里也可以调用，markAsSynced 是幂等的
       // localCacheManager.markAsSynced(documentId);
     } catch (error) {
-      console.error(`同步文档 ${documentId} 失败:`, error);
+      
       throw error;
     }
   }
@@ -188,7 +188,7 @@ class SyncManager {
         try {
           await documentCache.getDocument(docId);
         } catch (error) {
-          console.error(`预加载文档 ${docId} 失败:`, error);
+          
         }
       }
     }
@@ -258,7 +258,7 @@ class SyncManager {
     // 检查是否有失败
     const failures = results.filter(r => r.status === 'rejected');
     if (failures.length > 0) {
-      console.warn(`${failures.length} 个文档同步失败`);
+      
     }
   }
 
@@ -272,7 +272,7 @@ class SyncManager {
 
     // 关键修复：未打开章节不要同步
     if (this.activeDocumentId && documentId !== this.activeDocumentId) {
-      console.log('ℹ️ [syncManager] 跳过未打开章节的同步:', documentId, '当前活动文档:', this.activeDocumentId);
+      
       // 关键修复：对于未打开的章节，暂时不移除 pending 状态，等待下次检查
       // 这样当用户打开该章节时，可以继续同步
       // 但为了避免无限循环日志，我们可以不在这里输出日志，或者降低日志频率
@@ -281,12 +281,7 @@ class SyncManager {
 
     // 关键修复：检查内容是否为空，如果为空则跳过同步
     if (!contentStr || contentStr.trim() === '' || contentStr.trim() === '<p></p>') {
-      console.warn('⚠️ [syncManager] 章节内容为空，跳过同步:', {
-        documentId,
-        contentLength: contentStr?.length || 0,
-        timestamp: new Date().toISOString(),
-      });
-      // 标记为已同步（因为空内容不需要同步）
+            // 标记为已同步（因为空内容不需要同步）
       localCacheManager.markAsSynced(documentId);
       return;
     }

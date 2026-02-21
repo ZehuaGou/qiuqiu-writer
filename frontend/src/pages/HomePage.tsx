@@ -103,11 +103,11 @@ export default function HomePage() {
       if (response.works && response.works.length > 0) {
         // 有作品，打开最近编辑的作品
         const latestWork = response.works[0];
-        console.log('📖 [HomePage.handleGetStarted] 打开最近编辑的作品:', latestWork);
+        
         navigate(`/novel/editor?workId=${latestWork.id}`);
       } else {
         // 没有作品，创建新作品
-        console.log('📝 [HomePage.handleGetStarted] 没有作品，开始创建新作品...');
+        
         
         const workData = {
           title: '未命名作品',
@@ -117,7 +117,7 @@ export default function HomePage() {
         
         const newWork = await worksApi.createWork(workData);
         
-        console.log('✅ [HomePage.handleGetStarted] 作品创建成功:', newWork);
+        
         
         if (!newWork || !newWork.id) {
           throw new Error('创建作品成功，但未返回作品ID');
@@ -127,7 +127,7 @@ export default function HomePage() {
         navigate(`/novel/editor?workId=${newWork.id}`);
       }
     } catch (err) {
-      console.error('❌ [HomePage.handleGetStarted] 操作失败:', err);
+      
       const errorMessage = err instanceof Error ? err.message : '操作失败';
       showMessage(`操作失败: ${errorMessage}`, 'error');
     } finally {

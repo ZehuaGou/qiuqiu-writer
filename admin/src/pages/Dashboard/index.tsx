@@ -35,7 +35,7 @@ const Dashboard: React.FC = () => {
       });
       setMonitorData(res.data);
     } catch (error) {
-      console.error('Failed to fetch monitor data', error);
+      
     }
   };
 

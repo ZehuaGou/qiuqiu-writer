@@ -24,7 +24,7 @@ const Login: React.FC = () => {
         navigate('/');
       }
     } catch (error) {
-      console.error(error);
+      
     } finally {
       setLoading(false);
     }

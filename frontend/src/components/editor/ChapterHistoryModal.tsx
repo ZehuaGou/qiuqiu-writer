@@ -97,10 +97,10 @@ export default function ChapterHistoryModal({
     if (Number.isNaN(id)) return;
     setLoading(true);
     try {
-      console.log('🔍 [ChapterHistoryModal] 开始加载历史快照, chapterId:', id, 'skipCache:', skipCache);
+      
       const sRes = await chaptersApi.listYjsSnapshots(id, 1, 50, skipCache);
       
-      console.log('📦 [ChapterHistoryModal] 快照接口返回:', sRes);
+      
 
       const unifiedSnapshots: UnifiedHistoryItem[] = (sRes.snapshots || []).map(s => ({
         id: s.id,
@@ -116,7 +116,7 @@ export default function ChapterHistoryModal({
         return timeB - timeA;
       });
 
-      console.log('📋 [ChapterHistoryModal] 历史记录:', combined);
+      
       setItems(combined);
       
       // 如果当前没有选中项，自动选中第一个（最新的）
@@ -131,7 +131,7 @@ export default function ChapterHistoryModal({
         });
       }
     } catch (err) {
-      console.error('❌ [ChapterHistoryModal] 加载历史失败:', err);
+      
       setItems([]);
     } finally {
       setLoading(false);
@@ -178,7 +178,7 @@ export default function ChapterHistoryModal({
       const currentText = getCurrent();
       setDiffLinesState(diffLines(versionText, currentText));
     } catch (err) {
-      console.error('❌ [ChapterHistoryModal] 加载差异失败:', err);
+      
       if (loadingIdRef.current !== loadingKey) return;
       setDiffLinesState([]);
       setVersionTextState(null);
@@ -208,7 +208,7 @@ export default function ChapterHistoryModal({
       await onRestore(selectedId, 'snapshot');
       onClose();
     } catch (err) {
-      console.error('❌ [ChapterHistoryModal] 恢复失败:', err);
+      
       alert('恢复失败，请重试');
     } finally {
       setRestoringId(null);

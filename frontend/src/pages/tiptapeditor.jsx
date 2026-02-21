@@ -41,7 +41,7 @@ const TipTapEditor = () => {
 
     // 等待连接建立
     provider.on('synced', () => {
-      console.log('Collaboration synced');
+      
       setIsCollabReady(true);
     });
 

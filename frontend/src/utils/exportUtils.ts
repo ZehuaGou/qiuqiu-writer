@@ -43,7 +43,7 @@ async function getAllChapters(workId: string): Promise<Chapter[]> {
     
     // 安全限制：最多获取 1000 个章节
     if (allChapters.length >= 1000) {
-      console.warn('⚠️ 章节数量超过 1000，停止获取');
+      
       break;
     }
   }
@@ -65,9 +65,9 @@ export async function exportAsText(work: Work): Promise<void> {
       
       chapters = await getAllChapters(work.id);
     } catch (listErr) {
-      console.error('❌ [导出Text] 获取章节列表失败:', listErr);
-      console.error('❌ [导出Text] 错误类型:', typeof listErr);
-      console.error('❌ [导出Text] 错误详情:', listErr);
+      
+      
+      
       
       // 更好地提取错误信息
       let errorMsg = '未知错误';
@@ -94,12 +94,12 @@ export async function exportAsText(work: Work): Promise<void> {
         errorMsg = String(listErr);
       }
       
-      console.error('❌ [导出Text] 提取的错误信息:', errorMsg);
+      
       throw new Error(`获取章节列表失败: ${errorMsg}`);
     }
 
     if (chapters.length === 0) {
-      console.warn('⚠️ [导出Text] 作品没有章节，将导出空文件');
+      
     }
 
     // 构建文本内容
@@ -124,18 +124,18 @@ export async function exportAsText(work: Work): Promise<void> {
             if (typeof docResponse.content === 'string') {
               chapterContent = docResponse.content;
             } else {
-              console.warn(`⚠️ [导出Text] 章节 ${chapter.id} ShareDB 响应中 content 格式错误，应为字符串:`, typeof docResponse.content);
+              
               chapterContent = '';
             }
           } else {
-            console.warn(`⚠️ [导出Text] 章节 ${chapter.id} ShareDB 响应中没有 content`);
+            
           }
         } catch (docErr) {
-          console.warn(`⚠️ [导出Text] 从 ShareDB 获取章节 ${chapter.id} 内容失败:`, docErr);
+          
           if (docErr instanceof Error) {
-            console.warn(`⚠️ [导出Text] 错误信息:`, docErr.message);
+            
           } else if (typeof docErr === 'object' && docErr !== null) {
-            console.warn(`⚠️ [导出Text] 错误对象:`, JSON.stringify(docErr));
+            
           }
         }
 
@@ -145,7 +145,7 @@ export async function exportAsText(work: Work): Promise<void> {
             const chapterDetail = await chaptersApi.getChapter(chapter.id);
             chapterContent = chapterDetail.content || '';
           } catch (detailErr) {
-            console.warn(`从章节详情获取章节 ${chapter.id} 内容失败:`, detailErr);
+            
           }
         }
 
@@ -156,7 +156,7 @@ export async function exportAsText(work: Work): Promise<void> {
         content += `${'-'.repeat(50)}\n\n`;
         content += `${textContent}\n\n\n`;
       } catch (err) {
-        console.error(`获取章节 ${chapter.id} 内容失败:`, err);
+        
         content += `第 ${chapter.chapter_number} 章 ${chapter.title}\n`;
         content += `${'-'.repeat(50)}\n\n`;
         content += `[内容获取失败: ${err instanceof Error ? err.message : String(err)}]\n\n\n`;
@@ -168,7 +168,7 @@ export async function exportAsText(work: Work): Promise<void> {
     
     
     if (content.length === 0) {
-      console.warn('⚠️ [导出Text] 内容为空，但继续创建文件');
+      
     }
     
     try {
@@ -205,7 +205,7 @@ export async function exportAsText(work: Work): Promise<void> {
       
       
     } catch (downloadError) {
-      console.error('❌ [导出Text] 下载过程出错:', downloadError);
+      
       let downloadErrorMsg = '未知错误';
       if (downloadError instanceof Error) {
         downloadErrorMsg = downloadError.message || downloadError.toString();
@@ -225,9 +225,9 @@ export async function exportAsText(work: Work): Promise<void> {
       throw new Error(`文件下载失败: ${downloadErrorMsg}`);
     }
   } catch (error) {
-    console.error('❌ [导出Text] 导出失败:', error);
-    console.error('❌ [导出Text] 错误类型:', typeof error);
-    console.error('❌ [导出Text] 错误详情:', error);
+    
+    
+    
     
     // 更好地处理错误信息
     let errorMessage = '未知错误';
@@ -250,7 +250,7 @@ export async function exportAsText(work: Work): Promise<void> {
       errorMessage = String(error);
     }
     
-    console.error('❌ [导出Text] 错误堆栈:', error instanceof Error ? error.stack : '无堆栈信息');
+    
     throw new Error(`导出 Text 失败: ${errorMessage}`);
   }
 }
@@ -267,7 +267,7 @@ export async function exportAsWord(work: Work): Promise<void> {
     const chapters = await getAllChapters(work.id);
     
     if (chapters.length === 0) {
-      console.warn('⚠️ [导出Word] 作品没有章节，将导出空文件');
+      
     }
 
     // 构建 HTML 内容
@@ -329,12 +329,12 @@ export async function exportAsWord(work: Work): Promise<void> {
             if (typeof docResponse.content === 'string') {
               chapterContent = docResponse.content;
             } else {
-              console.warn(`⚠️ [导出] 章节 ${chapter.id} ShareDB 响应中 content 格式错误，应为字符串:`, typeof docResponse.content);
+              
               chapterContent = '';
             }
           }
         } catch (docErr) {
-          console.warn(`从 ShareDB 获取章节 ${chapter.id} 内容失败:`, docErr);
+          
         }
 
         // 如果没有内容，尝试从章节详情获取
@@ -343,7 +343,7 @@ export async function exportAsWord(work: Work): Promise<void> {
             const chapterDetail = await chaptersApi.getChapter(chapter.id);
             chapterContent = chapterDetail.content || '';
           } catch (detailErr) {
-            console.warn(`从章节详情获取章节 ${chapter.id} 内容失败:`, detailErr);
+            
           }
         }
 
@@ -352,7 +352,7 @@ export async function exportAsWord(work: Work): Promise<void> {
           <div class="chapter-content">${chapterContent || '[章节内容为空]'}</div>
         `;
       } catch (err) {
-        console.error(`获取章节 ${chapter.id} 内容失败:`, err);
+        
         htmlContent += `
           <h2>第 ${chapter.chapter_number} 章 ${chapter.title}</h2>
           <div class="chapter-content">[内容获取失败: ${err instanceof Error ? err.message : String(err)}]</div>
@@ -387,7 +387,7 @@ export async function exportAsWord(work: Work): Promise<void> {
     URL.revokeObjectURL(url);
     
   } catch (error) {
-    console.error('❌ [导出Word] 导出失败:', error);
+    
     throw new Error(`导出 Word 失败: ${error instanceof Error ? error.message : '未知错误'}`);
   }
 }
@@ -403,7 +403,7 @@ export async function exportAsPdf(work: Work): Promise<void> {
     const chapters = await getAllChapters(work.id);
     
     if (chapters.length === 0) {
-      console.warn('⚠️ [导出PDF] 作品没有章节，将导出空文件');
+      
     }
 
     // 创建打印窗口
@@ -486,12 +486,12 @@ export async function exportAsPdf(work: Work): Promise<void> {
             if (typeof docResponse.content === 'string') {
               chapterContent = docResponse.content;
             } else {
-              console.warn(`⚠️ [导出] 章节 ${chapter.id} ShareDB 响应中 content 格式错误，应为字符串:`, typeof docResponse.content);
+              
               chapterContent = '';
             }
           }
         } catch (docErr) {
-          console.warn(`从 ShareDB 获取章节 ${chapter.id} 内容失败:`, docErr);
+          
         }
 
         // 如果没有内容，尝试从章节详情获取
@@ -500,7 +500,7 @@ export async function exportAsPdf(work: Work): Promise<void> {
             const chapterDetail = await chaptersApi.getChapter(chapter.id);
             chapterContent = chapterDetail.content || '';
           } catch (detailErr) {
-            console.warn(`从章节详情获取章节 ${chapter.id} 内容失败:`, detailErr);
+            
           }
         }
 
@@ -514,7 +514,7 @@ export async function exportAsPdf(work: Work): Promise<void> {
           <div class="chapter-content">${chapterContent || '[章节内容为空]'}</div>
         `;
       } catch (err) {
-        console.error(`获取章节 ${chapter.id} 内容失败:`, err);
+        
         if (i > 0) {
           htmlContent += '<div class="page-break"></div>';
         }
@@ -543,7 +543,7 @@ export async function exportAsPdf(work: Work): Promise<void> {
       }, 500);
     };
   } catch (error) {
-    console.error('导出 PDF 失败:', error);
+    
     throw new Error('导出失败，请稍后重试');
   }
 }

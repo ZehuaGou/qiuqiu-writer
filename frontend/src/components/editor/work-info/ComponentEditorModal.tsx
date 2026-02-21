@@ -98,7 +98,7 @@ export default function ComponentEditorModal({
                 analysisPrompt: ana?.prompt_content || prev.analysisPrompt
               }));
             } catch (e) {
-              console.error("Failed to load prompts", e);
+              
             } finally {
               setLoadingPrompts(false);
             }
@@ -164,7 +164,7 @@ export default function ComponentEditorModal({
         }
         await Promise.all(promises);
       } catch (e) {
-        console.error("Failed to save prompts to API", e);
+        
       }
     }
 

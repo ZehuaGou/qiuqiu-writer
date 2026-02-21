@@ -52,7 +52,7 @@ export async function getAnalysisPromptFromBackend(templateType: string = 'chapt
     );
     return result.prompt_content || '';
   } catch (error) {
-    console.warn('获取后端prompt模板失败，使用默认模板:', error);
+    
   }
   return getDefaultAnalysisPrompt();
 }
@@ -192,7 +192,7 @@ export async function analyzeChapterContent(
                 break;
               
               case 'character_extraction_error':
-                console.warn('角色提取错误:', data.message);
+                
                 break;
               
               case 'save_start':
@@ -210,7 +210,7 @@ export async function analyzeChapterContent(
                 break;
               
               case 'save_error':
-                console.warn('保存错误:', data.message);
+                
                 break;
               
               case 'structured_data':
@@ -235,11 +235,11 @@ export async function analyzeChapterContent(
                 throw new Error(data.message || '分析过程中出错');
               
               default:
-                console.warn('未知的消息类型:', msgType, data);
+                
             }
           } catch (e) {
             if (e instanceof Error && e.message !== '分析过程中出错') {
-              console.warn('解析 SSE 消息失败:', e, 'Line:', line);
+              
             } else {
               throw e;
             }
@@ -257,7 +257,7 @@ export async function analyzeChapterContent(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';
-    console.error('❌ 分析失败:', errorMessage);
+    
     onProgress?.({ error: errorMessage });
     throw new Error(errorMessage);
   }
@@ -425,7 +425,7 @@ export async function analyzeBookEnhanced(
                 break;
               
               case 'work_creation_error':
-                console.error('❌ 作品创建失败:', parsed.message);
+                
                 onProgress?.({ error: parsed.message });
                 break;
               
@@ -433,11 +433,11 @@ export async function analyzeBookEnhanced(
                 throw new Error(parsed.message || '分析过程中出错');
               
               default:
-                console.warn('未知的消息类型:', msgType, parsed);
+                
             }
           } catch (e) {
             if (e instanceof Error && e.message !== '分析过程中出错') {
-              console.warn('解析 SSE 消息失败:', e, 'Line:', data);
+              
             } else {
               throw e;
             }
@@ -455,7 +455,7 @@ export async function analyzeBookEnhanced(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';
-    console.error('❌ 分析失败:', errorMessage);
+    
     onProgress?.({ error: errorMessage });
     throw new Error(errorMessage);
   }
@@ -578,7 +578,7 @@ export async function analyzeChaptersIncremental(
                 break;
               
               case 'chapter_insert_error':
-                console.error(`❌ 第 ${parsed.chapter_index} 章插入失败:`, parsed.message);
+                
                 onProgress?.({
                   error: `第 ${parsed.chapter_index} 章插入失败: ${parsed.message}`,
                   chapterIndex: parsed.chapter_index,
@@ -596,11 +596,11 @@ export async function analyzeChaptersIncremental(
                 throw new Error(parsed.message || '分析过程中出错');
               
               default:
-                console.warn('未知的消息类型:', msgType, parsed);
+                
             }
           } catch (e) {
             if (e instanceof Error && e.message !== '分析过程中出错') {
-              console.warn('解析 SSE 消息失败:', e, 'Line:', data);
+              
             } else {
               throw e;
             }
@@ -613,7 +613,7 @@ export async function analyzeChaptersIncremental(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';
-    console.error('❌ 分析失败:', errorMessage);
+    
     onProgress?.({ error: errorMessage });
     throw new Error(errorMessage);
   }
@@ -802,11 +802,11 @@ export async function analyzeChapterByFile(
                 throw new Error(parsed.message || '分析过程中出错');
               
               default:
-                console.warn('未知的消息类型:', msgType, parsed);
+                
             }
           } catch (e) {
             if (e instanceof Error && e.message !== '分析过程中出错') {
-              console.warn('解析 SSE 消息失败:', e, 'Line:', data);
+              
             } else {
               throw e;
             }
@@ -832,7 +832,7 @@ export async function analyzeChapterByFile(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '分析请求失败';
-    console.error('❌ 分析失败:', errorMessage);
+    
     onProgress?.({ error: errorMessage });
     throw new Error(errorMessage);
   }
@@ -895,7 +895,7 @@ export async function createWorkFromFile(
     );
     return result;
   } catch (error) {
-    console.error('❌ 创建作品和章节失败:', error);
+    
     throw error;
   }
 }
@@ -951,7 +951,7 @@ export async function analyzeChapter(
       detailed_outline: (successResult.detailed_outline as Record<string, unknown>) || {},
     };
   } catch (error) {
-    console.error('分析章节失败:', error);
+    
     throw error;
   }
 }
@@ -975,7 +975,7 @@ export async function testAPIConnection(): Promise<{
         models: data?.models,
       };
     } catch (err) {
-      console.error('❌ 连接失败:', err);
+      
       return {
         success: false,
         message: err instanceof Error ? err.message : '连接失败',
@@ -983,7 +983,7 @@ export async function testAPIConnection(): Promise<{
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '连接失败';
-    console.error('❌ API 连接错误:', errorMessage);
+    
     return {
       success: false,
       message: errorMessage,
@@ -1058,7 +1058,7 @@ export async function generateComponentData(
     }>('/ai/generate-component-data', body);
     return result;
   } catch (error) {
-    console.error('生成组件数据失败:', error);
+    
     throw error;
   }
 }
@@ -1123,7 +1123,7 @@ export async function generateChapterContent(
               throw new Error(data.message || '生成失败');
             }
           } catch (e) {
-            console.warn('解析SSE消息失败:', e, line);
+            
           }
         }
       }
@@ -1135,7 +1135,7 @@ export async function generateChapterContent(
 
     return content;
   } catch (error) {
-    console.error('生成章节内容失败:', error);
+    
     throw error;
   }
 }

@@ -58,7 +58,7 @@ export const documentCache = {
           const oldCached = await localCacheManager.get<ShareDBDocument>(oldFormatKey);
           
           if (oldCached) {
-            console.log(`🔄 [DocumentCache] 从旧格式迁移: ${oldFormatKey} -> ${documentId}`);
+            
             
             // 统一格式：content 必须是字符串
             const contentStr = typeof oldCached.content === 'string' ? oldCached.content : '';
@@ -80,7 +80,7 @@ export const documentCache = {
       if (cached) {
         // 统一格式：content 必须是字符串
         if (typeof cached.content !== 'string') {
-          console.warn('⚠️ [DocumentCache] 缓存内容格式错误，应为字符串:', typeof cached.content);
+          
           cached.content = '';
           await localCacheManager.set(documentId, cached, cached.version || 1);
         }
@@ -89,7 +89,7 @@ export const documentCache = {
         documentCache.currentVersion.set(documentId, cached.version || 1);
         documentCache.currentContent.set(documentId, cached.content);
         
-        console.log('✅ [DocumentCache] 从缓存加载文档（本地优先）:', documentId);
+        
         
         // 关键优化：移除后台刷新，避免不必要的服务器请求
         // 本地优先策略：优先使用本地缓存，不自动刷新
@@ -97,7 +97,7 @@ export const documentCache = {
         return cached;
       }
     } catch (error) {
-      console.warn('⚠️ [DocumentCache] 从缓存获取文档失败:', error);
+      
     }
     
     // 2. 缓存没有，从服务器获取
@@ -133,7 +133,7 @@ export const documentCache = {
           return doc;
         }
       } catch (error) {
-        console.warn('⏳ [DocumentCache] 等待中的请求失败:', error);
+        
       }
     }
     
@@ -155,7 +155,7 @@ export const documentCache = {
           if (content.startsWith('<xml_fragment>') && content.endsWith('</xml_fragment>')) {
             content = content.substring(14, content.length - 15);
             serverDoc.content = content;
-            console.log('🧹 [DocumentCache] 已清理服务器内容中的 xml_fragment 标签');
+            
           }
         }
 
@@ -166,7 +166,7 @@ export const documentCache = {
         const contentStr = typeof serverDoc.content === 'string' ? serverDoc.content : '';
         
         if (!documentExists) {
-          console.log('⚠️ [getDocument] MongoDB 没有数据（document_exists=false），不覆盖本地缓存，尝试使用本地缓存');
+          
           
           // 当 document_exists=false 时，将本地缓存内容同步回服务器
           try {
@@ -176,7 +176,7 @@ export const documentCache = {
               const localContent = typeof localCached.content === 'string' ? localCached.content : '';
               
               if (localContent && localContent.trim().length > 0) {
-                console.log('🔄 [getDocument] 开始将本地缓存同步回 MongoDB...');
+                
                 
                 // 关键修复：复用保存按钮的请求逻辑（syncDocumentState）
                 // 注意：当 document_exists=false 时，需要确保版本号正确
@@ -194,36 +194,16 @@ export const documentCache = {
                     documentCache.currentVersion.set(documentId, localVersion);
                   }
                   
-                  console.log('📤 [getDocument] 准备同步，版本号:', {
-                    documentId,
-                    localVersion,
-                    cachedVersion: localCached.version,
-                    currentVersionInMemory: documentCache.currentVersion.get(documentId),
-                    contentLength: localContent.length,
-                    contentPreview: localContent.substring(0, 100),
-                  });
-                  
+                                    
                   const syncResult = await documentCache.syncDocumentState(
                     documentId,
                     localContent,
                     undefined // contentJson 可以为 undefined
                   );
                   
-                  console.log('📥 [getDocument] 同步结果:', {
-                    success: syncResult.success,
-                    version: syncResult.version,
-                    error: syncResult.error,
-                    hasContent: !!syncResult.content,
-                    contentLength: typeof syncResult.content === 'string' ? syncResult.content.length : 0,
-                  });
-                  
+                                    
                   if (syncResult.success) {
-                    console.log('✅ [getDocument] 本地缓存已成功同步回 MongoDB:', {
-                      documentId,
-                      version: syncResult.version,
-                      contentLength: localContent.length,
-                    });
-                    
+                                        
                     // 同步成功后，更新 serverDoc 的内容为本地缓存内容
                     serverDoc.content = localContent;
                     serverDoc.document_exists = true; // 同步后，文档已存在
@@ -235,39 +215,29 @@ export const documentCache = {
                     //   try {
                     //     const verifyDoc = await documentCache.fetchFromServer(documentId);
                     //     if (verifyDoc && verifyDoc.document_exists === true) {
-                    //       console.log('✅ [getDocument] 验证成功：MongoDB 中已存在文档');
+                    //       
                     //     } else {
-                    //       console.warn('⚠️ [getDocument] 验证失败：MongoDB 中仍然没有文档');
+                    //       
                     //     }
                     //   } catch (verifyErr) {
-                    //     console.warn('⚠️ [getDocument] 验证时出错:', verifyErr);
+                    //     
                     //   }
                     // }, 1000);
                   } else {
-                    console.warn('⚠️ [getDocument] 同步回 MongoDB 失败:', syncResult.error);
+                    
                     // 关键修复：如果同步失败，打印完整的错误信息
-                    console.error('❌ [getDocument] 同步失败详情:', {
-                      documentId,
-                      error: syncResult.error,
-                      version: syncResult.version,
-                      contentLength: localContent.length,
-                    });
-                  }
+                                      }
                 } catch (syncErr) {
-                  console.error('❌ [getDocument] 同步回 MongoDB 时出错:', syncErr);
+                  
                   // 打印完整的错误信息
                   if (syncErr instanceof Error) {
-                    console.error('错误详情:', {
-                      message: syncErr.message,
-                      stack: syncErr.stack,
-                    });
-                  }
+                                      }
                   // 即使同步失败，也继续使用本地缓存内容
                 }
               }
             }
           } catch (syncErr) {
-            console.error('❌ [getDocument] 同步回 MongoDB 时出错:', syncErr);
+            
           }
           
           // 不保存空内容到缓存，继续使用本地缓存
@@ -290,10 +260,10 @@ export const documentCache = {
         
         return serverDoc;
       } else {
-        console.warn('⚠️ [DocumentCache] 从服务器获取文档超时或失败，尝试使用缓存');
+        
       }
     } catch (error) {
-      console.warn('⚠️ [DocumentCache] 从服务器获取文档失败，尝试使用缓存:', error);
+      
     }
     
     // 如果服务器获取失败，使用本地缓存
@@ -309,7 +279,7 @@ export const documentCache = {
           const oldCached = await localCacheManager.get<ShareDBDocument>(oldFormatKey);
           
           if (oldCached) {
-            console.log(`🔄 [DocumentCache] 从旧格式迁移: ${oldFormatKey} -> ${documentId}`);
+            
             
             // 统一格式：content 必须是字符串
             const contentStr = typeof oldCached.content === 'string' ? oldCached.content : '';
@@ -331,7 +301,7 @@ export const documentCache = {
       if (cached) {
         // 统一格式：content 必须是字符串
         if (typeof cached.content !== 'string') {
-          console.warn('⚠️ [DocumentCache] 缓存内容格式错误，应为字符串:', typeof cached.content);
+          
           cached.content = '';
           await localCacheManager.set(documentId, cached, cached.version || 1);
         }
@@ -341,7 +311,7 @@ export const documentCache = {
         return cached;
       }
     } catch (error) {
-      console.error('从缓存获取文档失败:', error);
+      
     }
 
     return null;
@@ -356,17 +326,7 @@ export const documentCache = {
   ): Promise<void> {
     
     // 🔍 [调试] 缓存修改操作
-    console.log('🔍 [updateDocument-缓存操作] 开始更新缓存:', {
-      documentId,
-      contentLength: content.length,
-      contentPreview: content.substring(0, 100),
-      hasMetadata: !!metadata,
-      metadataKeys: metadata ? Object.keys(metadata) : [],
-      synced,
-      timestamp: new Date().toISOString(),
-      stackTrace: new Error().stack?.split('\n').slice(0, 8).join('\n'),
-    });
-    
+        
     // 统一格式：content 必须是字符串
     const contentToSave = typeof content === 'string' ? content : '';
     
@@ -380,25 +340,10 @@ export const documentCache = {
         if (metadataChanged) {
           existing.metadata = { ...existing.metadata, ...metadata };
           await localCacheManager.set(documentId, existing, existing.version || 1, { synced });
-          console.log('📝 [updateDocument-缓存操作] 内容未变化，只更新 metadata:', {
-            documentId,
-            version: existing.version,
-            metadataKeys: Object.keys(metadata),
-            synced,
-            timestamp: new Date().toISOString(),
-          });
-        } else {
-          console.log('⏭️ [updateDocument-缓存操作] 内容和 metadata 都未变化，跳过更新:', {
-            documentId,
-            timestamp: new Date().toISOString(),
-          });
-        }
+                  } else {
+                  }
       } else {
-        console.log('⏭️ [updateDocument-缓存操作] 内容未变化且无 metadata 更新，跳过:', {
-          documentId,
-          timestamp: new Date().toISOString(),
-        });
-      }
+              }
       return; // 内容没有变化，直接返回，避免不必要的更新
     }
     
@@ -416,16 +361,7 @@ export const documentCache = {
     documentCache.currentVersion.set(documentId, updated.version || 1);
     documentCache.currentContent.set(documentId, contentToSave);
     
-    console.log('💾 [updateDocument-缓存操作] 内容已更新到缓存:', {
-      documentId,
-      oldVersion: version,
-      newVersion: updated.version,
-      contentLength: contentToSave.length,
-      contentPreview: contentToSave.substring(0, 100),
-      timestamp: new Date().toISOString(),
-      stackTrace: new Error().stack?.split('\n').slice(0, 8).join('\n'),
-    });
-  },
+      },
   
   // 同步文档状态（保存到本地缓存并同步到服务器）
   // contentJson: 可选的 TipTap JSON 格式内容，用于更精确的段落级合并
@@ -440,14 +376,7 @@ export const documentCache = {
   ): Promise<SyncResponse> {
     // 🔍 [调试] 检查内容是否为空
     if (!content || content.trim() === '' || content.trim() === '<p></p>') {
-      console.warn('⚠️ [syncDocumentState] 内容为空，跳过同步:', {
-        documentId,
-        content,
-        contentLength: content?.length || 0,
-        timestamp: new Date().toISOString(),
-        stackTrace: new Error().stack?.split('\n').slice(0, 5).join('\n'),
-      });
-      // 返回一个表示跳过的响应，但不抛出错误
+            // 返回一个表示跳过的响应，但不抛出错误
       return {
         success: false,
         version: documentCache.currentVersion.get(documentId) || 0,
@@ -459,12 +388,7 @@ export const documentCache = {
     
     // 关键修复：验证是否是当前章节，如果不是，跳过同步
     if (verifyCurrentChapter && !verifyCurrentChapter(documentId)) {
-      console.warn('⚠️ [syncDocumentState] 不是当前章节，跳过同步:', {
-        documentId,
-        contentLength: content.length,
-        timestamp: new Date().toISOString(),
-      });
-      // 返回一个表示跳过的响应，但不抛出错误
+            // 返回一个表示跳过的响应，但不抛出错误
       return {
         success: false,
         version: documentCache.currentVersion.get(documentId) || 0,
@@ -477,12 +401,7 @@ export const documentCache = {
     // 关键修复：防止重复同步 - 如果同一个文档正在同步，等待之前的同步完成
     const existingSync = documentCache.syncLocks.get(documentId);
     if (existingSync) {
-      console.warn('⚠️ [syncDocumentState] 检测到重复同步请求，等待之前的同步完成:', {
-        documentId,
-        contentLength: content.length,
-        timestamp: new Date().toISOString(),
-      });
-      return existingSync;
+            return existingSync;
     }
     
     const localVersion = documentCache.currentVersion.get(documentId) || 0;
@@ -494,17 +413,7 @@ export const documentCache = {
     const syncPromise = (async (): Promise<SyncResponse> => {
       try {
         // 🔍 [调试] sync 请求中的缓存操作
-        console.log('🔍 [syncDocumentState-缓存操作] 开始同步并更新缓存:', {
-          documentId,
-          localVersion,
-          contentLength: contentToSave.length,
-          contentPreview: contentToSave.substring(0, 100),
-          hasMetadata: !!metadata,
-          metadataKeys: metadata ? Object.keys(metadata) : [],
-          timestamp: new Date().toISOString(),
-          stackTrace: new Error().stack?.split('\n').slice(0, 8).join('\n'),
-        });
-
+        
         // 统一格式：contentToSave 必须是字符串
         // 先保存到本地缓存（使用 updateDocument，它会检查内容是否变化）
         // 这样可以在同步前确保本地有备份，同时避免重复更新
@@ -513,7 +422,7 @@ export const documentCache = {
         try {
           // 关键修复：验证内容不为空（空字符串也是有效内容，但需要确保不是 undefined 或 null）
           if (contentToSave === null || contentToSave === undefined) {
-            console.error('❌ [DocumentCache] 内容为 null 或 undefined，无法保存');
+            
             throw new Error('内容不能为 null 或 undefined');
           }
           
@@ -536,41 +445,11 @@ export const documentCache = {
           };
           
           // 关键修复：记录发送的内容信息，用于调试
-          console.log('📤 [DocumentCache] 发送同步请求:', {
-            documentId,
-            version: localVersion,
-            contentLength: contentToSave.length,
-            contentType: typeof contentToSave,
-            contentPreview: contentToSave.substring(0, 200),
-            hasContentJson: !!contentJson,
-            hasMetadata: !!metadata,
-            metadataKeys: metadata ? Object.keys(metadata) : [],
-            requestBody: {
-              doc_id: requestBody.doc_id,
-              version: requestBody.version,
-              contentLength: requestBody.content?.length || 0,
-              hasBaseVersion: !!requestBody.base_version,
-              hasBaseContent: !!requestBody.base_content,
-              hasMetadata: !!requestBody.metadata,
-              metadataKeys: requestBody.metadata ? Object.keys(requestBody.metadata) : [],
-            },
-          });
-          
+                    
           const result = await sharedbApi.post<SyncResponse>('/v1/sharedb/documents/sync', requestBody);
 
-          console.log('📥 [DocumentCache] 同步响应状态:', {
-            success: result.success,
-            version: result.version,
-            error: result.error,
-          });
-          
-          console.log('📥 [DocumentCache] 同步响应结果:', {
-            success: result.success,
-            version: result.version,
-            contentLength: result.content?.length || 0,
-            error: result.error,
-          });
-          
+                    
+                    
           if (result.success) {
             // 统一格式：result.content 必须是字符串
             const resultContent = typeof result.content === 'string' ? result.content : '';
@@ -599,11 +478,11 @@ export const documentCache = {
                   remoteTimestamp: remoteDoc?.metadata?.updated_at,
                 };
                 
-                console.log('⚠️ [DocumentCache] 检测到版本冲突，请求用户解决:', conflictInfo);
+                
                 
                 const resolution = await versionConflictManager.resolveConflict(conflictInfo);
                 
-                console.log('✅ [DocumentCache] 用户选择的解决方式:', resolution);
+                
                 
                 // 根据用户选择处理冲突
                 if (resolution === 'keep_local') {
@@ -658,7 +537,7 @@ export const documentCache = {
                 }
                 // 'merge' 或 'cancel': 继续使用服务器返回的合并结果
               } catch (conflictError) {
-                console.warn('⚠️ [DocumentCache] 冲突解决失败，使用服务器合并结果:', conflictError);
+                
                 // 如果冲突解决失败，继续使用服务器返回的合并结果
               }
             }
@@ -681,7 +560,7 @@ export const documentCache = {
               // 关键修复：确保 existingDoc.content 是字符串（如果它是对象，说明缓存已损坏，需要修复）
               // 统一格式：确保 content 是字符串
               if (typeof existingDoc.content !== 'string') {
-                console.warn('⚠️ [syncDocumentState] 检测到 existingDoc.content 格式错误，修复为字符串');
+                
                 existingDoc.content = resultContent;
               }
               
@@ -702,21 +581,8 @@ export const documentCache = {
             
             // 关键修复：确保 metadata 被正确保存，并记录日志
             const finalDoc = existingDoc || await localCacheManager.get<ShareDBDocument>(documentId);
-            console.log('✅ [DocumentCache] 已更新本地缓存:', {
-              documentId,
-              version: result.version,
-              contentLength: resultContent.length, // 关键修复：使用 resultContent 而不是 result.content
-              hasMetadata: !!finalDoc?.metadata,
-              metadataKeys: finalDoc?.metadata ? Object.keys(finalDoc.metadata) : [],
-            });
+                        
             
-            console.log('✅ [DocumentCache] 已同步到服务器:', {
-              documentId,
-              version: result.version,
-              previousVersion,
-              hasBaseContent: !!documentCache.lastSyncedContent.get(documentId),
-            });
-
             return {
               success: true,
               version: result.version,
@@ -745,7 +611,7 @@ export const documentCache = {
                     remoteTimestamp: remoteDoc.metadata?.updated_at,
                   };
                   
-                  console.log('⚠️ [DocumentCache] 检测到版本冲突（同步失败），请求用户解决:', conflictInfo);
+                  
                   
                   const resolution = await versionConflictManager.resolveConflict(conflictInfo);
                   
@@ -802,32 +668,28 @@ export const documentCache = {
                   // 'merge' 或 'cancel': 抛出错误，让调用者处理
                 }
               } catch (conflictError) {
-                console.warn('⚠️ [DocumentCache] 冲突解决失败:', conflictError);
+                
               }
             }
             
             throw new Error(errorMsg);
           }
       } catch (syncError) {
-        console.warn('⚠️ [DocumentCache] 同步到服务器失败，但已保存到本地缓存:', syncError);
+        
         // 关键修复：即使服务器同步失败，也要确保本地缓存已更新
         // 重新读取本地缓存，确保内容已保存
         const savedDoc = await localCacheManager.get<ShareDBDocument>(documentId);
         if (savedDoc) {
           // 统一格式：确保 content 是字符串
           if (typeof savedDoc.content !== 'string') {
-            console.warn('⚠️ [syncDocumentState] 检测到缓存内容格式错误，正在修复');
+            
             savedDoc.content = contentToSave;
             await localCacheManager.set(documentId, savedDoc, savedDoc.version || localVersion);
           } else if (savedDoc.content !== contentToSave) {
             // 确保本地缓存中的内容是最新的编辑器内容
             savedDoc.content = contentToSave;
             await localCacheManager.set(documentId, savedDoc, savedDoc.version || localVersion);
-            console.log('✅ [DocumentCache] 已更新本地缓存（同步失败后的修复）:', {
-              documentId,
-              contentLength: contentToSave.length,
-            });
-          }
+                      }
         }
         // 即使服务器同步失败，也返回成功（因为已保存到本地）
         return {
@@ -838,7 +700,7 @@ export const documentCache = {
         };
       }
       } catch (error) {
-        console.error('❌ [DocumentCache] 保存失败:', error);
+        
         return {
           success: false,
           version: localVersion,
@@ -927,7 +789,7 @@ export const documentCache = {
           };
         }
       } catch (error) {
-        console.warn('等待中的请求失败:', error);
+        
       }
     }
 
@@ -953,25 +815,14 @@ export const documentCache = {
       const shouldUseLocalCache = !documentExists || !hasValidContent;
       
       if (shouldUseLocalCache) {
-        console.log('⚠️ [fetchFromServer] MongoDB 没有数据，尝试使用本地缓存:', {
-          documentId,
-          documentExists,
-          hasValidContent,
-          contentLength: typeof content === 'string' ? content.length : 0,
-          contentType: typeof content,
-        });
-        
+                
         const localCached = await localCacheManager.get<ShareDBDocument>(documentId);
         if (localCached && localCached.content) {
           // 统一格式：content 必须是字符串
           const localContent = typeof localCached.content === 'string' ? localCached.content : '';
           
           if (localContent && localContent.trim().length > 0) {
-            console.log('✅ [fetchFromServer] 使用本地缓存内容:', {
-              documentId,
-              contentLength: localContent.length,
-            });
-            content = localContent;
+                        content = localContent;
             // 如果使用了本地缓存，document_exists 仍然保持为 false
             // 这样后续逻辑可以知道 MongoDB 没有数据，需要同步
           }
@@ -1031,19 +882,19 @@ export const documentCache = {
             ...serverDoc,
             cached_at: new Date().toISOString(),
           }, serverDoc.version || 1);
-          console.log('✅ [DocumentCache] 已缓存服务器文档:', documentId);
+          
           
           // 更新版本号
           documentCache.currentVersion.set(documentId, serverDoc.version || 1);
           documentCache.currentContent.set(documentId, htmlContent);
         } catch (error) {
-          console.warn('⚠️ [DocumentCache] 缓存服务器文档失败:', error);
+          
         }
       }
       
       return serverDoc;
     } catch (error) {
-      console.error('❌ [DocumentCache] 从章节 API 获取文档失败:', error);
+      
       return null;
     }
   },
@@ -1074,22 +925,12 @@ export const documentCache = {
             documentCache.currentContent.set(documentId, contentStr);
             
             await localCacheManager.set(documentId, serverDoc, serverVersion).catch(console.error);
-            console.log('✅ [DocumentCache] 后台刷新成功，已更新缓存:', {
-              documentId,
-              version: serverVersion,
-              contentLength: contentStr.length,
-            });
-          } else {
-            console.log('ℹ️ [DocumentCache] 服务器版本未更新，跳过缓存更新:', {
-              documentId,
-              cachedVersion: previousVersion,
-              serverVersion,
-            });
-          }
+                      } else {
+                      }
         }
       }
     } catch (error) {
-      console.warn('⚠️ [DocumentCache] 后台刷新失败:', error);
+      
     }
   },
 };

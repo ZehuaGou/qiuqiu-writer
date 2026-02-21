@@ -52,7 +52,7 @@ class VersionConflictManager {
           return resolution;
         } else {
           // 如果没有注册回调，默认使用自动合并
-          console.warn(`[VersionConflictManager] 未找到冲突处理回调，使用默认合并策略: ${documentId}`);
+          
           return 'merge';
         }
       } finally {

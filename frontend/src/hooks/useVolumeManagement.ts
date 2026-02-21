@@ -129,7 +129,7 @@ export function useVolumeManagement(options: UseVolumeManagementOptions): UseVol
 
       closeVolumePopup();
     } catch (err) {
-      console.error('保存卷信息失败:', err);
+      
       onError?.('保存卷信息失败');
     }
   }, [workId, volumes, setVolumes, closeVolumePopup, onError]);
@@ -157,7 +157,7 @@ export function useVolumeManagement(options: UseVolumeManagementOptions): UseVol
       setVolumes(prev => prev.filter(v => v.id !== volumeId));
       closeVolumePopup();
     } catch (err) {
-      console.error('删除卷失败:', err);
+      
       onError?.('删除卷失败');
     }
   }, [volumes, setVolumes, closeVolumePopup, onError]);

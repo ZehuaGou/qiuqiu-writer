@@ -17,7 +17,7 @@ export function useDocuments(userId: string = DEFAULT_USER_ID) {
       setDocuments(docs);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load documents');
-      console.error('Error loading documents:', err);
+      
     } finally {
       setLoading(false);
     }
@@ -32,7 +32,7 @@ export function useDocuments(userId: string = DEFAULT_USER_ID) {
       return newDoc;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create document');
-      console.error('Error creating document:', err);
+      
       throw err;
     } finally {
       setLoading(false);
@@ -53,7 +53,7 @@ export function useDocuments(userId: string = DEFAULT_USER_ID) {
       return updated;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update document');
-      console.error('Error updating document:', err);
+      
       throw err;
     } finally {
       setLoading(false);
@@ -68,7 +68,7 @@ export function useDocuments(userId: string = DEFAULT_USER_ID) {
       setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete document');
-      console.error('Error deleting document:', err);
+      
       throw err;
     } finally {
       setLoading(false);

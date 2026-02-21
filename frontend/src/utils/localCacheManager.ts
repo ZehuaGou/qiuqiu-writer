@@ -113,7 +113,7 @@ class LocalCacheManager {
     try {
       localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
     } catch (e) {
-      console.error('删除 localStorage 缓存失败:', e);
+      
     }
 
     // 从同步队列移除
@@ -238,7 +238,7 @@ class LocalCacheManager {
 
       return item;
     } catch (e) {
-      console.error('从 localStorage 读取缓存失败:', e);
+      
       return null;
     }
   }
@@ -291,7 +291,7 @@ class LocalCacheManager {
           };
           localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(retryItem));
         } catch (retryErr) {
-          console.error('❌ [Cache] 清理后重试保存仍然失败:', retryErr);
+          
         }
       }
     }
@@ -389,7 +389,7 @@ class LocalCacheManager {
         JSON.parse(metadataStr);
       }
     } catch (e) {
-      console.error('加载缓存元数据失败:', e);
+      
     }
   }
 

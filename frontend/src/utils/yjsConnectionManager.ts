@@ -60,7 +60,7 @@ class YjsConnectionManager {
     };
 
     this.connections.set(key, conn);
-    console.log(`🔌 [YjsConnectionManager] 创建作品连接: work_${workId}`);
+    
     
     return conn;
   }
@@ -78,7 +78,7 @@ class YjsConnectionManager {
     if (!fragment) {
       fragment = conn.ydoc.getXmlFragment(`chapter_${chapterId}`);
       conn.chapterFragments.set(chapterId, fragment);
-      console.log(`📄 [YjsConnectionManager] 创建章节片段: chapter_${chapterId}`);
+      
     }
 
     return fragment;
@@ -95,7 +95,7 @@ class YjsConnectionManager {
     if (conn.refCount <= 0) {
       // 延迟断开，以便快速切换章节时可以复用
       conn.disconnectTimer = setTimeout(() => {
-        console.log(`🔌 [YjsConnectionManager] 断开作品连接: work_${workId}`);
+        
         conn.wsProvider.destroy();
         conn.idbProvider.destroy();
         conn.ydoc.destroy();
@@ -118,7 +118,7 @@ class YjsConnectionManager {
     conn.idbProvider.destroy();
     conn.ydoc.destroy();
     this.connections.delete(workId);
-    console.log(`🔌 [YjsConnectionManager] 立即断开连接: work_${workId}`);
+    
   }
 
   /**

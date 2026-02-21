@@ -24,7 +24,7 @@ const Works: React.FC = () => {
         total: res.total,
       });
     } catch (error) {
-      console.error(error);
+      
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ const Works: React.FC = () => {
           message.success('Status updated successfully');
           fetchWorks(pagination.current, pagination.pageSize, keyword);
         } catch (error) {
-          console.error(error);
+          
         }
       },
     });

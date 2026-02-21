@@ -68,7 +68,7 @@ export function useAutoSave(
           }
 
         } catch (err) {
-          console.error('自动保存失败:', err);
+          
         }
       }, 2000);
     };

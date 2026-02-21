@@ -39,18 +39,18 @@ function getMemosUserId(workId?: number | string | null): string | null {
   try {
     const userStr = localStorage.getItem('user_info');
     if (!userStr) {
-      console.warn('[getMemosUserId] 未找到 user_info');
+      
       return null; // 未登录
     }
     
     const userInfo = JSON.parse(userStr) as Record<string, unknown>;
-    console.log('[getMemosUserId] 用户信息:', userInfo);
+    
     
     // 尝试多种可能的用户ID字段名
     const userId = userInfo.user_id || userInfo.id || userInfo.userId;
     
     if (!userId) {
-      console.warn('[getMemosUserId] 用户信息中未找到 user_id 或 id 字段:', userInfo);
+      
       return null; // 用户信息不完整
     }
     
@@ -60,16 +60,16 @@ function getMemosUserId(workId?: number | string | null): string | null {
       : null;
     
     if (!workIdStr) {
-      console.warn('[getMemosUserId] 未提供有效的 workId:', workId);
+      
       return null; // 没有作品ID
     }
     
     // 格式：user_{userId}_work_{workId}
     const memosUserId = `user_${userId}_work_${workIdStr}`;
-    console.log('[getMemosUserId] 生成的 MemOS 用户ID:', memosUserId);
+    
     return memosUserId;
   } catch (e) {
-    console.error('[getMemosUserId] 无法获取用户信息:', e);
+    
     return null;
   }
 }
@@ -208,7 +208,7 @@ export async function streamChatMessage(
       parseAndDispatch(buffer, onEvent);
     }
   } catch (e) {
-    console.error('读取流失败:', e);
+    
     throw e;
   }
 }
@@ -240,12 +240,12 @@ function parseAndDispatch(rawLine: string, onEvent?: (event: ChatStreamEvent) =>
     const event: ChatStreamEvent = { type, data };
 
     if (type === 'continue_chapter_result') {
-      console.log('[chatApi] 收到 continue_chapter_result:', event.data);
+      
     }
 
     onEvent?.(event);
   } catch (e) {
-    console.warn('解析聊天 SSE 消息失败:', e, dataStr);
+    
   }
 }
 

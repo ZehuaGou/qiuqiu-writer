@@ -53,7 +53,7 @@ export default function WorkRecoveryModal({
       setRecoverableWorks(offlineWorks);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载可恢复作品失败');
-      console.error('加载可恢复作品失败:', err);
+      
     } finally {
       setLoading(false);
     }

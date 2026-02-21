@@ -89,13 +89,12 @@
   position: relative;
   z-index: 1000;
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-light);
-  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: none;
 }
 
 .header-container {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
   padding: 0 20px;
   display: flex;
   align-items: center;
@@ -150,6 +149,9 @@
   border-radius: var(--radius);
   transition: background var(--transition-base), color var(--transition-base);
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .nav-link:hover {
@@ -177,21 +179,28 @@
     "logo right"
     "nav nav";
   grid-template-columns: 1fr auto;
+  grid-template-rows: 52px 48px;
   height: 100px;
-  padding-top: 12px;
+  padding-top: 0;
   padding-bottom: 0;
   gap: 0;
-  align-content: space-between;
+  align-content: start;
 }
 
 .profile-header .header-left {
   grid-area: logo;
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .profile-header .header-right {
   grid-area: right;
   justify-self: end;
   margin-left: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .profile-header .header-nav {
@@ -199,13 +208,18 @@
   display: flex;
   gap: 24px;
   margin-top: 0;
+  height: 100%;
+  align-items: stretch;
 }
 
 .profile-header .nav-link {
   background: transparent !important;
   border-radius: 0;
   border-bottom: 2px solid transparent;
-  padding: 8px 4px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  height: 100%;
   color: var(--text-secondary);
   font-weight: 500;
   transition: all var(--transition-base);
@@ -220,7 +234,7 @@
 .profile-header .nav-link.active {
   color: var(--text-primary);
   font-weight: 600;
-  border-bottom-color: var(--accent-primary); /* 下划线颜色 */
+  border-bottom-color: #fd8c73; /* 下划线颜色: 橙色 */
 }
 
 .header-btn {
@@ -274,6 +288,19 @@
   display: inline;
 }
 
+.header-btn.create-btn {
+  padding: 0 8px;
+  height: 28px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  gap: 4px;
+}
+
+.header-btn.create-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .user-menu-wrapper {
   position: relative;
   display: flex;
@@ -281,8 +308,8 @@
 }
 
 .user-avatar-btn {
-  width: 45px;
-  height: 45px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid var(--border-color);
   background: var(--bg-secondary);
@@ -401,6 +428,48 @@
   min-width: 0;
 }
 
+/* 创建/导入菜单 */
+.header-create-menu {
+  position: relative;
+}
+
+.header-create-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1000;
+  animation: slideDown 0.2s var(--transition-bounce);
+}
+
+.header-create-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-base);
+}
+
+.header-create-item:hover {
+  background: var(--bg-secondary);
+}
+
 .user-name {
   font-size: 14px;
   font-weight: 600;
@@ -427,7 +496,9 @@
 }
 
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 16px;
   color: var(--text-primary);
   text-decoration: none;
@@ -474,7 +545,9 @@
 }
 
 .mobile-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 12px 16px;
   text-decoration: none;

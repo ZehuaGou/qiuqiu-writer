@@ -211,7 +211,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
         // 并行获取卷列表和章节列表
         const [dbVolumes, allChapters] = await Promise.all([
           volumesApi.listVolumes(workId).catch((e: unknown) => {
-            console.warn('加载卷列表失败:', e);
+            
             return [] as Volume[];
           }),
           (async () => {
@@ -372,7 +372,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
           setSelectedChapter(targetChapterId);
         }
       } catch (err) {
-        console.error('加载章节列表失败:', err);
+        
       }
     };
 
@@ -395,7 +395,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
       });
       setDeletedChapters(res.chapters || []);
     } catch (err) {
-      console.warn('加载回收站列表失败:', err);
+      
       setDeletedChapters([]);
     }
   }, [workId]);

@@ -100,7 +100,7 @@ class PromptTemplateApiClient extends BaseApiClient {
         params
       );
     } catch (error) {
-      console.error('获取组件Prompts失败:', error);
+      
       return [];
     }
   }
@@ -127,7 +127,7 @@ class PromptTemplateApiClient extends BaseApiClient {
       );
       return response && response.length > 0 ? response[0] : null;
     } catch (error) {
-      console.error('获取组件Prompt失败:', error);
+      
       return null;
     }
   }
@@ -198,10 +198,10 @@ class PromptTemplateApiClient extends BaseApiClient {
     } catch (error) {
       // 如果是取消请求，不记录错误
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('批量获取Prompt模板请求已取消');
+        
         return result;
       }
-      console.error('批量获取Prompt模板失败:', error);
+      
     }
     
     return result;

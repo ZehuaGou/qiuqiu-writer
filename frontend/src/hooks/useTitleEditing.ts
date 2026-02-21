@@ -66,7 +66,7 @@ export function useTitleEditing(options: UseTitleEditingOptions): UseTitleEditin
       const updatedWork = await worksApi.updateWork(workId, { title: newTitle });
       onWorkUpdate(updatedWork);
     } catch (err) {
-      console.error('更新标题失败:', err);
+      
       onError?.(err instanceof Error ? err.message : '更新标题失败');
       e.currentTarget.textContent = currentTitle;
     }
@@ -105,7 +105,7 @@ export function useTitleEditing(options: UseTitleEditingOptions): UseTitleEditin
       await chaptersApi.updateChapter(chapterId, { title: newTitle });
       onChapterTitleUpdate(selectedChapter, newTitle);
     } catch (err) {
-      console.error('更新章节名失败:', err);
+      
       onError?.(err instanceof Error ? err.message : '更新章节名失败');
       e.currentTarget.textContent = currentTitle;
     }
@@ -167,7 +167,7 @@ export function useTitleEditing(options: UseTitleEditingOptions): UseTitleEditin
         el.textContent = `第${num}章`;
       }
     } catch (err) {
-      console.error('更新章节号失败:', err);
+      
       onError?.(err instanceof Error ? err.message : '更新章节号失败');
       if (el) el.textContent = currentDisplay;
     } finally {

@@ -64,7 +64,7 @@ export default function TemplateMarketModal({
         const info = await authApi.getUserInfo();
         setUserInfo(info);
       } catch (error) {
-        console.error('Failed to load user info:', error);
+        
       }
     };
     loadUserInfo();
@@ -93,7 +93,7 @@ export default function TemplateMarketModal({
       
       setTemplates(filteredData);
     } catch (error) {
-      console.error('Failed to fetch templates:', error);
+      
     } finally {
       setLoading(false);
     }
@@ -125,7 +125,7 @@ export default function TemplateMarketModal({
         setSaveForm({ name: '', description: '', is_public: false });
         fetchTemplates();
       } catch (error) {
-        console.error('Failed to update template:', error);
+        
         showMessage('更新失败，请重试', 'error');
       }
       return;
@@ -154,7 +154,7 @@ export default function TemplateMarketModal({
         fetchTemplates();
       }
     } catch (error) {
-      console.error('Failed to save template:', error);
+      
       showMessage('保存失败，请重试', 'error');
     }
   };
@@ -185,7 +185,7 @@ export default function TemplateMarketModal({
         showMessage('模板删除成功', 'success');
         fetchTemplates();
       } catch (error) {
-        console.error('Failed to delete template:', error);
+        
         showMessage('删除失败，请重试', 'error');
       }
     });

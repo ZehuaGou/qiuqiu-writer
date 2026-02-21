@@ -145,11 +145,11 @@ export default function NovelEditorPage() {
     // 切换章节前，强制同步当前作品的 Yjs 状态到数据库
     // 这样新章节加载时，从数据库拉取的内容就是最新的
     if (workId) {
-      console.log(`🔄 [NovelEditorPage] 切换章节前触发 WebSocket 同步: work_${workId}`);
+      
       try {
         await syncToServer();
       } catch (err) {
-        console.warn('⚠️ [NovelEditorPage] 切换章节同步失败:', err);
+        
       }
     }
 
@@ -210,11 +210,11 @@ export default function NovelEditorPage() {
       try {
         const cached = await documentCache.getDocument(docId);
         if (cached && cached.content && cached.content.trim().length > 0) {
-          console.log('📦 [NovelEditorPage] 使用本地缓存作为初始内容');
+          
           return cached.content;
         }
       } catch (cacheErr) {
-        console.warn('⚠️ [NovelEditorPage] 读取本地缓存失败:', cacheErr);
+        
       }
 
       // 本地没有，再从服务器拉取
@@ -227,7 +227,7 @@ export default function NovelEditorPage() {
         // 注意：这里的 res.content 可能是 Yjs 的 XML 字符串
         return res?.content || null;
       } catch (err) {
-        console.error('❌ [NovelEditorPage] 获取初始内容失败:', err);
+        
         return null;
       }
     },
@@ -243,16 +243,16 @@ export default function NovelEditorPage() {
       // 这样可以避免 SyncManager 触发冗余的 ShareDB 同步请求，从而减少冲突
       if (documentId) {
         documentCache.updateDocument(documentId, content, undefined, true).catch(err => {
-          console.warn('⚠️ [NovelEditorPage] 更新本地缓存失败:', err);
+          
         });
       }
     },
     onSyncSuccess: (version) => {
-      console.log('✅ 同步成功，版本:', version);
+      
       setSyncStatus(syncManager.getStatus());
     },
     onSyncError: (error) => {
-      console.error('❌ 同步失败:', error);
+      
     },
   });
 
@@ -264,7 +264,7 @@ export default function NovelEditorPage() {
      // 延迟 2 秒检查，确保 Yjs 完成初始同步且用户尚未开始大量编辑
      const checkConflict = async () => {
        if (hasUserEdited.current) {
-         console.log('ℹ️ [NovelEditorPage] 用户已开始编辑，跳过自动冲突检测');
+         
          return;
        }
 
@@ -295,19 +295,19 @@ export default function NovelEditorPage() {
              const otherUsers = awareness ? awareness.getStates().size - 1 : 0;
              
              if (otherUsers > 0) {
-               console.log(`ℹ️ [NovelEditorPage] 发现 ${otherUsers} 位其他用户正在协作，由 Yjs 自动处理合并，跳过强行覆盖`);
+               
                return;
              }
 
-             console.log('⚠️ [NovelEditorPage] 发现版本冲突且本地落后。执行修复...');
+             
              
              // A. 保存本地版本为历史记录 (使用 Yjs 快照)
              try {
                const base64 = createYjsSnapshotFromEditor(editor);
                await chaptersApi.createYjsSnapshot(chapterId, base64, '冲突自动保存');
-               console.log('✅ [NovelEditorPage] 本地冲突版本已保存为 Yjs 快照');
+               
              } catch (historyErr) {
-               console.error('❌ [NovelEditorPage] 保存 Yjs 快照失败:', historyErr);
+               
              }
  
              // B. 强制覆盖为线上最新版本 (仅在没有其他用户时安全)
@@ -320,7 +320,7 @@ export default function NovelEditorPage() {
            }
          }
        } catch (err) {
-         console.error('❌ [NovelEditorPage] 冲突检测失败:', err);
+         
        }
      };
  
@@ -419,7 +419,7 @@ export default function NovelEditorPage() {
           setError(null);
         }
       } catch (err) {
-        console.error('加载作品失败:', err);
+        
         setError(err instanceof Error ? err.message : '加载作品失败');
       } finally {
         setLoading(false);
@@ -572,7 +572,7 @@ export default function NovelEditorPage() {
       }
       setSelectionPopup((prev) => ({ ...prev, visible: false }));
     } catch (err) {
-      console.error('优化句子失败:', err);
+      
       showMessage(err instanceof Error ? err.message : '优化失败', 'error');
     } finally {
       setSelectionOptimizing(false);
@@ -599,7 +599,7 @@ export default function NovelEditorPage() {
       
       showMessage('保存成功', 'success');
     } catch (err) {
-      console.error('保存失败:', err);
+      
       showMessage('保存失败', 'error');
     }
   };
@@ -614,7 +614,7 @@ export default function NovelEditorPage() {
           removeChapterLocally(chapterId);
           await deleteChapter(chapterId, { skipRefresh: true });
         } catch (err) {
-          console.error('删除章节失败:', err);
+          
           setUpdateTrigger(prev => prev + 1);
         }
       }
@@ -687,7 +687,7 @@ export default function NovelEditorPage() {
         .join('');
       editor.commands.setContent(htmlContent || '<p></p>');
       if (isFinal) {
-        console.log('✅ 章节内容生成完成');
+        
       }
     }
   };
@@ -721,7 +721,7 @@ export default function NovelEditorPage() {
           }
         }
       } catch (e) {
-        console.warn('[handleGenerateChapterFromOutline] 拉取章节文档失败', e);
+        
       }
     }
 
@@ -771,7 +771,7 @@ export default function NovelEditorPage() {
           const uid = authApi.getUserInfo()?.id;
           navigate(uid ? `/users/${uid}` : '/');
         } catch (err) {
-          console.error('删除作品失败:', err);
+          
           showMessage('删除作品失败', 'error');
         }
       }

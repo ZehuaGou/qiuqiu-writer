@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { User, Plus, Menu, X } from 'lucide-react';
+import { User, Plus, Menu, X, Upload, Compass, BookOpen, LogOut } from 'lucide-react';
 import LoginModal from '../auth/LoginModal';
 import MessageModal from '../common/MessageModal';
 import type { MessageType } from '../common/MessageModal';
 import { authApi, type UserInfo } from '../../utils/authApi';
 import { worksApi } from '../../utils/worksApi';
 import { getUserAvatarUrl } from '../../utils/avatarUtils';
+import ImportWorkModal from '../ImportWorkModal';
 import './MainLayout.css';
 
 export default function MainLayout() {
@@ -15,10 +16,13 @@ export default function MainLayout() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const createMenuRef = useRef<HTMLDivElement>(null);
 
   // 消息提示状态
   const [messageState, setMessageState] = useState<{
@@ -85,9 +89,12 @@ export default function MainLayout() {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
         setMobileMenuOpen(false);
       }
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
+        setShowCreateMenu(false);
+      }
     };
 
-    if (userMenuOpen || mobileMenuOpen) {
+    if (userMenuOpen || mobileMenuOpen || showCreateMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
@@ -108,7 +115,7 @@ export default function MainLayout() {
     try {
       await authApi.logout();
     } catch (error) {
-      console.error('登出失败:', error);
+      
     } finally {
       setUserInfo(null);
       setIsAuthenticated(false);
@@ -120,7 +127,7 @@ export default function MainLayout() {
   // 处理创建作品
   const handleCreateWork = async () => {
     try {
-      console.log('📝 [MainLayout.handleCreateWork] 开始创建作品...');
+      
       
       const workData = {
         title: '未命名作品',
@@ -128,11 +135,11 @@ export default function MainLayout() {
         is_public: false,
       };
       
-      console.log('📝 [MainLayout.handleCreateWork] 准备发送请求，数据:', workData);
+      
       
       const newWork = await worksApi.createWork(workData);
       
-      console.log('✅ [MainLayout.handleCreateWork] 作品创建成功:', newWork);
+      
       
       if (!newWork || !newWork.id) {
         throw new Error('创建作品成功，但未返回作品ID');
@@ -141,10 +148,16 @@ export default function MainLayout() {
       // 跳转到编辑器
       navigate(`/novel/editor?workId=${newWork.id}`);
     } catch (err) {
-      console.error('❌ [MainLayout.handleCreateWork] 创建作品失败:', err);
+      
       const errorMessage = err instanceof Error ? err.message : '创建作品失败';
       showMessage(`创建作品失败: ${errorMessage}`, 'error');
     }
+  };
+
+  // 处理导入成功
+  const handleImportSuccess = (workId: string) => {
+    setShowImportModal(false);
+    navigate(`/novel/editor?workId=${workId}`);
   };
 
   const isHomePage = location.pathname === '/';
@@ -178,6 +191,7 @@ export default function MainLayout() {
                 to="/" 
                 className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
               >
+                <Compass size={16} />
                 探索
               </Link>
               {isAuthenticated && (
@@ -185,6 +199,7 @@ export default function MainLayout() {
                   to={userInfo ? `/users/${userInfo.id}` : '/'}
                   className={`nav-link ${isMyProfilePage ? 'active' : ''}`}
                 >
+                  <BookOpen size={16} />
                   个人主页
                 </Link>
               )}
@@ -194,15 +209,41 @@ export default function MainLayout() {
           <div className="header-right">
             {isAuthenticated ? (
               <>
-                {!isUserWorksPage && (
+                <div className="header-create-menu" ref={createMenuRef}>
                   <button
-                    className="header-btn icon-only"
-                    onClick={handleCreateWork}
-                    title="创建新作品"
+                    className="header-btn create-btn"
+                    onClick={() => setShowCreateMenu(!showCreateMenu)}
+                    title="创建/导入"
                   >
                     <Plus size={18} />
                   </button>
-                )}
+                  {showCreateMenu && (
+                    <div className="header-create-dropdown">
+                      <button
+                        type="button"
+                        className="header-create-item"
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          handleCreateWork();
+                        }}
+                      >
+                        <Plus size={16} />
+                        创建作品
+                      </button>
+                      <button
+                        type="button"
+                        className="header-create-item"
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setShowImportModal(true);
+                        }}
+                      >
+                        <Upload size={16} />
+                        导入作品
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="user-menu-wrapper" ref={userMenuRef}>
                   <button
                     className="user-avatar-btn"
@@ -253,6 +294,7 @@ export default function MainLayout() {
                         className="menu-item"
                         onClick={() => setUserMenuOpen(false)}
                       >
+                        <BookOpen size={16} />
                         个人主页
                       </Link>
                       <div className="menu-divider"></div>
@@ -264,6 +306,7 @@ export default function MainLayout() {
                           handleLogout();
                         }}
                       >
+                        <LogOut size={16} />
                         退出登录
                       </a>
                     </div>
@@ -294,26 +337,33 @@ export default function MainLayout() {
         {/* 移动端菜单 */}
         {mobileMenuOpen && (
           <div className="mobile-menu" ref={mobileMenuRef}>
+            {isAuthenticated && (
+              <>
+                <div className="mobile-menu-user">
+                  <div className="user-name">{userInfo?.display_name || userInfo?.username || '用户'}</div>
+                </div>
+                <div className="menu-divider"></div>
+              </>
+            )}
             <Link
               to="/"
               className="mobile-menu-item"
               onClick={() => setMobileMenuOpen(false)}
             >
+              <Compass size={16} />
               探索
             </Link>
             {isAuthenticated && (
               <>
-            <Link
-              to={userInfo ? `/users/${userInfo.id}` : '/'}
-              className="mobile-menu-item"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              个人主页
-            </Link>
-            <div className="menu-divider"></div>
-                <div className="mobile-menu-user">
-                  <div className="user-name">{userInfo?.display_name || userInfo?.username || '用户'}</div>
-                </div>
+                <Link
+                  to={userInfo ? `/users/${userInfo.id}` : '/'}
+                  className="mobile-menu-item"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <BookOpen size={16} />
+                  个人主页
+                </Link>
+                <div className="menu-divider"></div>
                 <a
                   href="#"
                   className="mobile-menu-item"
@@ -323,6 +373,7 @@ export default function MainLayout() {
                     setMobileMenuOpen(false);
                   }}
                 >
+                  <LogOut size={16} />
                   退出登录
                 </a>
               </>
@@ -364,6 +415,12 @@ export default function MainLayout() {
           closeMessage();
           if (messageState.onConfirm) messageState.onConfirm();
         }}
+      />
+      {/* 导入作品弹窗 */}
+      <ImportWorkModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={handleImportSuccess}
       />
     </div>
   );

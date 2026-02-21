@@ -59,17 +59,12 @@ export function useChapterAutoSave({
     const win = window as unknown as CustomWindow;
 
     if (!editor || !selectedChapter || !workId) {
-      console.log('⚠️ 自动保存未启动:', {
-        hasEditor: !!editor,
-        selectedChapter,
-        workId,
-      });
-      return;
+            return;
     }
 
     const chapterId = parseInt(selectedChapter);
     if (isNaN(chapterId)) {
-      console.warn('⚠️ 自动保存未启动：章节ID无效', selectedChapter);
+      
       return;
     }
 
@@ -88,11 +83,7 @@ export function useChapterAutoSave({
       // 关键修复：在触发保存前，先检查章节是否已经切换
       const currentChapterIdCheck = currentChapterIdRef.current;
       if (currentChapterIdCheck !== chapterId) {
-        console.warn('⚠️ [自动保存] 章节已切换，跳过保存:', {
-          currentChapterIdRef: currentChapterIdCheck,
-          expectedChapterId: chapterId,
-        });
-        return;
+                return;
       }
       
       if (saveTimeoutRef.current) {
@@ -106,24 +97,14 @@ export function useChapterAutoSave({
         // 再次检查，确保章节没有切换（双重验证）
         const currentChapterIdCheck2 = currentChapterIdRef.current;
         if (selectedChapter !== String(chapterId) || !workId || currentChapterIdCheck2 !== chapterId) {
-          console.warn('⚠️ [自动保存] 跳过：章节已切换或作品ID缺失', {
-            currentSelected: selectedChapter,
-            expectedChapter: chapterId,
-            currentChapterIdRef: currentChapterIdCheck2,
-            workId,
-          });
-          return;
+                    return;
         }
 
         try {
           // 关键修复：再次验证章节ID，确保保存到正确的章节
           const currentChapterIdCheck = currentChapterIdRef.current;
           if (currentChapterIdCheck !== chapterId) {
-            console.warn('⚠️ [自动保存] 章节ID不匹配，跳过保存:', {
-              currentChapterIdRef: currentChapterIdCheck,
-              expectedChapterId: chapterId,
-            });
-            return;
+                        return;
           }
           
           // 关键修复：直接使用编辑器中的实际内容，确保保存的是用户当前看到的内容
@@ -137,7 +118,7 @@ export function useChapterAutoSave({
             // 如果 currentChapterIdRef 匹配，说明是当前章节，可能是用户主动清空，应该保存
             // 如果不匹配，说明章节已切换，不应该保存空内容
             if (currentChapterIdCheck !== chapterId) {
-              console.warn('⚠️ [自动保存] 编辑器内容为空且章节已切换，跳过保存');
+              
               return;
             }
           }
@@ -177,23 +158,12 @@ export function useChapterAutoSave({
           const lastSavedContent = documentCache.currentContent.get(documentId);
           if (lastSavedContent === editorContent) {
             // 内容没有变化，不触发保存
-            console.log('⏭️ [自动保存] 内容未变化，跳过保存');
+            
             return;
           }
           
           // 🔍 [调试] 自动保存时的缓存操作
-          console.log('🔍 [自动保存-缓存操作] 开始自动保存并更新缓存:', {
-            documentId,
-            chapterId,
-            contentLength: editorContent.length,
-            contentPreview: editorContent.substring(0, 100),
-            hasJson: !!editorContentJson,
-            hasMetadata: !!metadata,
-            metadataKeys: Object.keys(metadata),
-            timestamp: new Date().toISOString(),
-            stackTrace: new Error().stack?.split('\n').slice(0, 8).join('\n'),
-          });
-          
+                    
           // 关键优化：只调用 syncDocumentState，它会内部处理缓存更新
           // 不再单独调用 updateDocument，避免重复更新
           // 关键修复：传递 metadata 到 syncDocumentState
@@ -222,11 +192,7 @@ export function useChapterAutoSave({
             
             // 关键修复：只有在同步成功时才更新状态
             if (syncResult.success) {
-              console.log('✅ [自动保存] 已同步到服务器:', {
-                documentId,
-                contentLength: editorContent.length,
-              });
-              
+                            
               // 如果 sync 接口返回了更新后的作品和章节信息，更新本地状态
               if (syncResult.work || syncResult.chapter) {
                 // 如果返回了更新后的作品信息，更新本地状态
@@ -240,11 +206,7 @@ export function useChapterAutoSave({
                     return prevWork;
                   });
                   
-                  console.log('✅ [字数统计] 作品总字数已更新（从 sync 接口返回）:', {
-                    workId,
-                    totalWordCount: syncResult.work.word_count,
-                  });
-                }
+                                  }
                 
                 // 如果返回了更新后的章节信息，更新本地章节数据
                 if (syncResult.chapter) {
@@ -254,34 +216,21 @@ export function useChapterAutoSave({
                     )
                   );
                   
-                  console.log('✅ [字数统计] 章节字数已更新（从 sync 接口返回）:', {
-                    chapterId,
-                    wordCount: syncResult.chapter.word_count,
-                  });
-                }
+                                  }
               }
             } else {
-              console.warn('⚠️ [自动保存] 同步未成功，跳过状态更新:', {
-                documentId,
-                error: syncResult.error,
-              });
-            }
+                          }
           } catch (syncErr) {
-            console.warn('⚠️ [自动保存] 同步到服务器失败，但已保存到本地缓存:', syncErr);
+            
           }
           
           // 关键优化：不再调用 getDocument 验证，避免触发服务器请求
           // 验证逻辑已在 syncDocumentState 中完成，不需要再次验证
           // syncDocumentState 已经确保内容保存到正确的章节，不需要再次验证
-          console.log('✅ [自动保存] 保存完成（已跳过验证，避免服务器请求）:', {
-            documentId,
-            contentLength: editorContent.length,
-            chapterId,
-          });
-          
+                    
           // 字数统计已在 sync 接口中处理，不需要单独更新
         } catch (err) {
-          console.error('❌ [自动保存] 保存到本地缓存失败:', err);
+          
         }
       }, 2000); // 2秒后保存到本地
     };

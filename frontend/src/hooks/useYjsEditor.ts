@@ -142,13 +142,13 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
 
     const parsed = parseDocumentId(documentId);
     if (!parsed) {
-      console.warn('⚠️ [useYjsEditor] 无效的 documentId 格式:', documentId);
+      
       return;
     }
 
     const { workId, chapterId } = parsed;
     const field = `chapter_${chapterId}`;
-    console.log('📄 [useYjsEditor] 章节:', chapterId, '作品:', workId, 'field:', field);
+    
 
     // 1. 获取或创建作品的共享连接（一个 work 一个 WebSocket）
     const wsUrl = getWebSocketUrl();
@@ -174,14 +174,14 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
     const markReady = () => {
       if (!readyMarked) {
         readyMarked = true;
-        console.log('✅ [useYjsEditor] 协作就绪:', documentId);
+        
         setCollabState({ ydoc, wsProvider, field });
       }
     };
 
     // 如果 Provider 已经同步过（连接复用场景），可以尝试立即就绪
     if (wsProvider.synced) {
-      console.log('🚀 [useYjsEditor] Provider 已同步，尝试快速就绪');
+      
       markReady();
     }
 
@@ -204,7 +204,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
     // 5秒兜底，防止同步卡住导致编辑器一直不显示
     const timeout = setTimeout(() => {
       if (!readyMarked) {
-        console.warn('⚠️ [useYjsEditor] 同步超时，强制就绪');
+        
         markReady();
       }
     }, 5000);
@@ -255,7 +255,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       },
     },
     onCreate: () => {
-      console.log('✨ [useYjsEditor] 编辑器已创建');
+      
     },
     onUpdate: ({ editor: ed }) => {
       if (onUpdate) {
@@ -276,14 +276,14 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       const xmlFragment = collabState.ydoc.getXmlFragment(collabState.field);
       // 1. 如果 Yjs 已经有内容（来自 IndexedDB 或已同步的 WebSocket），则不需要注入初始内容
       if (xmlFragment.length > 0) {
-        console.log('📚 [useYjsEditor] Yjs 已有内容，跳过初始内容注入');
+        
         isInitialized.current = true;
         return;
       }
 
       // 2. 如果正在连接中且尚未同步，则继续等待 sync 事件，避免覆盖正在同步的线上内容
       if (collabState.wsProvider.shouldConnect && !collabState.wsProvider.synced) {
-        console.log('⏳ [useYjsEditor] 等待服务器同步后再判断是否注入初始内容...');
+        
         return;
       }
 
@@ -296,7 +296,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
         const frag = collabState.ydoc.getXmlFragment(loadingField);
         if (frag.length > 0) return;
 
-        console.log('📝 [useYjsEditor] Yjs 为空，注入初始内容');
+        
         editor.commands.setContent(html);
         isInitialized.current = true;
       };
@@ -309,7 +309,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
             if (html !== null) apply(html);
           })
           .catch((err) => {
-            console.warn('⚠️ [useYjsEditor] 拉取初始内容失败:', err);
+            
           });
       }
     };
@@ -334,7 +334,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
   const syncToServer = useCallback(async () => {
     if (!editor) return;
 
-    console.log('💾 [useYjsEditor] 手动保存（通过 WebSocket 触发）');
+    
 
     try {
       // 优先通过 WebSocket 发送保存消息
@@ -343,13 +343,13 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
         if (ws && ws.readyState === WebSocket.OPEN) {
           const encoder = new Uint8Array([MSG_SAVE]);
           ws.send(encoder);
-          console.log('📤 [useYjsEditor] 已发送 WebSocket 保存指令');
+          
         }
       }
       
       onSyncSuccess?.(Date.now());
     } catch (err) {
-      console.error('❌ [useYjsEditor] 保存失败:', err);
+      
       onSyncError?.(err instanceof Error ? err : new Error('保存失败'));
     }
   }, [editor, onSyncSuccess, onSyncError]);
@@ -358,7 +358,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
   const loadFromServer = useCallback(async () => {
     if (!editor || !wsProviderRef.current) return;
 
-    console.log('📥 [useYjsEditor] 请求从服务器加载（触发重连同步）');
+    
 
     if (wsProviderRef.current.wsconnected) {
       wsProviderRef.current.disconnect();

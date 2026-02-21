@@ -62,7 +62,7 @@ export default function UserWorksPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载作品失败');
-      console.error('Error loading user works:', err);
+      
     } finally {
       setLoading(false);
     }
@@ -76,16 +76,16 @@ export default function UserWorksPage() {
       if (isCurrentUser) {
         try {
           const currentUser = await authApi.getCurrentUser();
-          console.log('从API获取的用户信息:', currentUser);
+          
           if (currentUser) {
             setUserInfo(currentUser);
             return;
           }
         } catch (err) {
-          console.error('获取用户信息失败，使用本地存储:', err);
+          
           // 如果API失败，使用本地存储的用户信息
           const storedUser = authApi.getUserInfo();
-          console.log('从本地存储获取的用户信息:', storedUser);
+          
           if (storedUser) {
             setUserInfo(storedUser);
             return;
@@ -103,7 +103,7 @@ export default function UserWorksPage() {
         status: 'active',
       });
     } catch (err) {
-      console.error('Error loading user info:', err);
+      
     }
   }, [userId, isCurrentUser]);
 
@@ -131,7 +131,7 @@ export default function UserWorksPage() {
   // 处理创建作品
   const handleCreateWork = async () => {
     try {
-      console.log('📝 [UserWorksPage.handleCreateWork] 开始创建作品...');
+      
       
       const workData = {
         title: '未命名作品',
@@ -151,7 +151,7 @@ export default function UserWorksPage() {
       // 跳转到编辑器
       navigate(`/novel/editor?workId=${newWork.id}`);
     } catch (err) {
-      console.error('❌ [UserWorksPage.handleCreateWork] 创建作品失败:', err);
+      
       const errorMessage = err instanceof Error ? err.message : '创建作品失败';
       alert(`创建作品失败: ${errorMessage}`);
     }
@@ -210,14 +210,14 @@ export default function UserWorksPage() {
     setSaving(true);
     try {
       const updatedUser = await authApi.updateProfile(editFormData);
-      console.log('更新后的用户信息:', updatedUser);
+      
       // 更新本地状态
       setUserInfo(updatedUser);
       // 重新加载用户信息以确保数据同步
       await loadUserInfo();
       setShowEditProfile(false);
     } catch (err) {
-      console.error('保存资料失败:', err);
+      
       alert(err instanceof Error ? err.message : '保存资料失败');
     } finally {
       setSaving(false);
@@ -245,6 +245,7 @@ export default function UserWorksPage() {
       <div className="user-works-container">
         {/* 左侧个人信息栏 */}
         <aside className="user-sidebar">
+          
           <div className="user-profile-card">
             <div className="user-avatar-large">
               {userInfo ? (
@@ -444,24 +445,26 @@ export default function UserWorksPage() {
               {isCurrentUser && (
                 <div className="works-create-menu">
                   <button
-                    className="header-btn icon-only works-create-trigger"
+                    className="header-btn works-create-trigger"
                     onClick={() => setShowCreateMenu((prev) => !prev)}
                     title="创建/导入"
                     type="button"
                   >
-                    <Plus size={18} />
+                    <Plus size={14} />
+                    <span>New</span>
                   </button>
                   {showCreateMenu && (
-                    <div className="works-create-dropdown">
+                    <div className="header-create-dropdown">
                       <button
                         type="button"
-                        className="works-create-item"
+                        className="header-create-item"    
                         onClick={() => {
                           setShowCreateMenu(false);
                           handleCreateWork();
                         }}
                       >
                         <Plus size={16} />
+
                         创建作品
                       </button>
                       <button

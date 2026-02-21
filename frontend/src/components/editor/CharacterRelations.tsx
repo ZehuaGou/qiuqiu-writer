@@ -706,7 +706,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
           renderResult.then(() => {
             fullscreenGraphRef.current = fullscreenGraph;
           }).catch((error) => {
-            console.error('全屏图渲染失败:', error);
+            
           });
         } else {
           fullscreenGraphRef.current = fullscreenGraph;
@@ -729,7 +729,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
           window.removeEventListener('resize', handleResize);
         };
       } catch (error) {
-        console.error('创建全屏图失败:', error);
+        
       }
     }, 100);
 

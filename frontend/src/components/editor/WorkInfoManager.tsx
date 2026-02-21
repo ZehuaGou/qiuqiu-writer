@@ -145,7 +145,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
         });
         setUserTemplates(templates);
       } catch (error) {
-        console.warn('获取模板列表失败:', error);
+        
       }
     };
     fetchTemplates();
@@ -282,7 +282,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
            setPreviewModalOpen(true);
        }
     } catch (error) {
-      console.error('Generate failed', error);
+      
       showMessage('生成失败: ' + (error instanceof Error ? error.message : String(error)), 'error');
     } finally {
       setGeneratingComponents(prev => ({ ...prev, [comp.id]: false }));
