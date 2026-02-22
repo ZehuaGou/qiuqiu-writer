@@ -32,7 +32,7 @@ Designed for **AI companions, role-playing NPCs, and multi-agent systems**, MemO
         <img src="https://img.shields.io/badge/arXiv-2507.03724-b31b1b.svg" alt="ArXiv Paper">
     </a>
     <a href="https://github.com/MemTensor/MemOS/discussions">
-      <img src="https://img.shields.io/badge/GitHub-Discussions-181717.svg?logo=github" alt="GitHub Discussions">
+      <img src="https://img.shields.io/badge/qiuqiu-Discussions-181717.svg?logo=github" alt="GitHub Discussions">
     </a>
     <a href="https://discord.gg/Txbx3gebZR">
       <img src="https://img.shields.io/badge/Discord-join%20chat-7289DA.svg?logo=discord" alt="Discord">

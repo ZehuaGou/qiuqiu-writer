@@ -13,7 +13,7 @@ export default function HomeSideNav() {
   return (
     <aside className="home-side-nav">
       <div className="nav-logo">
-        <span className="planet-icon">🌍</span>
+        <img src="/favicon.png" alt="Logo" className="planet-icon" />
         <span className="logo-text">球球写作</span>
       </div>
       <nav className="nav-menu">

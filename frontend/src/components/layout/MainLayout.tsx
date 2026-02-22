@@ -165,7 +165,7 @@ export default function MainLayout() {
   const needLoginPrompt = !isAuthenticated && (location.state as { needLogin?: boolean })?.needLogin;
 
   return (
-    <div className="github-layout">
+    <div className="qiuqiu-layout">
       {needLoginPrompt && (
         <div className="login-prompt-banner">
           <span>请先登录以继续访问</span>
@@ -175,11 +175,11 @@ export default function MainLayout() {
         </div>
       )}
       {/* GitHub风格的顶部导航栏 */}
-      <header className={`github-header ${isMyProfilePage ? 'profile-header' : ''}`}>
+      <header className={`qiuqiu-header ${isMyProfilePage ? 'profile-header' : ''}`}>
         <div className="header-container">
           <div className="header-left">
             <Link to="/" className="logo-link">
-              <span className="logo-icon">🌍</span>
+              <img src="/favicon.png" alt="Logo" className="logo-icon" />
               <span className="logo-text">球球写作</span>
             </Link>
           </div>
@@ -272,12 +272,12 @@ export default function MainLayout() {
                   {userMenuOpen && (
                     <div className="user-menu-dropdown">
                       <div className="user-menu-header">
-                        <div className="user-avatar-large">
+                        <div className="user-avatar-btn">
                           {userInfo ? (
                             <img 
                               src={getUserAvatarUrl(userInfo.avatar_url, userInfo.username, userInfo.display_name)} 
                               alt={userInfo.display_name || userInfo.username || '用户'}
-                              className="user-avatar-img"
+                              className="user-avatar-btn-img"
                             />
                           ) : (
                             <User size={24} />
@@ -339,6 +339,17 @@ export default function MainLayout() {
             {isAuthenticated && (
               <>
                 <div className="mobile-menu-user">
+                  <div className="user-avatar-btn">
+                  {userInfo ? (
+                    <img 
+                      src={getUserAvatarUrl(userInfo.avatar_url, userInfo.username, userInfo.display_name)} 
+                      alt={userInfo.display_name || userInfo.username || '用户'}
+                      className="user-avatar-btn-img"
+                    />
+                  ) : (
+                    <User size={24} />
+                  )}
+                  </div>
                   <div className="user-name">{userInfo?.display_name || userInfo?.username || '用户'}</div>
                 </div>
                 <div className="menu-divider"></div>
@@ -393,7 +404,7 @@ export default function MainLayout() {
       </header>
 
       {/* 主内容区域 */}
-      <main className="github-content">
+      <main className="qiuqiu-content">
         <Outlet />
       </main>
 
