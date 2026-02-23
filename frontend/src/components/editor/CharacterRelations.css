@@ -94,6 +94,8 @@
   flex: 1;
   display: flex;
   overflow: hidden;
+}
+
 .relations-canvas {
   flex: 1;
   position: relative;
@@ -121,10 +123,10 @@
 .relations-list-header,
 .relations-list-row {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr 1.1fr 2.2fr minmax(120px, 1fr);
-  gap: 12px;
+  grid-template-columns: 1fr 0.8fr 1fr 80px;
+  gap: 16px;
   align-items: center;
-  padding: 12px 16px;
+  padding: 12px 24px;
 }
 
 .relations-list-header {
@@ -138,21 +140,31 @@
 .relations-list-row {
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-light);
+  transition: background-color 0.2s;
+}
+
+.relations-list-row:hover {
+  background-color: var(--bg-secondary);
 }
 
 .relations-list-cell {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 列表行操作列始终可见，并使用与角色管理一致的按钮风格 */
 .relations-list-row .relation-actions {
   opacity: 1 !important;
-  min-width: 120px;
+  min-width: 80px;
   flex-shrink: 0;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   align-items: center;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* 列表行操作按钮：编辑与删除统一为同一风格（图标、无边框、透明背景） */
@@ -197,18 +209,23 @@
   font-size: 12px;
 }
 
-/* 编辑模态框样式 */
+/* 编辑模态框：从底部升起（与 AI 对话一致），点击遮罩关闭 */
 .edit-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   z-index: 1000;
-  padding: 20px;
+  padding: 0;
   animation: fadeIn 0.2s ease;
   backdrop-filter: blur(2px);
+  cursor: default;
+}
+
+.edit-modal-overlay:has(.edit-modal) {
+  cursor: default;
 }
 
 @keyframes fadeIn {
@@ -218,27 +235,41 @@
 
 .edit-modal {
   background: var(--bg-primary);
-  border-radius: 12px;
-  padding: 24px;
-  min-width: 400px;
+  border-radius: 16px 16px 0 0;
+  padding: 0 24px 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
   max-width: 500px;
-  max-height: 90vh;
+  max-height: 85vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: bottomSheetSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid var(--border-light);
+  border-bottom: none;
+  cursor: default;
 }
 
-@keyframes slideUp {
-  from { 
+.edit-modal::before {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 12px auto 20px;
+  background: var(--border-light);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+@keyframes bottomSheetSlideUp {
+  from {
     opacity: 0;
-    transform: translateY(20px) scale(0.96);
+    transform: translateY(100%);
   }
-  to { 
+  to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -290,6 +321,7 @@
   box-shadow: 0 0 0 3px var(--accent-light);
 }
 
+/* 保存与删除同一行 */
 .modal-actions {
   display: flex;
   align-items: center;
@@ -297,8 +329,12 @@
   margin-top: 24px;
 }
 
-.footer-spacer {
+.modal-actions .save-btn {
   flex: 1;
+}
+
+.modal-actions .modal-delete-btn {
+  flex: 0 0 auto;
 }
 
 .save-btn,
@@ -334,6 +370,23 @@
   border-color: var(--text-secondary);
 }
 
+.modal-delete-btn {
+  padding: 8px 20px;
+  border: 1px solid var(--error-primary, #ff4d4f);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--error-primary, #ff4d4f);
+}
+
+.modal-delete-btn:hover {
+  background: var(--error-light, rgba(255, 77, 79, 0.1));
+  color: var(--error-primary, #ff4d4f);
+}
+
 /* 移动端适配 */
 @media (max-width: 768px) {
   .relations-header {
@@ -349,37 +402,47 @@
 
   .header-actions {
     width: 100%;
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
   }
 
   .view-toggle {
     display: flex;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 
   .toggle-btn {
     flex: 1;
     text-align: center;
-    padding: 6px;
+    padding: 8px 10px;
     font-size: 12px;
   }
 
   .action-btn {
     min-width: auto;
-    padding: 6px 12px;
+    padding: 8px 12px;
     font-size: 12px;
     white-space: nowrap;
   }
   
-  /* 如果是关系图模式，操作按钮需要更紧凑 */
-  .header-actions .action-btn span {
-    display: none;
+  /* 顶部操作区：紧凑但保留文案，方便理解用途 */
+  .header-actions .action-btn {
+    width: auto;
+    min-width: 36px;
+    padding: 8px 10px;
   }
-  
+
+  /* 移动端保留简短文案，避免用户不知道「手动连线」「全屏」是做什么的 */
+  .header-actions .action-btn span {
+    display: inline;
+  }
+
   .header-actions .action-btn svg {
     margin: 0;
+    flex-shrink: 0;
   }
 
   .relations-list {
@@ -455,50 +518,37 @@
     margin: 0;
   }
   
-  /* 强制换行描述 */
-  .relations-list-cell:nth-child(4) {
-    order: 4;
-    width: 100%;
-    color: var(--text-secondary);
-    font-size: 13px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px dashed var(--border-light);
-    line-height: 1.5;
-  }
-
   .relations-list-row .relation-actions {
     position: absolute;
     top: 12px;
     right: 12px;
+    width: auto;
     min-width: auto;
     gap: 4px;
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .relations-list-row .relation-actions .action-btn,
+  .relations-list-row .relation-actions .delete-btn {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    flex-shrink: 0;
   }
   
-  /* Modal Mobile Styles */
+  /* 移动端：底部抽屉仅微调内边距与按钮高度 */
   .edit-modal {
-    min-width: auto;
-    width: calc(100% - 32px);
     max-width: 100%;
-    height: auto;
-    max-height: 80vh;
-    padding: 20px;
-    margin: 0;
+    padding-left: 20px;
+    padding-right: 20px;
   }
-  
-  .modal-actions {
-    flex-direction: column-reverse; /* 按钮垂直排列，取消在下 */
-    gap: 12px;
-  }
-  
-  .save-btn, .cancel-btn {
-    width: 100%;
-    padding: 12px;
-    height: 44px; /* 更易点击 */
-  }
-  
-  .footer-spacer {
-    display: none;
+
+  .modal-actions .save-btn,
+  .modal-actions .modal-delete-btn {
+    padding: 12px 16px;
+    height: 44px;
   }
 }
-}
+

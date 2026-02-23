@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, Sparkles } from 'lucide-react';
 import type { ComponentConfig } from './types';
 import GuideTip from '../../common/GuideTip';
+import './TabsComponent.css';
 
 export interface TabsComponentProps {
   tabs: { id: string; label: string; components: ComponentConfig[] }[];

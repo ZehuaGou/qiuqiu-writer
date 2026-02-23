@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react';
-import { Plus, Maximize2, X, Trash2, Pencil, ZoomIn, ZoomOut } from 'lucide-react';
+import { Plus, Maximize2, X, Trash2, Pencil, ZoomIn, ZoomOut, Link2 } from 'lucide-react';
 import { Graph } from '@antv/g6';
 import type { GraphData } from '@antv/g6';
 import { useIsMobile } from '../../hooks/useMediaQuery';
@@ -795,15 +795,15 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
                   pendingFromRef.current = null;
                   setManualLinking(v => !v);
                 }}
-                title="手动连线"
+                title={manualLinking ? '取消连线：点击画布取消' : '手动连线：从角色拖到另一角色可新建关系'}
               >
-                <Maximize2 size={16} />
+                <Link2 size={16} />
                 <span>{manualLinking ? '取消连线' : '手动连线'}</span>
               </button>
               <button
                 className="action-btn"
                 onClick={() => setIsFullscreen(true)}
-                title="全屏查看"
+                title="全屏查看关系图"
               >
                 <Maximize2 size={16} />
                 <span>全屏</span>
@@ -825,7 +825,6 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
                 <div className="relations-list-cell">角色A</div>
                 <div className="relations-list-cell">关系</div>
                 <div className="relations-list-cell">角色B</div>
-                <div className="relations-list-cell">描述</div>
                 <div className="relations-list-cell">操作</div>
               </div>
               {relations.map((rel) => {
@@ -833,14 +832,11 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
                 const toName = characters.find(c => c.id === rel.to)?.name || rel.to;
                 return (
                   <div key={rel.id} className="relations-list-row">
-                    <div className="relations-list-cell">{fromName}</div>
+                    <div className="relations-list-cell" title={fromName}>{fromName}</div>
                     <div className="relations-list-cell">
                       <span className="relation-pill">{rel.type || '关系'}</span>
                     </div>
-                    <div className="relations-list-cell">{toName}</div>
-                    <div className="relations-list-cell relation-desc">
-                      {rel.description || '—'}
-                    </div>
+                    <div className="relations-list-cell" title={toName}>{toName}</div>
                     <div className="relations-list-cell relation-actions">
                       <button
                         className="action-btn"
@@ -882,8 +878,21 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
       )}
 
       {addingRelation && (
-        <div className="edit-modal-overlay">
-          <div className="edit-modal">
+        <div
+          className="edit-modal-overlay"
+          onClick={() => {
+            if (tempEdgeIdRef.current && graphRef.current) {
+              try {
+                graphRef.current.removeData(tempEdgeIdRef.current as any);
+              } catch {
+                /* ignore */
+              }
+              tempEdgeIdRef.current = null;
+            }
+            setAddingRelation(false);
+          }}
+        >
+          <div className="edit-modal" onClick={e => e.stopPropagation()}>
             <h4>添加关系</h4>
             <div className="modal-form">
               <label>
@@ -949,25 +958,6 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
               </label>
             </div>
             <div className="modal-actions">
-              <div className="footer-spacer" />
-              <button
-                className="cancel-btn"
-                onClick={() => {
-                  if (tempEdgeIdRef.current && graphRef.current) {
-                    try {
-                      // 如果取消，移除临时创建的边
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      graphRef.current.removeData(tempEdgeIdRef.current as any);
-                    } catch {
-                      // 忽略错误
-                    }
-                    tempEdgeIdRef.current = null;
-                  }
-                  setAddingRelation(false);
-                }}
-              >
-                取消
-              </button>
               <button
                 className="save-btn"
                 onClick={() => {
@@ -1004,8 +994,11 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
       )}
 
       {editingRelation && (
-        <div className="edit-modal-overlay">
-          <div className="edit-modal">
+        <div
+          className="edit-modal-overlay"
+          onClick={() => setEditingRelation(null)}
+        >
+          <div className="edit-modal" onClick={e => e.stopPropagation()}>
             <h4>编辑关系</h4>
             <div className="modal-form">
               <label>
@@ -1072,13 +1065,6 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
             </div>
             <div className="modal-actions">
               <button
-                className="cancel-btn"
-                onClick={() => setEditingRelation(null)}
-              >
-                取消
-              </button>
-              <div className="footer-spacer" />
-              <button
                 className="save-btn"
                 onClick={() => {
                   if (!editForm.relationFrom || !editForm.relationTo) return;
@@ -1109,7 +1095,8 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
                 保存
               </button>
               <button
-                className="cancel-btn"
+                type="button"
+                className="modal-delete-btn"
                 onClick={() => {
                   const newRelations = relations.filter(
                     r => r.id !== editingRelation
