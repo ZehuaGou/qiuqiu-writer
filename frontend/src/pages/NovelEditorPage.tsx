@@ -614,7 +614,7 @@ export default function NovelEditorPage() {
       setSelectionPopup((prev) => ({ ...prev, visible: false }));
     } catch (err) {
       
-      showMessage(err instanceof Error ? err.message : '优化失败', 'error');
+      showMessage(err instanceof Error ? err.message : '优化失败', 'error', undefined, undefined, { toast: true, autoCloseMs: 2500 });
     } finally {
       setSelectionOptimizing(false);
     }
@@ -623,7 +623,7 @@ export default function NovelEditorPage() {
   // ===== 事件处理函数 =====
   const handleManualSave = async () => {
     if (!selectedChapter || !editor) {
-      showMessage('请先选择章节', 'warning');
+      showMessage('请先选择章节', 'warning', undefined, undefined, { toast: true, autoCloseMs: 2000 });
       return;
     }
 
@@ -638,10 +638,9 @@ export default function NovelEditorPage() {
         await chaptersApi.createYjsSnapshot(chapterIdNum, base64, '手动保存');
       }
       
-      showMessage('保存成功', 'success');
+      showMessage('保存成功', 'success', undefined, undefined, { toast: true, autoCloseMs: 2000 });
     } catch {
-      
-      showMessage('保存失败', 'error');
+      showMessage('保存失败', 'error', undefined, undefined, { toast: true, autoCloseMs: 2000 });
     }
   };
   
@@ -1352,7 +1351,7 @@ export default function NovelEditorPage() {
           if (type === 'snapshot') {
             const data = await chaptersApi.getYjsSnapshot(chapterIdNum, id);
             restoreYjsSnapshotToEditor(editor!, data.snapshot);
-            showMessage('已恢复到此快照', 'success');
+            showMessage('已恢复到此快照', 'success', undefined, undefined, { toast: true, autoCloseMs: 2000 });
           }
         } : undefined}
       />

@@ -1,3 +1,47 @@
+/* Toast：透明灰色小浮层，不遮挡操作 */
+.message-toast-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 3000;
+  pointer-events: none;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.message-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: toastIn 0.25s ease-out;
+}
+
+.message-toast .icon-success { color: #95de64; }
+.message-toast .icon-error { color: #ff7875; }
+.message-toast .icon-warning { color: #ffc53d; }
+.message-toast .icon-info { color: #69c0ff; }
+
+.message-toast-text {
+  line-height: 1.4;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .message-modal-overlay {
   position: fixed;
   top: 0;

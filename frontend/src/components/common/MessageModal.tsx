@@ -50,12 +50,12 @@ export default function MessageModal({
 
   if (!visible && !isOpen) return null;
 
-  const getIcon = () => {
+  const getIcon = (size = 20) => {
     switch (type) {
-      case 'success': return <CheckCircle size={20} className="icon-success" />;
-      case 'error': return <AlertCircle size={20} className="icon-error" />;
-      case 'warning': return <AlertTriangle size={20} className="icon-warning" />;
-      case 'info': default: return <Info size={20} className="icon-info" />;
+      case 'success': return <CheckCircle size={size} className="icon-success" />;
+      case 'error': return <AlertCircle size={size} className="icon-error" />;
+      case 'warning': return <AlertTriangle size={size} className="icon-warning" />;
+      case 'info': default: return <Info size={size} className="icon-info" />;
     }
   };
 
@@ -69,12 +69,25 @@ export default function MessageModal({
     }
   };
 
+  // Toast：透明灰色小浮层，不挡操作、自动消失
+  if (toast) {
+    return (
+      <div className="message-toast-wrap" aria-live="polite">
+        <div className="message-toast">
+          {getIcon(18)}
+          <span className="message-toast-text">{message}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 模态框：带遮罩的完整弹窗
   return (
     <div className={`message-modal-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}>
       <div className="message-modal" onClick={e => e.stopPropagation()}>
         <div className="message-modal-header">
           <h3>
-            {getIcon()}
+            {getIcon(20)}
             <span>{getDefaultTitle()}</span>
           </h3>
           <button className="message-modal-close" onClick={onClose}>
@@ -86,24 +99,22 @@ export default function MessageModal({
           {message}
         </div>
 
-        {!toast && (
-          <div className="message-modal-footer">
-            {onConfirm && (
-              <button className="message-btn secondary" onClick={onClose}>
-                {cancelText}
-              </button>
-            )}
-            <button 
-              className="message-btn primary" 
-              onClick={() => {
-                if (onConfirm) onConfirm();
-                onClose();
-              }}
-            >
-              {confirmText}
+        <div className="message-modal-footer">
+          {onConfirm && (
+            <button className="message-btn secondary" onClick={onClose}>
+              {cancelText}
             </button>
-          </div>
-        )}
+          )}
+          <button 
+            className="message-btn primary" 
+            onClick={() => {
+              if (onConfirm) onConfirm();
+              onClose();
+            }}
+          >
+            {confirmText}
+          </button>
+        </div>
       </div>
     </div>
   );
