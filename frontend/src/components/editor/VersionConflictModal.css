@@ -92,13 +92,33 @@
   margin: 0;
   color: var(--text-secondary, #6b7280);
   line-height: 1.6;
-}
-
 .version-comparison {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .version-conflict-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .version-conflict-header {
+    padding: 16px;
+  }
+
+  .version-conflict-body {
+    padding: 16px;
+  }
+
+  .version-comparison {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+} margin-bottom: 24px;
 }
 
 .version-card {

@@ -94,8 +94,6 @@
   flex: 1;
   display: flex;
   overflow: hidden;
-}
-
 .relations-canvas {
   flex: 1;
   position: relative;
@@ -199,405 +197,7 @@
   font-size: 12px;
 }
 
-.relation-desc {
-  color: var(--text-secondary);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.relation-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.relation-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid var(--text-primary);
-  background: var(--text-primary);
-  color: var(--bg-primary);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.relation-action-btn:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: var(--text-inverse);
-}
-
-.relation-action-btn.danger {
-  color: var(--error);
-  border-color: color-mix(in srgb, var(--error) 45%, var(--border-light));
-  background: color-mix(in srgb, var(--error) 12%, transparent);
-}
-
-.relation-action-btn.danger:hover {
-  background: color-mix(in srgb, var(--error) 18%, transparent);
-}
-
-/* 空状态 */
-.relations-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: var(--bg-primary);
-  color: var(--text-tertiary);
-}
-
-.relations-empty h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.relations-empty p {
-  font-size: 14px;
-  color: var(--text-tertiary);
-  margin: 0;
-}
-
-.list-empty {
-  padding: 16px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  border-radius: 8px;
-}
-
-/* 确保 G6 容器有尺寸 */
-.relations-canvas > div {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* G6 图容器样式 */
-.relations-canvas canvas {
-  display: block;
-}
-
-/* React 节点样式 */
-.character-node-react {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.character-node-react:hover {
-  transform: scale(1.05);
-}
-
-.character-node-circle {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  border: 2px solid var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.character-node-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-align: center;
-  white-space: nowrap;
-  padding: 2px 6px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  box-shadow: var(--shadow-sm);
-}
-
-/* 图例 */
-.flow-legend {
-  background: var(--bg-primary);
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.legend-node {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  border: 2px solid var(--text-secondary);
-}
-
-.legend-edge {
-  width: 30px;
-  height: 2px;
-  background: var(--text-secondary);
-}
-
-.relations-sidebar {
-  width: 300px;
-  border-left: 1px solid var(--border-light);
-  background: var(--bg-primary);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-.sidebar-section {
-  padding: 20px;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.sidebar-section:last-child {
-  border-bottom: none;
-}
-
-.sidebar-section h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 16px 0;
-}
-
-.character-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.character-item {
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.character-item:hover {
-  border-color: var(--text-secondary);
-  background: var(--bg-secondary);
-}
-
-.character-item.active {
-  border-color: var(--text-secondary);
-  background: var(--accent-light);
-}
-
-.character-info {
-  flex: 1;
-}
-
-.character-name {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.character-gender {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.character-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.relations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.relation-item {
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.relation-item:hover {
-  border-color: var(--text-secondary);
-  background: var(--bg-secondary);
-}
-
-.relation-item.active {
-  border-color: var(--text-secondary);
-  background: var(--accent-light);
-}
-
-.relation-item.editing {
-  border-color: var(--text-secondary);
-  background: var(--accent-light);
-}
-
-.relation-item-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.relation-from,
-.relation-to {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 13px;
-}
-
-.relation-type {
-  color: var(--text-secondary);
-  font-weight: 500;
-  padding: 2px 8px;
-  background: var(--accent-light);
-  border-radius: 4px;
-  font-size: 11px;
-}
-
-.relation-description {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.relation-actions {
-  display: flex;
-  gap: 8px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.relation-item:hover .relation-actions {
-  opacity: 1;
-}
-
-.action-icon-btn {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.action-icon-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.relation-edit-form {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-light);
-}
-
-.edit-input,
-.edit-select,
-.edit-textarea {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  font-size: 13px;
-  margin-bottom: 8px;
-  font-family: inherit;
-  box-sizing: border-box;
-}
-
-.edit-input:focus,
-.edit-select:focus,
-.edit-textarea:focus {
-  outline: none;
-  border-color: var(--text-secondary);
-  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
-}
-
-.edit-textarea {
-  resize: vertical;
-  min-height: 50px;
-}
-
-.edit-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.edit-actions .save-btn,
-.edit-actions .cancel-btn {
-  flex: 1;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.edit-actions .save-btn {
-  background: var(--text-secondary);
-  color: var(--text-inverse);
-}
-
-.edit-actions .save-btn:hover {
-  background: var(--text-primary);
-}
-
-.edit-actions .cancel-btn {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.edit-actions .cancel-btn:hover {
-  background: var(--border-light);
-  color: var(--text-primary);
-}
-
-/* 编辑模态框 */
+/* 编辑模态框样式 */
 .edit-modal-overlay {
   position: fixed;
   inset: 0;
@@ -608,6 +208,7 @@
   z-index: 1000;
   padding: 20px;
   animation: fadeIn 0.2s ease;
+  backdrop-filter: blur(2px);
 }
 
 @keyframes fadeIn {
@@ -617,26 +218,27 @@
 
 .edit-modal {
   background: var(--bg-primary);
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   padding: 24px;
-  min-width: 320px;
-  max-width: 420px;
+  min-width: 400px;
+  max-width: 500px;
   max-height: 90vh;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid var(--border-light);
 }
 
 @keyframes slideUp {
   from { 
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(20px) scale(0.96);
   }
   to { 
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -665,259 +267,238 @@
   color: var(--text-secondary);
 }
 
+.edit-input,
+.edit-select,
 .edit-textarea {
   width: 100%;
-  padding: 8px;
+  padding: 10px 12px;
   border: 1px solid var(--border-light);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
-  resize: vertical;
-  min-height: 80px;
   box-sizing: border-box;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all 0.2s;
 }
 
+.edit-input:focus,
+.edit-select:focus,
 .edit-textarea:focus {
   outline: none;
-  border-color: var(--text-secondary);
-  box-shadow: 0 0 0 3px rgba(68, 68, 68, 0.1);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-light);
 }
 
 .modal-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 24px;
 }
 
-.modal-actions .footer-spacer {
+.footer-spacer {
   flex: 1;
 }
 
-.modal-actions .save-btn,
-.modal-actions .cancel-btn {
-  width: auto !important;
-  min-width: 120px !important;
-  max-width: none !important;
-  padding: 12px 24px !important;
+.save-btn,
+.cancel-btn {
+  padding: 8px 20px;
   border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px !important;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-base);
-  flex: none !important;
-  height: auto !important;
-  line-height: normal !important;
-}
-
-.modal-actions .save-btn {
-  background: var(--text-primary) !important;
-  color: var(--bg-primary) !important;
-  box-shadow: var(--shadow-sm);
-}
-
-.modal-actions .save-btn:active,
-.modal-actions .save-btn:focus {
-  background: var(--accent-primary) !important;
-  color: var(--text-inverse) !important;
-  border: 1px solid var(--accent-primary) !important;
-}
-
-.modal-actions .save-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.modal-actions .cancel-btn {
-  background: var(--bg-primary) !important;
-  border: 1px solid var(--border-light) !important;
-  color: var(--text-secondary) !important;
-}
-
-.modal-actions .cancel-btn:active,
-.modal-actions .cancel-btn:focus {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-hover) !important;
-}
-
-.modal-actions .cancel-btn:hover {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-}
-
-/* 关系信息显示样式 */
-.relation-info-display {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-}
-
-.relation-characters {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.relation-char-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  padding: 8px 16px;
-  background: var(--bg-primary);
   border-radius: 6px;
-  border: 1px solid var(--border-light);
-}
-
-.relation-type-display {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: 8px 16px;
-  background: var(--accent-light);
-  border-radius: 6px;
-  border: 1px solid var(--text-secondary);
-}
-
-.relation-desc-display {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  background: var(--bg-primary);
-  border-radius: 6px;
-  border: 1px solid var(--border-light);
-}
-
-.desc-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.desc-text {
   font-size: 14px;
-  color: var(--text-primary);
-  line-height: 1.6;
-}
-
-/* 全屏模态框 */
-.fullscreen-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 20px;
-}
-
-.fullscreen-modal {
-  width: 100%;
-  height: 100%;
-  min-height: 70vh;
-  max-width: 95vw;
-  max-height: 95vh;
-  background: var(--bg-primary);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.fullscreen-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.fullscreen-header h3 {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.fullscreen-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.fullscreen-zoom-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid var(--border-light);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: 8px;
+  font-weight: 500;
   cursor: pointer;
-  font-size: 13px;
-  transition: background 0.2s, border-color 0.2s;
+  transition: all 0.2s;
 }
 
-.fullscreen-zoom-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
+.save-btn {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
 }
 
-.close-fullscreen-btn {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
+.save-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.cancel-btn {
   background: transparent;
+  border: 1px solid var(--border-light);
   color: var(--text-secondary);
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
 }
 
-.close-fullscreen-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.fullscreen-canvas-wrapper {
-  flex: 1;
-  position: relative;
-  min-height: 400px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.fullscreen-canvas {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  min-height: 300px;
+.cancel-btn:hover {
   background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
 }
 
-.fullscreen-empty-state {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--text-tertiary);
-  pointer-events: none;
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .relations-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .relations-title h3 {
+    font-size: 16px;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+
+  .view-toggle {
+    display: flex;
+    width: 100%;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    text-align: center;
+    padding: 6px;
+    font-size: 12px;
+  }
+
+  .action-btn {
+    min-width: auto;
+    padding: 6px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  
+  /* 如果是关系图模式，操作按钮需要更紧凑 */
+  .header-actions .action-btn span {
+    display: none;
+  }
+  
+  .header-actions .action-btn svg {
+    margin: 0;
+  }
+
+  .relations-list {
+    padding: 0;
+  }
+  
+  .relations-list-table {
+    border: none;
+    border-radius: 0;
+    border-top: 1px solid var(--border-light);
+  }
+
+  .relations-list-header {
+    display: none;
+  }
+
+  .relations-list-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 16px;
+    position: relative;
+    border-bottom: 8px solid var(--bg-secondary);
+  }
+  
+  .relations-list-row:last-child {
+    border-bottom: none;
+  }
+
+  .relations-list-cell {
+    width: 100%;
+    padding: 0;
+  }
+
+  /* 调整第一列（角色A）样式 */
+  .relations-list-cell:nth-child(1) {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+  }
+
+  /* 调整第二列（关系类型）样式 */
+  .relations-list-cell:nth-child(2) {
+    order: 2;
+    display: inline-block;
+    width: auto;
+  }
+
+  /* 调整第三列（角色B）样式 */
+  .relations-list-cell:nth-child(3) {
+    order: 3;
+    font-weight: 600;
+    display: inline-block;
+    width: auto;
+    margin-left: 8px;
+    font-size: 15px;
+  }
+
+  /* 组合关系显示: A [关系] B */
+  .relations-list-row {
+    flex-wrap: wrap;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  
+  .relations-list-cell:nth-child(1),
+  .relations-list-cell:nth-child(2),
+  .relations-list-cell:nth-child(3) {
+    width: auto;
+    margin: 0;
+  }
+  
+  /* 强制换行描述 */
+  .relations-list-cell:nth-child(4) {
+    order: 4;
+    width: 100%;
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border-light);
+    line-height: 1.5;
+  }
+
+  .relations-list-row .relation-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    min-width: auto;
+    gap: 4px;
+  }
+  
+  /* Modal Mobile Styles */
+  .edit-modal {
+    min-width: auto;
+    width: calc(100% - 32px);
+    max-width: 100%;
+    height: auto;
+    max-height: 80vh;
+    padding: 20px;
+    margin: 0;
+  }
+  
+  .modal-actions {
+    flex-direction: column-reverse; /* 按钮垂直排列，取消在下 */
+    gap: 12px;
+  }
+  
+  .save-btn, .cancel-btn {
+    width: 100%;
+    padding: 12px;
+    height: 44px; /* 更易点击 */
+  }
+  
+  .footer-spacer {
+    display: none;
+  }
+}
 }

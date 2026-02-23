@@ -45,6 +45,14 @@
 }
 
 /* Mobile specific styles */
+.header-settings-menu.mobile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  flex-shrink: 0;
+}
+
 .header-settings-menu.mobile .settings-trigger-btn {
   width: 40px;
   height: 40px;
@@ -155,4 +163,14 @@
 
 .header-settings-menu .theme-selector-wrapper-in-menu .theme-selector-trigger:hover svg {
   color: var(--text-primary);
+}
+
+.header-settings-menu.mobile .menu-item {
+  padding: 12px 16px;
+  font-size: 16px;
+}
+
+.header-settings-menu.mobile .settings-dropdown {
+  width: 200px;
+  right: -8px; /* Adjust for padding/margin */
 }

@@ -75,10 +75,11 @@
   gap: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .novel-new-card.primary {
-  border-color: var(--accent-primary);
+  border-color: transparent;
 }
 
 .novel-new-card:hover {
@@ -98,7 +99,7 @@
   position: absolute;
   width: 100%;
   height: 100%;
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   opacity: 0.1;
 }
 
@@ -121,21 +122,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
 }
 
 .primary-icon {
-  background: var(--accent-primary);
-  color: white;
+  color: var(--accent-primary);
 }
 
 .secondary-icon {
-  background: #fce7f3;
   color: #cccccc;
 }
 
 .tertiary-icon {
-  background: #dbeafe;
   color: #999999;
 }
 
@@ -167,6 +165,7 @@
 .recent-cover {
   border-radius: 16px;
   background: linear-gradient(135deg, #ecfdf5 0%, #e5f9ff 100%);
+  aspect-ratio: 3/4;
 }
 
 .recent-info {
@@ -196,82 +195,111 @@
   margin: 0;
 }
 
-.recent-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 13px;
-  color: #666666;
-}
+  .recent-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+    color: #666666;
+  }
+  
+  @media (max-width: 768px) {
+    .novel-page {
+      padding: 16px;
+    }
+  
+    .novel-new-cards {
+      grid-template-columns: 1fr;
+    }
+  
+    .recent-content {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    .recent-cover {
+      max-width: 140px;
+      margin: 0 auto;
+    }
+    
+    .section-header {
+      flex-direction: row;
+      align-items: center;
+    }
+    
+    .section-title {
+      font-size: 20px;
+    }
+  }
 
 .recent-actions {
-  margin-top: 12px;
   display: flex;
   gap: 12px;
-}
-
-.primary-button {
-  padding: 10px 20px;
-  border-radius: 999px;
-  border: none;
-  background: #444444;
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.primary-button.small {
-  padding: 8px 16px;
-  font-size: 13px;
-}
-
-.primary-button:hover {
-  background: #333333;
+  margin-top: auto;
 }
 
 .outline-button {
   padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
   background: white;
-  color: #444444;
+  color: #333333;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  display: inline-flex;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.primary-button {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent-primary);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primary-button:hover {
+  opacity: 0.9;
+}
+
+.primary-button.small {
+  padding: 6px 16px;
+  font-size: 13px;
+  display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.outline-button:hover {
-  background: #f8f8f8;
-}
-
-.novel-tools .tools-tags {
-  margin-bottom: 16px;
+.tools-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 20px;
 }
 
 .tag {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #ecfdf5;
-  color: #444444;
-  font-size: 12px;
+  padding: 6px 12px;
+  background: #f3f4f6;
+  border-radius: 16px;
+  color: #4b5563;
+  font-size: 13px;
 }
 
 .tools-card {
+  background: linear-gradient(to right, #fdfbf7, #fff);
+  border: 1px solid #f3f4f6;
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 18px;
-  border-radius: 12px;
-  background: #f8f8f8;
+  gap: 16px;
 }
 
 .tools-main h3 {
@@ -282,30 +310,52 @@
 
 .tools-main p {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: #666666;
 }
 
-@media (max-width: 900px) {
+/* 响应式适配 */
+@media (max-width: 768px) {
   .novel-page {
     padding: 16px;
   }
 
+  .novel-section {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
   .novel-new-cards {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .recent-content {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
-
+  
   .recent-cover {
-    height: 160px;
+    width: 120px;
+    margin: 0 auto;
   }
-
+  
   .recent-actions {
     flex-wrap: wrap;
   }
+  
+  .recent-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .tools-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .tools-card button {
+    width: 100%;
+    justify-content: center;
+  }
 }
-
-

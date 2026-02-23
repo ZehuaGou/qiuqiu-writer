@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Plus, Maximize2, X, Trash2, Pencil, ZoomIn, ZoomOut } from 'lucide-react';
 import { Graph } from '@antv/g6';
 import type { GraphData } from '@antv/g6';
+import { useIsMobile } from '../../hooks/useMediaQuery';
 import './CharacterRelations.css';
 
 function getCssVar(name: string, fallback: string): string {
@@ -113,6 +114,8 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
   const [addingRelation, setAddingRelation] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [manualLinking, setManualLinking] = useState(false);
+  const isMobile = useIsMobile();
+
   const [editForm, setEditForm] = useState<{
     relationType?: string;
     relationDescription?: string;
@@ -224,7 +227,6 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
   // 使用 useMemo 来稳定数据引用，避免不必要的重新渲染
   const graphData = useMemo(() => {
     const edgeColor = getCssVar('--text-primary', '#000000');
-    // 计算初始位置，让节点均匀分布在一个圆形上
     const nodeCount = characters.length;
     
     // 如果没有节点，返回空数据
@@ -232,22 +234,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
       return { nodes: [], edges: [] } as GraphData;
     }
     
-    // 使用固定尺寸计算位置，避免依赖容器尺寸导致重新计算
-    // 容器尺寸会在初始化时动态获取
-    const containerWidth = 800;
-    const containerHeight = 600;
-    const centerX = containerWidth / 2;
-    const centerY = containerHeight / 2;
-    const radius = Math.max(150, nodeCount * 40); // 根据节点数量调整半径
-    
-    const nodes = characters.map((char, index) => {
-      // 计算节点在圆形上的位置
-      const angle = nodeCount === 1 
-        ? 0 // 如果只有一个节点，放在中心
-        : (index * 2 * Math.PI) / nodeCount - Math.PI / 2; // 从顶部开始
-      const x = nodeCount === 1 ? centerX : centerX + radius * Math.cos(angle);
-      const y = nodeCount === 1 ? centerY : centerY + radius * Math.sin(angle);
-      
+    const nodes = characters.map((char) => {
       return {
         id: char.id,
         type: 'circle', // Use built-in circle node
@@ -257,16 +244,14 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
           gender: char.gender,
         },
         style: {
-          x: x, 
-          y: y, 
-          size: 40, 
+          size: isMobile ? 32 : 40, 
           fill: char.gender === '女' ? '#ffadd2' : '#91caff',
           stroke: '#d9d9d9',
           lineWidth: 1,
           labelText: char.name,
           labelPlacement: 'bottom',
           labelFill: edgeColor,
-          labelFontSize: 12,
+          labelFontSize: isMobile ? 10 : 12,
         },
       };
     });
@@ -290,7 +275,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
     }));
 
     return { nodes, edges } as GraphData;
-  }, [characters, relations]);
+  }, [characters, relations, isMobile]);
 
   // 创建数据 ID 字符串用于 G6 初始化依赖比较
   const graphDataId = useMemo(() => {
@@ -409,6 +394,11 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
           data,
           autoFit: 'view',
           padding: 20,
+          layout: {
+            type: 'circular',
+            center: [width / 2, height / 2],
+            radius: Math.max(isMobile ? 80 : 150, (data.nodes?.length || 0) * (isMobile ? 25 : 40)),
+          },
           node: {
             type: 'circle',
             style: {
@@ -567,7 +557,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
       isInitializingRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphDataId, viewMode]); // 只使用稳定的 graphDataId 作为依赖，避免 graphData 对象引用变化导致循环
+  }, [graphDataId, viewMode, isMobile]); // isMobile 变化时重新初始化图表以适配移动端样式
 
   // 组件卸载时清理图实例
   useEffect(() => {
@@ -765,7 +755,7 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
           <h3>人物关系</h3>
           {dependencyKeys.length > 0 && (
             <div className="relations-meta">
-              依赖数据键：{dependencyKeys.join(', ')}（已加载 {characters.length} 人物）
+              （已加载 {characters.length} 人物）
             </div>
           )}
         </div>

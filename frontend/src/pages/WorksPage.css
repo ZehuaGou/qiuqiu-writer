@@ -322,3 +322,43 @@
   flex-shrink: 0;
   color: inherit;
 }
+
+/* Mobile Adaptation */
+@media (max-width: 768px) {
+  .works-page {
+    padding: 16px;
+  }
+
+  .works-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .works-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .action-btn-wrapper {
+    flex: 1;
+  }
+
+  .action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .works-content.grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .work-card {
+    padding: 12px;
+  }
+
+  .work-cover {
+    height: 160px;
+  }
+}

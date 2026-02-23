@@ -18,6 +18,8 @@
   border-radius: 12px;
   width: 90%;
   max-width: 400px;
+  max-height: 90vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -77,6 +79,8 @@
   color: var(--text-secondary, #444444);
   font-size: 14px;
   line-height: 1.6;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .message-modal-footer {
@@ -88,6 +92,24 @@
   background: var(--bg-secondary, #f9f9f9);
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
+}
+
+@media (max-width: 768px) {
+  .message-modal {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 90vh; /* Keep some margin or make full screen? Let's make it responsive but not necessarily full screen for small messages */
+    position: absolute;
+    bottom: 0;
+    border-radius: 12px 12px 0 0;
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  .message-modal-footer {
+    border-radius: 0;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
 }
 
 .message-btn {

@@ -23,6 +23,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .toolbar-divider {
@@ -30,6 +31,7 @@
   height: 24px;
   background: var(--border-light);
   margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .toolbar-btn {
@@ -44,6 +46,7 @@
   font-size: 13px;
   cursor: pointer;
   transition: all var(--transition-base);
+  white-space: nowrap;
 }
 
 .toolbar-btn:hover:not(:disabled) {
@@ -98,105 +101,77 @@
   line-height: 1.8;
   color: var(--text-primary);
   min-height: 100%;
-  height: 100%;
-  display: block;
 }
 
-/* 场景标题 */
-.script-editor-content h2 {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 24px 0 12px 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-/* 角色名称 */
-.script-editor-content .character-name {
-  font-weight: 700;
-  color: var(--accent-primary);
-  margin: 16px 0 4px 0;
-  text-align: center;
-  font-size: 15px;
-}
-
-/* 对话内容 */
-.script-editor-content .dialogue {
-  margin: 8px 0;
-  padding: 0 40px;
-  text-align: left;
-  line-height: 1.8;
-}
-
-/* 动作指示 */
-.script-editor-content .action {
-  margin: 12px 0;
-  padding: 0 20px;
-  font-style: italic;
-  color: var(--text-secondary);
-  text-align: left;
-}
-
-/* 转场标记 */
-.script-editor-content .transition {
-  margin: 24px 0;
-  text-align: right;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  font-size: 13px;
-}
-
-/* 段落样式 */
 .script-editor-content p {
-  margin: 8px 0;
+  margin: 1em 0;
 }
 
-.script-editor-content p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  color: var(--text-tertiary);
-  pointer-events: none;
-  height: 0;
+.script-editor-content h1,
+.script-editor-content h2,
+.script-editor-content h3 {
+  margin: 1.5em 0 0.5em;
+  font-weight: bold;
 }
 
-/* Markdown 代码块样式 */
-.script-editor-content .markdown-code-block {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  font-family: 'Courier New', 'Monaco', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 12px 0;
-}
-
-.script-editor-content code {
-  background: var(--bg-secondary);
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'Courier New', 'Monaco', monospace;
-  font-size: 0.9em;
-}
-
-/* Markdown 引用样式 */
-.script-editor-content blockquote {
+/* 场景标题样式 */
+.script-editor-content h2 {
+  text-align: left;
+  background: #f5f5f5;
+  padding: 8px 12px;
   border-left: 4px solid var(--accent-primary);
-  padding-left: 16px;
-  margin: 12px 0;
-  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* 角色名称样式 */
+.character-name {
+  text-align: center;
+  font-weight: bold;
+  margin-top: 1.5em;
+  margin-bottom: 0;
+  width: 60%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 对话样式 */
+.dialogue {
+  text-align: left;
+  width: 50%;
+  margin: 0 auto 1.5em;
+}
+
+/* 动作指示样式 */
+.action {
+  text-align: left;
+  margin: 1em 0;
   font-style: italic;
 }
 
-/* Markdown 列表样式 */
-.script-editor-content ul,
-.script-editor-content ol {
-  padding-left: 24px;
-  margin: 12px 0;
+/* 转场样式 */
+.transition {
+  text-align: right;
+  font-weight: bold;
+  margin-top: 2em;
+  text-transform: uppercase;
 }
 
-.script-editor-content li {
-  margin: 4px 0;
-}
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .script-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 8px 12px;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+    scrollbar-width: none; /* Hide scrollbar for Firefox */
+  }
+  
+  .script-toolbar::-webkit-scrollbar {
+    display: none; /* Hide scrollbar for Chrome/Safari */
+  }
 
+  .script-editor-wrapper {
+    padding: 16px 20px;
+  }
+}

@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Info, Menu, X, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Lightbulb, LightbulbOff } from 'lucide-react';
+import { ArrowLeft, Info, Menu, X, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { EditorContent } from '@tiptap/react';
 
 // 组件
@@ -22,7 +22,6 @@ import MapView from '../components/editor/MapView';
 import Characters from '../components/editor/Characters';
 import Factions from '../components/editor/Factions';
 import WorkInfoManager from '../components/editor/WorkInfoManager';
-import ThemeSelector from '../components/ThemeSelector';
 import ChapterEditorToolbar from '../components/editor/ChapterEditorToolbar';
 import EditorSelectionPopup from '../components/editor/EditorSelectionPopup';
 import OnboardingGuide from '../components/common/OnboardingGuide';
@@ -940,18 +939,16 @@ export default function NovelEditorPage() {
               >
                 <MessageSquare size={24} />
               </button>
-              <div style={{ marginLeft: '8px' }}>
-                <HeaderSettingsMenu
-                  onFindReplace={() => {
-                    handleReplace();
-                    setMobileMenuOpen(false);
-                  }}
-                  tipsEnabled={tipsEnabled}
-                  onToggleTips={toggleTips}
-                  onDeleteWork={handleDeleteWork}
-                  isMobile={true}
-                />
-              </div>
+              <HeaderSettingsMenu
+                onFindReplace={() => {
+                  handleReplace();
+                  setMobileMenuOpen(false);
+                }}
+                tipsEnabled={tipsEnabled}
+                onToggleTips={toggleTips}
+                onDeleteWork={handleDeleteWork}
+                isMobile={true}
+              />
             </>
           ) : (
             <>
@@ -1025,59 +1022,9 @@ export default function NovelEditorPage() {
           <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
             <div className="mobile-menu-drawer" onClick={(e) => e.stopPropagation()}>
               <div className="mobile-menu-header">
-                <h2>菜单</h2>
                 <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>
                   <X size={24} />
                 </button>
-              </div>
-              <div className="mobile-menu-actions">
-                <div className="mobile-menu-section">
-                  <h3>操作</h3>
-                  <button 
-                    className="mobile-menu-item" 
-                    onClick={() => {
-                      handleReplace();
-                      setMobileMenuOpen(false);
-                    }}
-                  >
-                    <span>查找替换</span>
-                  </button>
-                  <button 
-                    className="mobile-menu-item delete" 
-                    onClick={() => {
-                      handleDeleteWork();
-                      setMobileMenuOpen(false);
-                    }}
-                  >
-                    <Trash2 size={20} />
-                    <span>删除作品</span>
-                  </button>
-                </div>
-                <div className="mobile-menu-section">
-                  <h3>设置</h3>
-                  <button 
-                    className="mobile-menu-item" 
-                    onClick={() => {
-                      toggleTips();
-                      setMobileMenuOpen(false);
-                    }}
-                  >
-                    {tipsEnabled ? <Lightbulb size={20} color="#eab308" /> : <LightbulbOff size={20} />}
-                    <span>{tipsEnabled ? '关闭功能引导' : '开启功能引导'}</span>
-                  </button>
-                  <div className="mobile-menu-item">
-                    <ThemeSelector />
-                  </div>
-                  <div className="mobile-menu-item">
-                    <span className={`status-tag ${syncStatus.isOnline ? 'online' : 'offline'}`}>
-                      {syncStatus.isOnline 
-                        ? (syncStatus.pendingCount > 0 
-                            ? `同步中 (${syncStatus.pendingCount})` 
-                            : '已同步')
-                        : '离线模式'}
-                    </span>
-                  </div>
-                </div>
               </div>
               <div className="mobile-menu-content">
                 <SideNav
@@ -1434,6 +1381,16 @@ export default function NovelEditorPage() {
             setSelectedChapter(null);
           }}
           onSkip={() => {}}
+        />
+      )}
+      {/* 移动端侧边栏遮罩 */}
+      {isMobile && (!leftSidebarCollapsed || !rightSidebarCollapsed) && (
+        <div 
+          className="sidebar-overlay"
+          onClick={() => {
+            if (!leftSidebarCollapsed) toggleLeftSidebar();
+            if (!rightSidebarCollapsed) toggleRightSidebar();
+          }}
         />
       )}
     </div>

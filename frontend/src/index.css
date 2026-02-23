@@ -36,6 +36,21 @@ button span,
   flex-wrap: nowrap !important;
 }
 
+@media (max-width: 768px) {
+  .header-left,
+  .header-right,
+  .header-actions,
+  .work-info-row,
+  .toolbar-group,
+  .novel-editor-toolbar {
+    flex-wrap: wrap !important;
+    height: auto !important;
+    gap: 8px;
+  }
+  
+
+}
+
 /* 确保所有按钮和文字元素在 flex 容器中不换行 */
 [class*="btn"],
 [class*="button"],
@@ -139,17 +154,7 @@ select option:focus {
   background: var(--accent-light, rgba(0, 0, 0, 0.15));
 }
 
-/* 特定类的样式覆盖 */
-.comp-select,
-.deps-select,
-.font-select,
-.sort-select,
-.field-type-select,
-.character-gender-select,
-.character-type-select,
-.tool-select {
-  /* 继承基础样式，可以在这里添加特定覆盖 */
-}
+
 
 /* 小尺寸选择器 */
 select.small {

@@ -544,7 +544,12 @@
   box-shadow: var(--shadow-md);
   padding: 8px 0;
   z-index: 999;
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
+
+/* 移动端样式合并到下方统一的 media query 中 */
 
 .mobile-menu-item {
   display: flex;
@@ -612,8 +617,9 @@
 /* 响应式 */
 @media (max-width: 768px) {
   .header-container {
-    padding: 0 14px;
+    padding: 0 12px;
     height: 52px;
+    gap: 12px;
   }
 
   .logo-text {
@@ -622,6 +628,10 @@
 
   .header-nav {
     display: none;
+  }
+
+  .header-right {
+    gap: 8px;
   }
 
   .header-btn .btn-text {
@@ -634,10 +644,36 @@
 
   .mobile-menu {
     display: block;
+    max-height: calc(100vh - 52px);
   }
 
   .user-menu-toggle {
     display: none;
+  }
+
+  /* 移动端 Profile Header 适配 */
+  .profile-header .header-container {
+    height: auto;
+    grid-template-rows: 52px auto;
+  }
+
+  .profile-header .header-nav {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-top: 4px;
+    /* 隐藏滚动条但允许滚动 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .profile-header .header-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .profile-header .nav-link {
+    white-space: nowrap;
+    padding: 0 12px;
+    font-size: 13px;
   }
 }
 

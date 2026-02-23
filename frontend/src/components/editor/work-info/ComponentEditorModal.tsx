@@ -4,6 +4,8 @@ import type { ComponentType, ComponentConfig, TemplateConfig } from './types';
 import { DataDependenciesSelector } from './DataDependenciesSelector';
 import { promptTemplateApi } from '../../../utils/promptTemplateApi';
 
+import './ComponentEditorModal.css';
+
 /** 多选标签随机颜色池（区分度高、适合做标签背景） */
 const TAG_COLORS = [
   '#dbeafe', '#fce7f3', '#d1fae5', '#fef3c7', '#e0e7ff',
@@ -176,14 +178,14 @@ export default function ComponentEditorModal({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '800px', width: '90%' }}>
-        <div className="modal-header">
+    <div className="component-editor-modal-overlay">
+      <div className="component-editor-modal-content">
+        <div className="component-editor-modal-header">
           <h3>{isEditing ? '编辑组件' : '添加组件'}</h3>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
         </div>
         
-        <div className="modal-body">
+        <div className="component-editor-modal-body">
           {step === 'type' ? (
             <div className="component-type-selector">
               <h4>选择组件类型</h4>
@@ -220,9 +222,18 @@ export default function ComponentEditorModal({
             </div>
           ) : (
             <div className="component-config-form">
-              {/* ... existing config form fields ... */}
-              {/* This is a placeholder for where the config fields start */}
-              
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+                <button 
+                  onClick={() => setStep('type')}
+                  className="icon-btn"
+                  style={{ marginRight: '8px' }}
+                  title="返回选择类型"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h4 style={{ margin: 0 }}>配置 {formData.type} 组件</h4>
+              </div>
+
               <div className="form-group">
                 <label>组件名称</label>
                 <input
@@ -244,14 +255,13 @@ export default function ComponentEditorModal({
                 <small>其他组件可以通过此 Key 引用该组件的数据</small>
               </div>
               
-              {/* ... rest of the form ... */}
-              
+              {/* Type specific config */}
               {(formData.type === 'select' || formData.type === 'multiselect') && (
                 <div className="form-group">
                   <label>选项配置 (每行一个，支持设置颜色)</label>
-                  <div className="options-config-container" style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                  <div className="options-config-container">
                     {((formData.config.options as any[]) || []).map((option, index) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                      <div key={index} style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '8px', gap: '8px', alignItems: 'center' }}>
+                      <div key={index} className="option-row">
                         <input
                           type="text"
                           value={option.label}
@@ -308,16 +318,7 @@ export default function ComponentEditorModal({
                             config: { ...formData.config, options: newOptions }
                           });
                         }}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          border: '1px dashed #cbd5e1',
-                          background: 'white',
-                          borderRadius: '4px',
-                          color: '#64748b',
-                          cursor: 'pointer',
-                          fontSize: '13px'
-                        }}
+                        className="add-option-btn"
                       >
                         + 添加选项
                       </button>
@@ -398,7 +399,6 @@ export default function ComponentEditorModal({
                     className="icon-btn" 
                     onClick={() => setExpandedPromptField('generatePrompt')}
                     title="放大编辑"
-                    style={{ padding: '2px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
                   >
                     <Maximize2 size={14} />
                   </button>
@@ -419,7 +419,6 @@ export default function ComponentEditorModal({
                     className="icon-btn" 
                     onClick={() => setExpandedPromptField('validatePrompt')}
                     title="放大编辑"
-                    style={{ padding: '2px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
                   >
                     <Maximize2 size={14} />
                   </button>
@@ -440,7 +439,6 @@ export default function ComponentEditorModal({
                     className="icon-btn" 
                     onClick={() => setExpandedPromptField('analysisPrompt')}
                     title="放大编辑"
-                    style={{ padding: '2px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#666' }}
                   >
                     <Maximize2 size={14} />
                   </button>
@@ -490,9 +488,9 @@ export default function ComponentEditorModal({
 
       {/* Expanded Prompt Editor Modal */}
       {expandedPromptField && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="modal-content" style={{ maxWidth: '90vw', width: '800px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header">
+        <div className="component-editor-modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="component-editor-modal-content" style={{ maxWidth: '90vw', width: '800px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="component-editor-modal-header">
               <h3>
                 编辑
                 {expandedPromptField === 'generatePrompt' ? '生成 Prompt' :
@@ -501,7 +499,7 @@ export default function ComponentEditorModal({
               </h3>
               <button className="close-btn" onClick={() => setExpandedPromptField(null)}><X size={18} /></button>
             </div>
-            <div className="modal-body" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column' }}>
+            <div className="component-editor-modal-body" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column' }}>
               <textarea
                 value={formData[expandedPromptField]}
                 onChange={e => setFormData({ ...formData, [expandedPromptField]: e.target.value })}

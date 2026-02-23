@@ -50,7 +50,7 @@ export default function HeaderSettingsMenu({
         onClick={() => setIsOpen(!isOpen)}
         title="设置与工具"
       >
-        <MoreVertical size={16} />
+        <MoreVertical size={isMobile ? 24 : 16} />
       </button>
 
       {isOpen && (

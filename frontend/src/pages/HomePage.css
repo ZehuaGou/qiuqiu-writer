@@ -198,8 +198,60 @@
 .feature-card:hover {
   border-color: var(--accent-primary);
   background: color-mix(in srgb, var(--bg-secondary) 90%, transparent);
-  box-shadow: var(--shadow-xl);
-  transform: translateY(-4px);
+}
+
+/* Mobile Adaptations */
+@media (max-width: 768px) {
+  .hero-section {
+    padding: 60px 20px;
+    min-height: auto;
+  }
+
+  .hero-title {
+    font-size: 36px;
+    gap: 8px;
+  }
+
+  .hero-subtitle {
+    font-size: 20px;
+  }
+
+  .hero-description {
+    font-size: 16px;
+    margin-bottom: 32px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .features-section {
+    padding: 60px 20px;
+  }
+
+  .section-title {
+    font-size: 28px;
+  }
+
+  .section-description {
+    font-size: 16px;
+  }
+
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .feature-card {
+    padding: 24px;
+  }
 }
 
 .feature-icon {

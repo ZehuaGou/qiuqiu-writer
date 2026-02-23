@@ -205,6 +205,113 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 768px) {
+  .work-info-manager {
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .wim-toolbar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .toolbar-left, .toolbar-right {
+    flex-shrink: 0;
+  }
+
+  .work-info-sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+    border-radius: 12px;
+    box-shadow: none;
+    border: 1px solid var(--border-light);
+    transition: none;
+  }
+
+  .work-info-sidebar:hover {
+    width: 100%;
+    padding: 8px;
+  }
+
+  .module-btn {
+    flex-direction: column;
+    padding: 8px 12px;
+    gap: 4px;
+    min-width: 64px;
+    margin-bottom: 0;
+    margin-right: 4px;
+    border-radius: 8px;
+    justify-content: center;
+  }
+
+  .work-info-sidebar:hover .module-btn {
+    padding: 8px 12px;
+    justify-content: center;
+  }
+
+  .module-btn span {
+    display: block;
+    font-size: 10px;
+    opacity: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  .work-info-sidebar:hover .module-btn span {
+     display: block;
+     opacity: 1;
+  }
+
+  .module-btn svg {
+    width: 20px;
+    height: 20px;
+    margin-bottom: 2px;
+  }
+  
+  .module-btn.active::after {
+    margin: 2px auto 0;
+    width: 4px;
+    height: 4px;
+  }
+  
+  .work-info-sidebar:not(:hover) .module-btn.active::after {
+    display: block;
+  }
+
+  .work-info-content {
+    width: 100%;
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  
+  .module-header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .module-header h2 {
+    font-size: 16px;
+  }
+  
+  .header-actions {
+    margin-left: auto;
+  }
+  
+  .module-components {
+    padding: 16px;
+  }
+}
+
 .comp-wrapper {
   background: var(--bg-primary);
   border: 1px solid var(--border-light);

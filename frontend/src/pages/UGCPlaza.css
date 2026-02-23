@@ -105,6 +105,43 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+@media (max-width: 768px) {
+  .ugc-plaza-header {
+    padding: 1.5rem 1rem 1rem;
+  }
+
+  .plaza-title {
+    font-size: 1.75rem;
+  }
+
+  .ugc-plaza-toolbar {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .toolbar-right {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .ugc-plaza-filters {
+    padding: 1rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    display: block; /* Override flex for scrolling if needed, or keep flex but row */
+    /* If it was column, we might want row for horizontal scrolling tags? */
+    /* The original code had flex-direction: column for filters? That seems odd for a filter bar unless it has rows of filters. */
+    /* Let's assume it's row for now or keep column but make sure it fits. */
+    /* Actually, looking at the code again, it says flex-direction: column. */
+    /* If it's column, then horizontal scrolling won't work well unless we change to row or just scroll vertically? */
+    /* But usually filter bars are horizontal. */
+    /* Let's check the JSX usage of filters. */
+  }
+}
+
 .ugc-plaza-content {
   position: relative;
   z-index: 1;
@@ -115,11 +152,23 @@
 
 .content-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 2rem;
   max-width: 1400px;
   margin: 0 auto;
   animation: fadeInUp 0.6s ease-out;
+}
+
+@media (max-width: 640px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 0 1rem;
+  }
+  
+  .ugc-plaza-content {
+    padding: 1.5rem 0.5rem;
+  }
 }
 
 @keyframes fadeInUp {

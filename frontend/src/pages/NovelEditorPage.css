@@ -26,6 +26,52 @@
   gap: 24px;
 }
 
+@media (max-width: 768px) {
+  .novel-editor-header {
+    padding: 0 12px;
+    gap: 8px;
+    height: 52px;
+  }
+
+  .header-left {
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .header-right {
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+
+  .header-actions,
+  .sidebar-toggle-buttons {
+    display: none;
+  }
+
+  .exit-btn {
+    padding: 6px;
+  }
+  
+  .exit-btn span {
+    display: none;
+  }
+  
+  .work-info {
+    gap: 0;
+  }
+  
+  .work-title {
+    font-size: 15px;
+    padding: 2px 4px;
+  }
+  
+  .work-tags {
+    display: none;
+  }
+}
+
 .header-left {
   display: flex;
   align-items: center;
@@ -203,6 +249,12 @@
   flex: 1;
   justify-content: center;
   min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .header-center {
+    display: none;
+  }
 }
 
 .word-count {
@@ -998,6 +1050,104 @@
   border-radius: 2px;
 }
 
+/* 移动端侧边栏遮罩 */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  top: 60px; /* Header height */
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1500;
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .novel-editor-page {
+    position: fixed;
+    height: 100dvh; /* Use dynamic viewport height for mobile */
+  }
+  
+  .sidebar-overlay {
+    top: 52px;
+  }
+
+  .left-sidebar-wrapper, 
+  .right-sidebar-wrapper {
+    position: fixed;
+    top: 52px;
+    bottom: 0;
+    height: calc(100dvh - 52px);
+    z-index: 1600;
+    background: var(--bg-primary);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 280px !important; /* Force width */
+    padding: 16px !important;
+  }
+
+  .left-sidebar-wrapper {
+    left: 0;
+    transform: translateX(0);
+    border-right: 1px solid var(--border-light);
+  }
+
+  .left-sidebar-wrapper.collapsed {
+    transform: translateX(-100%);
+    width: 280px !important; /* Maintain width for transform */
+    padding: 16px !important;
+  }
+
+  .right-sidebar-wrapper {
+    right: 0;
+    transform: translateX(0);
+    border-left: 1px solid var(--border-light);
+  }
+
+  .right-sidebar-wrapper.collapsed {
+    transform: translateX(100%);
+    width: 280px !important;
+    padding: 16px !important;
+  }
+
+  /* Ensure content is always full width on mobile */
+  .novel-editor-main {
+    width: 100% !important;
+  }
+  
+  /* Hide toggle buttons that might float weirdly */
+  .left-toggle-header, 
+  .right-toggle-header {
+    display: none !important;
+  }
+
+  /* Adjust header for mobile */
+  .novel-editor-header {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .work-info-row {
+    gap: 8px;
+  }
+
+  .word-count {
+    display: none; /* Hide word count in header on mobile to save space */
+  }
+
+  .header-actions .action-btn span {
+    display: none; /* Hide text labels in header actions */
+  }
+  
+  .header-actions .action-btn {
+    padding: 8px;
+  }
+}
+
 .embedded-toolbar .novel-editor-toolbar::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -1689,28 +1839,6 @@
 
 /* 移动端样式 */
 @media (max-width: 768px) {
-  .novel-editor-header {
-    height: 56px;
-    padding: 0 16px;
-    flex-wrap: nowrap;
-  }
-
-  .header-left {
-    flex: 1;
-    min-width: 0;
-    overflow: visible;
-  }
-
-  .header-right {
-    flex: 0 0 auto;
-    gap: 8px;
-  }
-
-  .header-actions,
-  .sidebar-toggle-buttons {
-    display: none;
-  }
-
   /* 移动端菜单按钮 */
   .mobile-menu-btn,
   .mobile-chat-btn {
@@ -1832,13 +1960,6 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .mobile-menu-actions {
-    padding: 16px;
-    border-bottom: 1px solid var(--border-light);
-    background: var(--bg-secondary);
-    flex-shrink: 0;
-    overflow: visible; /* 皮肤下拉弹框不被裁剪 */
-  }
 
   .mobile-menu-section {
     margin-bottom: 16px;

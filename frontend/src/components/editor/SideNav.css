@@ -192,14 +192,59 @@
 
 .nav-subitem:hover::before {
   height: 60%;
-}
-
 .nav-section-header-with-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+}
+
+@media (max-width: 768px) {
+  .side-nav {
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+  }
+
+  .nav-item {
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+
+  .nav-section-header {
+    padding: 12px 16px;
+  }
+
+  .nav-subitem {
+    padding: 12px 14px 12px 24px;
+  }
+} padding: 0 20px;
   margin-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .nav-item {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  .nav-section-title {
+    padding: 0 12px 8px;
+    font-size: 12px;
+  }
+  
+  .nav-section-header {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  .nav-subitem {
+    padding: 8px 12px 8px 14px;
+    font-size: 14px;
+  }
+  
+  .nav-submenu {
+    padding-left: 12px;
+  }
 }
 
 .nav-section-header-with-action .nav-section-header {

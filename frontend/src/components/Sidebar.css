@@ -105,3 +105,34 @@
   flex: 1;
   min-width: 0;
 }
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    bottom: 0;
+    width: 85%;
+    max-width: 300px;
+    height: calc(100vh - 60px);
+    border-right: 1px solid var(--border-color);
+    border-bottom: none;
+    z-index: 100;
+    box-shadow: var(--shadow-xl);
+    animation: slideRight 0.3s ease-out;
+  }
+
+  .sidebar-content {
+    max-height: none;
+    flex: 1;
+  }
+}
+
+@keyframes slideRight {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}

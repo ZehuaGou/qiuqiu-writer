@@ -54,6 +54,10 @@
   background: var(--accent-primary) !important;
 }
 
+.mobile-actions {
+  display: none;
+}
+
 /* 左右分栏容器 */
 .user-works-container {
   max-width: 1280px;
@@ -153,31 +157,122 @@
   box-shadow: none;
 }
 
-/* 移动端操作按钮 */
-.mobile-actions {
-  display: none;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
-  flex-direction: column;
-  gap: 12px;
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .user-works-container {
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .user-sidebar {
+    width: 100%;
+    text-align: center;
+  }
+
+  .user-profile-card {
+    padding: 20px;
+  }
+
+  .user-avatar-large {
+    width: 120px;
+    height: 120px;
+  }
+
+  .user-name-large {
+    font-size: 20px;
+  }
+
+  /* 移动端显示操作按钮 */
+  .mobile-actions {
+    display: flex;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* 确保移动端主要按钮显示为蓝色 */
+  .mobile-action-btn.action-btn.primary {
+    color: var(--text-inverse) !important;
+    background: var(--accent-primary) !important;
+    border-color: var(--accent-primary) !important;
+  }
+
+  .mobile-action-btn.action-btn.primary:hover {
+    background: var(--accent-hover) !important;
+  }
+
+  /* 隐藏桌面端头部操作区 */
+  .works-header-actions {
+    display: none;
+  }
+  
+  /* 作品列表头部适配 */
+  .works-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .works-header-filters {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .works-search {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .works-sort {
+    width: 100%;
+  }
+
+  .works-sort-trigger {
+    width: 100% !important;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+  }
+
+  .works-header-right {
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  /* 作品列表适配 */
+  .works-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .works-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .edit-profile-actions {
+    flex-direction: column;
+  }
+  
+  .edit-profile-save-btn,
+  .edit-profile-cancel-btn {
+    width: 100%;
+    flex: 1;
+    height: 40px;
+  }
 }
 
-.mobile-action-btn {
-  width: 100%;
-  justify-content: center;
-}
-
-/* 确保移动端主要按钮显示为蓝色 */
-.mobile-action-btn.action-btn.primary {
-  color: var(--text-inverse) !important;
-  background: var(--accent-primary) !important;
-  border-color: var(--accent-primary) !important;
-}
-
-.mobile-action-btn.action-btn.primary:hover {
-  background: var(--accent-hover) !important;
-}
 
 /* 编辑资料表单 */
 .edit-profile-form {
