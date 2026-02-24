@@ -1707,6 +1707,33 @@
   gap: 12px;
 }
 
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 85vh;
+    border-radius: 12px;
+  }
+  
+  .modal-header {
+    padding: 12px 16px;
+  }
+  
+  .modal-body {
+    padding: 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .modal-footer {
+    padding: 12px 16px;
+    flex-direction: column-reverse;
+  }
+  
+  .modal-footer button {
+    width: 100%;
+    margin: 0;
+  }
+}
+
 .modal-footer button {
   padding: 8px 16px;
   border-radius: var(--radius-sm);

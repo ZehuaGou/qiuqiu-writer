@@ -713,8 +713,12 @@ export default function NovelEditorPage() {
   };
 
   const handleSaveChapter = async (data: ChapterSaveData) => {
+    const isCreate = !data.id || isNaN(parseInt(data.id));
     await saveChapterSettings(data);
     closeChapterModal();
+    if (isCreate) {
+      showMessage('章节创建成功', 'success', undefined, undefined, { toast: true, autoCloseMs: 2000 });
+    }
   };
   
   const handleGenerateContent = async (content: string, isFinal?: boolean) => {
@@ -1027,9 +1031,25 @@ export default function NovelEditorPage() {
           <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
             <div className="mobile-menu-drawer" onClick={(e) => e.stopPropagation()}>
               <div className="mobile-menu-header">
-                <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>
-                  <X size={24} />
-                </button>
+                <div className="mobile-menu-header-top">
+                  <h2 className="mobile-menu-title">作品信息</h2>
+                  <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>
+                    <X size={24} />
+                  </button>
+                </div>
+                <div className="mobile-menu-stats work-stats-inline">
+                  <span className="sync-status-text">
+                    {syncStatus.isOnline
+                      ? (syncStatus.pendingCount > 0
+                          ? `同步中 (${syncStatus.pendingCount})`
+                          : '已同步')
+                      : '离线模式'}
+                  </span>
+                  <span className="stats-divider">·</span>
+                  <span>本章字数：{currentChapterWordCount}</span>
+                  <span className="stats-divider">·</span>
+                  <span>总字数：{work?.word_count ?? 0}</span>
+                </div>
               </div>
               <div className="mobile-menu-content">
                 <SideNav

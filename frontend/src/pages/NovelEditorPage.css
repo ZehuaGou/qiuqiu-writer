@@ -78,6 +78,11 @@
   .work-stats-inline {
     font-size: 11px;
   }
+
+  /* 移动端顶部栏不展示统计行（已在作品信息抽屉中展示） */
+  .novel-editor-header .work-info-row {
+    display: none;
+  }
   
   .work-tags {
     display: none;
@@ -1913,35 +1918,67 @@
     animation: fadeIn 0.2s ease;
   }
 
+  /* 移动端作品信息：从下方全屏升起 */
   .mobile-menu-drawer {
     position: fixed;
-    top: 0;
     left: 0;
-    width: 280px;
-    max-width: 85vw;
-    height: 100vh;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
     background: var(--bg-primary);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
     z-index: 2001;
     display: flex;
     flex-direction: column;
-    animation: slideInLeft 0.3s ease;
-    overflow: visible; /* 皮肤下拉用 Portal 前首帧不裁剪 */
+    animation: slideInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+    border-radius: 0;
+  }
+
+  .mobile-menu-drawer::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 12px auto 8px;
+    background: var(--border-light);
+    border-radius: 2px;
+    flex-shrink: 0;
   }
 
   .mobile-menu-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 16px 16px;
     border-bottom: 1px solid var(--border-light);
+    flex-shrink: 0;
   }
 
-  .mobile-menu-header h2 {
+  .mobile-menu-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-menu-header h2,
+  .mobile-menu-title {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
     color: var(--text-primary);
+    flex: 1;
+    text-align: left;
+  }
+
+  .mobile-menu-stats {
+    padding: 0 2px;
+    font-size: 12px;
   }
 
   .mobile-menu-close {
