@@ -1390,8 +1390,37 @@
   background: var(--bg-primary);
   border-radius: 12px;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  overflow-y: auto; /* 在这里滚动 */
+  overflow: hidden; /* 修改这里，防止主容器产生滚动条 */
   height: 100%; /* 占满父容器高度 */
+}
+
+/* 包含标题和正文的滚动容器 */
+.editor-with-header .editor-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0; /* 允许 flex 子元素缩小以触发滚动 */
+}
+
+/* 复用滚动条样式 */
+.editor-with-header .editor-scroll-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.editor-with-header .editor-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-with-header .editor-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border-light, #e0e0e0);
+  border-radius: 4px;
+}
+
+.editor-with-header .editor-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary, #999999);
 }
 
 /* 章节头部信息 - 作为编辑器的一部分 */

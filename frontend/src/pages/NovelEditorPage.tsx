@@ -1127,51 +1127,53 @@ export default function NovelEditorPage() {
               <div className="novel-editor-wrapper">
                 <div className="chapter-content-wrapper" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
                   <div className="editor-with-header">
-                    {/* 工具栏 */}
-                    <div className="embedded-toolbar">
-                      <ChapterEditorToolbar
-                        editor={editor}
-                        onManualSave={handleManualSave}
-                        onEditChapter={handleEditCurrentChapter}
-                        onOpenHistory={() => setIsHistoryModalOpen(true)}
-                        headingMenuOpen={headingMenuOpen}
-                        setHeadingMenuOpen={setHeadingMenuOpen}
-                      />
-                    </div>
-                    
-                    {/* 章节头部 */}
-                    {selectedChapter && chaptersData[selectedChapter] && (
-                      <div className="chapter-header-info">
-                        <div
-                          ref={chapterNumberInputRef}
-                          className="chapter-number chapter-number-editable"
-                          contentEditable
-                          suppressContentEditableWarning
-                          onBlur={handleSaveChapterNumber}
-                          onKeyDown={handleChapterNumberKeyDown}
-                          title="点击编辑章节号"
-                          data-placeholder={chaptersData[selectedChapter].volumeTitle || '第1章'}
-                        >
-                          {getChapterNumberDisplayText(chaptersData[selectedChapter])}
-                        </div>
-                        <h2
-                          ref={chapterNameInputRef}
-                          className="chapter-title"
-                          contentEditable
-                          suppressContentEditableWarning
-                          onBlur={handleSaveChapterName}
-                          onKeyDown={handleChapterNameKeyDown}
-                        >
-                          {chaptersData[selectedChapter].title || '未命名章节'}
-                        </h2>
+                      {/* 工具栏 */}
+                      <div className="embedded-toolbar">
+                        <ChapterEditorToolbar
+                          editor={editor}
+                          onManualSave={handleManualSave}
+                          onEditChapter={handleEditCurrentChapter}
+                          onOpenHistory={() => setIsHistoryModalOpen(true)}
+                          headingMenuOpen={headingMenuOpen}
+                          setHeadingMenuOpen={setHeadingMenuOpen}
+                        />
                       </div>
-                    )}
-                    
-                    {/* 编辑器内容：key 随章节变化强制挂载，确保切换章节时显示对应 fragment */}
-                    <div className="editor-content-area" key={documentId ?? 'no-chapter'}>
-                      <EditorContent editor={editor} />
+                      
+                      <div className="editor-scroll-container">
+                        {/* 章节头部 */}
+                        {selectedChapter && chaptersData[selectedChapter] && (
+                          <div className="chapter-header-info">
+                            <div
+                              ref={chapterNumberInputRef}
+                              className="chapter-number chapter-number-editable"
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={handleSaveChapterNumber}
+                              onKeyDown={handleChapterNumberKeyDown}
+                              title="点击编辑章节号"
+                              data-placeholder={chaptersData[selectedChapter].volumeTitle || '第1章'}
+                            >
+                              {getChapterNumberDisplayText(chaptersData[selectedChapter])}
+                            </div>
+                            <h2
+                              ref={chapterNameInputRef}
+                              className="chapter-title"
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={handleSaveChapterName}
+                              onKeyDown={handleChapterNameKeyDown}
+                            >
+                              {chaptersData[selectedChapter].title || '未命名章节'}
+                            </h2>
+                          </div>
+                        )}
+                        
+                        {/* 编辑器内容：key 随章节变化强制挂载，确保切换章节时显示对应 fragment */}
+                        <div className="editor-content-area" key={documentId ?? 'no-chapter'}>
+                          <EditorContent editor={editor} />
+                        </div>
+                      </div>
                     </div>
-                  </div>
                 </div>
               </div>
               
