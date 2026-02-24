@@ -9,6 +9,7 @@ import { getAvatarInitial } from '../../utils/avatarUtils';
 import { chaptersApi, type Chapter } from '../../utils/chaptersApi';
 import { worksApi } from '../../utils/worksApi';
 import MarkdownIt from 'markdown-it';
+import { copyToClipboard } from '../../utils/clipboard';
 import ChatInputContentEditable from './ChatInputContentEditable';
 import './AIAssistant.css';
 
@@ -123,39 +124,47 @@ export default function AIAssistant({
     setIsAuthenticated(authApi.isAuthenticated());
   }, []);
 
-  // 加载章节和作品信息（包含角色）
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!workId || !isAuthenticated) return;
 
-    const loadData = async () => {
-      try {
-        const workIdStr = String(workId);
-        
-        // 加载章节列表
-        const chaptersResponse = await chaptersApi.listChapters({
-          work_id: workIdStr,
-          page: 1,
-          size: 100,
-          sort_by: 'chapter_number',
-          sort_order: 'asc',
-        });
-        setChapters(chaptersResponse.chapters);
+    try {
+      const workIdStr = String(workId);
+      
+      // 加载章节列表
+      const chaptersResponse = await chaptersApi.listChapters({
+        work_id: workIdStr,
+        page: 1,
+        size: 100,
+        sort_by: 'chapter_number',
+        sort_order: 'asc',
+        skipCache: true, // 关键修复：对话框提及需要最新章节，跳过本地缓存
+      });
+      setChapters(chaptersResponse.chapters);
 
-        // 加载作品详情（包含metadata中的角色信息）
-        const workData = await worksApi.getWork(workIdStr);
-        
-        // 从作品metadata的component_data中提取角色信息
-        const componentData = workData.metadata?.component_data || {characters: []};
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const charactersFromComponentData = (componentData as any).characters || [];
-        setCharacters(charactersFromComponentData);
-      } catch {
-        // ignore
-      }
-    };
-
-    loadData();
+      // 加载作品详情（包含metadata中的角色信息）
+      const workData = await worksApi.getWork(workIdStr);
+      
+      // 从作品metadata中提取角色信息
+      const componentData = workData.metadata?.component_data || {characters: []};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const charactersFromComponentData = (componentData as any).characters || [];
+      setCharacters(charactersFromComponentData);
+    } catch {
+      // ignore
+    }
   }, [workId, isAuthenticated]);
+
+  // 加载章节和作品信息（包含角色）
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // 当提及菜单打开时，也尝试刷新一次数据，确保能看到刚创建的章节
+  useEffect(() => {
+    if (showMentionMenu) {
+      loadData();
+    }
+  }, [showMentionMenu, loadData]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -462,6 +471,13 @@ export default function AIAssistant({
     }
   }, [chapters, characters]);
 
+  // 当章节或角色数据更新且提及菜单打开时，重新运行菜单逻辑以刷新选项
+  useEffect(() => {
+    if (showMentionMenu) {
+      runMentionMenuLogic(message, cursorOffsetRef.current);
+    }
+  }, [runMentionMenuLogic, showMentionMenu, message]);
+
   const handleCEChange = useCallback((text: string, cursorOffset: number) => {
     setMessage(text);
     setCharCount(text.length);
@@ -618,6 +634,7 @@ export default function AIAssistant({
         setMessage(newMessage);
         setCharCount(newMessage.length);
         cursorAfterUpdateRef.current = newCursorPos;
+        cursorOffsetRef.current = newCursorPos;
         runMentionMenuLogic(newMessage, newCursorPos);
         chatInputRef.current?.focus();
       } else {
@@ -639,12 +656,10 @@ export default function AIAssistant({
   };
 
   const handleCopy = async (content: string, index: number) => {
-    try {
-      await navigator.clipboard.writeText(content);
+    const success = await copyToClipboard(content);
+    if (success) {
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 2000);
-    } catch {
-      // ignore
     }
   };
 
@@ -1130,6 +1145,8 @@ export default function AIAssistant({
               <button 
                 className="input-action-btn"
                 onClick={() => {
+                  // 点击时也主动刷新一次章节列表，确保最新
+                  loadData();
                   if (chatInputRef.current) {
                     const cursorPos = cursorOffsetRef.current;
                     const newMessage = 

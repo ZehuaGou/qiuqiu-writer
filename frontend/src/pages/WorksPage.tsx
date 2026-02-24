@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Grid, List, Plus, Upload, ChevronDown, Download, Link2, Trash2, RefreshCw } from 'lucide-react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { exportAsText, exportAsWord, exportAsPdf } from '../utils/exportUtils';
+import { copyToClipboard } from '../utils/clipboard';
 import ImportWorkModal from '../components/ImportWorkModal';
 import WorkRecoveryModal from '../components/WorkRecoveryModal';
 import MessageModal from '../components/common/MessageModal';
@@ -197,50 +198,17 @@ export default function WorksPage() {
             // 生成作品链接
             const workLink = `${window.location.origin}/novel/editor?workId=${workId}`;
             
-            try {
-              // 使用 Clipboard API 复制链接
-              await navigator.clipboard.writeText(workLink);
-              // 显示成功提示
+            const success = await copyToClipboard(workLink);
+            if (success) {
               showMessage('链接已复制到剪贴板', 'success');
-            } catch {
-              // 如果 Clipboard API 不可用，使用备用方法
-              
-              
-              // 创建临时文本区域
-              const textArea = document.createElement('textarea');
-              textArea.value = workLink;
-              textArea.style.position = 'fixed';
-              textArea.style.left = '-999999px';
-              textArea.style.top = '-999999px';
-              document.body.appendChild(textArea);
-              textArea.focus();
-              textArea.select();
-              
-              try {
-                const successful = document.execCommand('copy');
-                document.body.removeChild(textArea);
-                
-                if (successful) {
-                  showMessage('链接已复制到剪贴板', 'success');
-                } else {
-                  // 如果复制失败，显示链接让用户手动复制
-                  showMessage(
-                    `无法自动复制链接，请手动复制：\n\n${workLink}\n\n点击"确定"打开链接`,
-                    'warning',
-                    '复制链接',
-                    () => window.open(workLink, '_blank')
-                  );
-                }
-              } catch {
-                document.body.removeChild(textArea);
-                // 最后的后备方案：显示链接并询问是否打开
-                showMessage(
-                  `无法复制链接，请手动复制：\n\n${workLink}\n\n点击"确定"打开链接`,
-                  'warning',
-                  '复制链接',
-                  () => window.open(workLink, '_blank')
-                );
-              }
+            } else {
+              // 如果复制失败，显示链接让用户手动复制
+              showMessage(
+                `无法自动复制链接，请手动复制：\n\n${workLink}\n\n点击"确定"打开链接`,
+                'warning',
+                '复制链接',
+                () => window.open(workLink, '_blank')
+              );
             }
           }
           break;

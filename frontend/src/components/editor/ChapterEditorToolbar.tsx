@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Editor } from '@tiptap/react';
 import { Undo2, Redo2, Save, Heading, Bold, Underline, ChevronDown, Settings, History, Copy, Check } from 'lucide-react';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface ChapterEditorToolbarProps {
   editor: Editor | null;
@@ -272,11 +273,8 @@ export default function ChapterEditorToolbar({
           onClick={async () => {
             if (!editor) return;
             const text = editor.getText();
-            try {
-              await navigator.clipboard.writeText(text);
-              setCopyJustDone(true);
-              setTimeout(() => setCopyJustDone(false), 1500);
-            } catch {
+            const success = await copyToClipboard(text);
+            if (success) {
               setCopyJustDone(true);
               setTimeout(() => setCopyJustDone(false), 1500);
             }

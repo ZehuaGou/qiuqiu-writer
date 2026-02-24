@@ -9,7 +9,7 @@ import { authApi } from './utils/authApi';
 // 路由懒加载 - 提升首屏加载性能
 const HomePage = lazy(() => import('./pages/HomePage'));
 const UserWorksPage = lazy(() => import('./pages/UserWorksPage'));
-const NovelPage = lazy(() => import('./pages/NovelPage'));
+const WorksPage = lazy(() => import('./pages/WorksPage'));
 const ScriptPage = lazy(() => import('./pages/ScriptPage'));
 const EditorPage = lazy(() => import('./pages/EditorPage'));
 const UGCPlaza = lazy(() => import('./pages/UGCPlaza'));
@@ -51,7 +51,7 @@ function AppContent() {
           <Route path="/" element={<HomePage />} />
           <Route path="/works" element={<RedirectToMyWorks />} />
           <Route path="/users/:userId" element={<RequireAuth><UserWorksPage /></RequireAuth>} />
-          <Route path="/novel" element={<NovelPage />} />
+          <Route path="/novel" element={<WorksPage />} />
           <Route path="/script" element={<ScriptPage />} />
           <Route path="/editor" element={<EditorPage />} />
           <Route path="/ugc-plaza" element={<UGCPlaza />} />

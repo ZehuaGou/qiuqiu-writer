@@ -1021,6 +1021,33 @@
   text-decoration: underline;
 }
 
+/* 协作光标：悬浮小标签 */
+.novel-editor-content .collaboration-cursor__caret {
+  border-left: 2px solid #0d0d0d;
+  border-right: 2px solid #0d0d0d;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+
+.novel-editor-content .collaboration-cursor__label {
+  border-radius: 3px 3px 3px 0;
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  left: -1px;
+  line-height: 1.2;
+  padding: 0.1rem 0.3rem;
+  position: absolute;
+  top: -1.4em;
+  user-select: none;
+  white-space: nowrap;
+  z-index: 10;
+}
+
 /* 章节编辑器容器 */
 .chapter-editor-container {
   flex: 1;
