@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    Column, Integer, String, Boolean, DateTime, Text,
     Index, ForeignKey
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -31,10 +32,10 @@ class Faction(Base):
     power_level = Column(Integer, default=0)  # 实力等级
     headquarters = Column(String(200))
     ideology = Column(Text)  # 理念/宗旨
-    structure = Column(JSON, default=dict)  # 组织结构
-    relationships = Column(JSON, default=dict)  # 派系关系
-    tags = Column(JSON, default=list)
-    character_metadata = Column("metadata", JSON, default=dict)
+    structure = Column(JSONB, default=dict)  # 组织结构
+    relationships = Column(JSONB, default=dict)  # 派系关系
+    tags = Column(JSONB, default=list)
+    character_metadata = Column("metadata", JSONB, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

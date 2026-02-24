@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    Column, Integer, String, Boolean, DateTime, Text,
     Index, ForeignKey
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -25,7 +26,7 @@ class WritingPrompt(Base):
     description = Column(Text)
     prompt_type = Column(String(30), nullable=False, index=True)  # scenario/dialogue/character/world_building
     category = Column(String(50), index=True)
-    tags = Column(JSON, default=list)
+    tags = Column(JSONB, default=list)
     difficulty = Column(String(20))  # beginner/intermediate/advanced
     language = Column(String(10), default="zh-CN")
     is_public = Column(Boolean, default=True, index=True)
@@ -69,7 +70,7 @@ class AIAnalysis(Base):
     target_id = Column(Integer, nullable=False, index=True)
     analysis_type = Column(String(50), nullable=False, index=True)  # content_analysis/plot_analysis/character_development
     model_name = Column(String(50))
-    analysis_result = Column(JSON, nullable=False)
+    analysis_result = Column(JSONB, nullable=False)
     status = Column(String(20), default="completed", index=True)  # pending/processing/completed/failed
     created_by = Column(String(40), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

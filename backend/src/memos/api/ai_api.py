@@ -126,17 +126,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️  Yjs WebSocket router not available: {e}", exc_info=True)
 
-# Yjs 数据表初始化：启动时确保 yjs_documents 表存在
+# 数据库初始化：启动时确保所有表存在
 @app.on_event("startup")
-async def startup_yjs_table():
+async def startup_db_tables():
     try:
-        from memos.api.core.database import engine, Base
-        from memos.api.models.yjs_document import YjsDocument  # noqa: F401 - register model
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("✅ Database tables ensured (including yjs_documents)")
+        from memos.api.core.database import init_db
+        await init_db()
+        logger.info("✅ Database tables ensured (including all models)")
     except Exception as e:
-        logger.error(f"❌ Failed to ensure database tables: {e}")
+        logger.error(f"❌ Failed to ensure database tables: {e}", exc_info=True)
 
 # Yjs 文档持久化：应用关闭时保存所有活跃房间
 @app.on_event("shutdown")

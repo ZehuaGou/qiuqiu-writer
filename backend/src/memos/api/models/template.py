@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    Column, Integer, String, Boolean, DateTime, Text,
     Index, ForeignKey
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -28,9 +29,9 @@ class WorkTemplate(Base):
     is_public = Column(Boolean, default=False, index=True)
     creator_id = Column(String(40), ForeignKey("users.id"), index=True)
     category = Column(String(50), index=True)
-    tags = Column(JSON, default=list)
-    template_config = Column(JSON, nullable=False)  # 模板配置信息
-    settings = Column(JSON, default=dict)  # 模板设置（如默认值、验证规则等）
+    tags = Column(JSONB, default=list)
+    template_config = Column(JSONB, nullable=False)  # 模板配置信息
+    settings = Column(JSONB, default=dict)  # 模板设置（如默认值、验证规则等）
     usage_count = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -122,7 +123,7 @@ class TemplateField(Base):
     field_type = Column(String(50), nullable=False)  # text/textarea/select/checkbox/date/number
     field_label = Column(String(100), nullable=False)
     field_description = Column(Text)
-    field_options = Column(JSON)  # 选择题选项、验证规则等
+    field_options = Column(JSONB)  # 选择题选项、验证规则等
     is_required = Column(Boolean, default=False)
     default_value = Column(Text)
     sort_order = Column(Integer, default=0)
@@ -168,8 +169,8 @@ class WorkInfoExtended(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     work_id = Column(String(40), ForeignKey("works.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    template_id = Column(Integer, ForeignKey("work_templates.id"), index=True)
-    field_values = Column(JSON, default=dict)  # 存储模板字段的具体值
+    template_id = Column(Integer, ForeignKey("work_templates.id"), nullable=False, index=True)
+    field_values = Column(JSONB, default=dict)  # 存储模板字段的具体值
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

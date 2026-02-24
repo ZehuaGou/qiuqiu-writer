@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Button, message, Space, Typography, Alert, Row, Col } from 'antd';
-import { ClearOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Card, Button, message, Typography, Alert, Row, Col } from 'antd';
+import { ClearOutlined, ReloadOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
 const { Title, Paragraph } = Typography;

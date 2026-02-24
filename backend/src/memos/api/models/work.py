@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    Column, Integer, String, Boolean, DateTime, Text,
     Index, ForeignKey, and_
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, foreign
 from sqlalchemy.sql import func
 
@@ -27,7 +28,7 @@ class Work(Base):
     work_type = Column(String(20), nullable=False, index=True)  # novel/script/short_story/film_script
     status = Column(String(20), default="draft", index=True)  # draft/published/archived
     cover_image_url = Column(String(255))
-    tags = Column(JSON, default=list)
+    tags = Column(JSONB, default=list)
     category = Column(String(50), index=True)
     genre = Column(String(50), index=True)
     target_audience = Column(String(50))
@@ -39,8 +40,8 @@ class Work(Base):
     collaborator_count = Column(Integer, default=0)
     is_public = Column(Boolean, default=False, index=True)
     is_collaborative = Column(Boolean, default=False)
-    settings = Column(JSON, default=dict)  # 作品设置
-    work_metadata = Column("metadata", JSON, default=dict)  # 扩展元数据
+    settings = Column(JSONB, default=dict)  # 作品设置
+    work_metadata = Column("metadata", JSONB, default=dict)  # 扩展元数据
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     published_at = Column(DateTime(timezone=True))

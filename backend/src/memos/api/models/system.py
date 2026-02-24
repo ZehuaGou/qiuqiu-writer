@@ -6,11 +6,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    Column, Integer, String, Boolean, DateTime, Text,
     Index, ForeignKey
 )
-from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import INET
+from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.sql import func
 
 from memos.api.core.database import Base
@@ -23,7 +22,7 @@ class SystemSetting(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(100), unique=True, nullable=False, index=True)
-    value = Column(JSON, nullable=False)
+    value = Column(JSONB, nullable=False)
     description = Column(Text)
     category = Column(String(50), index=True)
     is_public = Column(Boolean, default=False, index=True)
@@ -57,7 +56,7 @@ class AuditLog(Base):
     action = Column(String(50), nullable=False, index=True)  # create/update/delete/login/logout
     target_type = Column(String(50), index=True)  # work/chapter/user
     target_id = Column(String(50), index=True)  # work_id(40) 或 chapter_id 等字符串形式
-    details = Column(JSON, default=dict)
+    details = Column(JSONB, default=dict)
     ip_address = Column(INET)
     user_agent = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

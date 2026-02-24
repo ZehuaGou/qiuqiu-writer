@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Statistic, Progress, Spin, message } from 'antd';
+import { Row, Col, Card, Statistic, Progress } from 'antd';
 import { UserOutlined, BookOutlined, ReadOutlined, DashboardOutlined, CloudServerOutlined, HddOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -25,7 +25,6 @@ interface SystemMonitor {
 
 const Dashboard: React.FC = () => {
   const [monitorData, setMonitorData] = useState<SystemMonitor | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const fetchMonitorData = async () => {
     try {

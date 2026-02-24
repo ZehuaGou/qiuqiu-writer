@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON, LargeBinary,
+    Column, Integer, String, Boolean, DateTime, Text, LargeBinary,
     Index, ForeignKey
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -30,10 +31,10 @@ class Chapter(Base):
     word_count = Column(Integer, default=0)
     estimated_reading_time = Column(Integer, default=0)  # 预估阅读时间（分钟）
     content_hash = Column(String(32), index=True)  # 内容哈希，用于对比
-    tags = Column(JSON, default=list)
+    tags = Column(JSONB, default=list)
     summary = Column(Text)  # 章节简介
-    notes = Column(JSON, default=dict)  # 作者备注
-    chapter_metadata = Column("metadata", JSON, default=dict)  # 扩展元数据
+    notes = Column(JSONB, default=dict)  # 作者备注
+    chapter_metadata = Column("metadata", JSONB, default=dict)  # 扩展元数据
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

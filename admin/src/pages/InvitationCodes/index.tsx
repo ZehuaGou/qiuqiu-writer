@@ -26,7 +26,7 @@ const InvitationCodes: React.FC = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('admin_token');
-      const params: Record<string, string | number> = { page, size };
+      const params: Record<string, any> = { page, size };
       if (usedFilter !== undefined) {
         params.used = usedFilter;
       }
