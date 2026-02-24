@@ -1032,7 +1032,7 @@ export default function NovelEditorPage() {
             <div className="mobile-menu-drawer" onClick={(e) => e.stopPropagation()}>
               <div className="mobile-menu-header">
                 <div className="mobile-menu-header-top">
-                  <h2 className="mobile-menu-title">作品信息</h2>
+                  <h2 className="mobile-menu-title">{work?.title ?? '作品信息'}</h2>
                   <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>
                     <X size={24} />
                   </button>

@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { useIsMobile } from './useMediaQuery';
 
 export type NavItem = 'work-info' | 'tags' | 'outline' | 'characters' | 'settings' | 'map' | 'factions';
 
@@ -32,9 +33,11 @@ export interface UseUIStateReturn {
 }
 
 export function useUIState(): UseUIStateReturn {
+  const isMobile = useIsMobile();
   const [activeNav, setActiveNav] = useState<NavItem>('work-info');
-  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
-  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false);
+  // 移动端刷新后默认折叠侧边栏，避免出现灰色遮罩
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(() => isMobile);
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(() => isMobile);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [showWordCountTooltip, setShowWordCountTooltip] = useState(false);
