@@ -771,6 +771,7 @@
   height: 20px;
   background: var(--border-light, #e0e0e0);
   margin: 0 8px;
+  flex-shrink: 0;
 }
 
 /* 工具栏下拉菜单 */
@@ -1062,7 +1063,10 @@
   border-radius: 12px 12px 0 0;
   overflow-x: auto;
   overflow-y: hidden;
+  flex-wrap: nowrap !important;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
 }
 
 /* 隐藏滚动条但保持可滚动（可选，根据用户喜好，这里保留默认滚动条以便用户发现可滚动） */
@@ -1070,9 +1074,13 @@
   height: 4px; /* 细滚动条 */
 }
 
+.embedded-toolbar .novel-editor-toolbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .embedded-toolbar .novel-editor-toolbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
+  background: var(--border-light);
+  border-radius: 4px;
 }
 
 /* 移动端侧边栏遮罩 */

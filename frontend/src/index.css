@@ -40,12 +40,39 @@ button span,
   .header-left,
   .header-right,
   .header-actions,
-  .work-info-row,
-  .toolbar-group,
-  .novel-editor-toolbar {
+  .work-info-row {
     flex-wrap: wrap !important;
     height: auto !important;
     gap: 8px;
+  }
+  
+  .toolbar-group {
+    flex-wrap: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  
+  .novel-editor-toolbar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 0;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-light) transparent;
+  }
+
+  .novel-editor-toolbar::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .novel-editor-toolbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .novel-editor-toolbar::-webkit-scrollbar-thumb {
+    background-color: var(--border-light);
+    border-radius: 4px;
   }
   
 
