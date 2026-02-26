@@ -37,7 +37,13 @@ fi
 echo "  - 正在编译静态资源..."
 npm run build
 
-# 3. 启动 Docker 容器
+# 3. 数据备份（可选，建议在生产环境下执行）
+if [ "$1" == "--backup" ]; then
+    echo "💾 正在执行部署前备份..."
+    bash "$PROJECT_ROOT/backup.sh"
+fi
+
+# 4. 启动 Docker 容器
 echo "🐳 正在启动 Docker 容器..."
 cd "$DOCKER_DIR"
 
@@ -46,12 +52,13 @@ if [ ! -f ".env" ]; then
     echo "⚠️ 警告: 未找到 $DOCKER_DIR/.env 文件，请确保已配置。"
 fi
 
-# 停止并清理旧容器（可选，根据需要决定是否保留数据卷）
-# echo "  - 停止旧容器..."
-# docker-compose down
+# 仅更新应用容器，保持数据库等基础设施容器不动
+# --no-recreate 会防止已存在的容器被重新创建
+echo "  - 启动基础设施容器 (如果未运行)..."
+docker-compose up -d --no-recreate postgres redis mongodb qdrant neo4j
 
-echo "  - 启动容器..."
-docker-compose up -d --build
+echo "  - 更新并启动应用容器..."
+docker-compose up -d --build backend frontend admin
 
 echo "✅ 部署完成！"
 echo "🌐 前端访问地址: http://localhost"

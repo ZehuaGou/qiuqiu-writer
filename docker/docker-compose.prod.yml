@@ -1,0 +1,100 @@
+# qiuqiuwriter 生产环境部署配置
+# 区别于开发环境：
+# 1. 使用预构建镜像（从 Registry 拉取），不进行本地构建
+# 2. 启用更严格的重启策略
+# 3. 限制日志大小，防止磁盘撑爆
+# 4. 移除本地源码挂载，提高安全性
+
+name: qiuqiuwriter-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qiuqiuwriter-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    networks:
+      - qiuqiuwriter_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: qiuqiuwriter-redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+    networks:
+      - qiuqiuwriter_net
+
+  mongodb:
+    image: mongo:7
+    container_name: qiuqiuwriter-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - qiuqiuwriter_net
+
+  backend:
+    # 生产环境应替换为您的私有仓库地址，例如：registry.cn-hangzhou.aliyuncs.com/myrepo/backend:latest
+    image: ${BACKEND_IMAGE:-qiuqiuwriter-backend:latest}
+    container_name: qiuqiuwriter-backend
+    restart: always
+    env_file: .env
+    environment:
+      PYTHONPATH: /app/src
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      MONGODB_HOST: mongodb
+    # 生产环境不再挂载源码，使用镜像内的代码
+    command: >
+      sh -c "python init_admin_auto.py && uvicorn memos.api.ai_api:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - qiuqiuwriter_net
+
+  frontend:
+    image: nginx:alpine
+    container_name: qiuqiuwriter-frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # 生产环境建议将编译后的 dist 固化到 Nginx 镜像中，或者使用独立卷
+      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx/frontend.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - qiuqiuwriter_net
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongodb_data:
+  qdrant_data:
+  neo4j_data:
+
+networks:
+  qiuqiuwriter_net:
+    driver: bridge
