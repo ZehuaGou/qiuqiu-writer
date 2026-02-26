@@ -28,7 +28,7 @@ WORKDIR /app
 # 先拷贝 requirements.txt 以利用 Docker 缓存
 COPY docker/requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 6. 拷贝应用源码
 # .dockerignore 会过滤掉不需要的文件

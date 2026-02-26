@@ -19,11 +19,13 @@ ENV HF_ENDPOINT=https://hf-mirror.com
 
 # Install Python packages
 COPY docker/requirements.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Copy application code
 COPY docker/ ./docker/
 COPY src/ ./src/
+COPY models/ ./models/
+
 
 # Set Python import path
 ENV PYTHONPATH=/app/src

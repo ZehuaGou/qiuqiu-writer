@@ -35,9 +35,16 @@ build/
 .DS_Store
 frontend/
 admin/
-docker/
-docs/
-evaluation/
-examples/
-scripts/
-tests/
+# 允许构建所需的 docker 配置
+!docker/requirements.txt
+
+# 禁用大型数据目录和模型（这些通常不应该打入镜像，而应该通过挂载或下载）
+evaluation/data/
+examples/data/
+**/__pycache__/
+*.pickle
+*.adapter
+*.bin
+*.pth
+*.h5
+*.model
