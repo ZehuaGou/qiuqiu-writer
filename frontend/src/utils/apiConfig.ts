@@ -12,29 +12,26 @@ export const isRelativeApi = API_BASE_URL === '';
 /**
  * 获取 WebSocket 基地址（Yjs 等）
  * 
- * 重要：WebSocket 连接应该直接连接到后端，而不是通过 Vite 代理
- * 因为 Vite 的 HTTP 代理可能不支持 WebSocket 升级
- * 
- * 开发环境：直接连接到后端 (ws://localhost:8001)
- * 生产环境：使用 API_BASE_URL 或当前 origin
+ * 逻辑：
+ * 1. 如果配置了 VITE_API_BASE_URL，优先使用它
+ * 2. 如果是开发环境 (localhost)，且未配置 API_BASE_URL，
+ *    优先通过当前 window.location 连接（利用 Vite 或 Nginx 代理）
+ * 3. 生产环境使用 window.location.origin
  */
 export function getWsBaseUrl(): string {
-  // 如果配置了 API_BASE_URL，使用它（转换为 ws://）
+  // 1. 如果配置了 API_BASE_URL (如 https://api.example.com)，将其转换为 ws://
   if (API_BASE_URL) {
     return API_BASE_URL.replace(/^http/, 'ws');
   }
   
-  // 开发环境：直接连接到后端，避免 Vite 代理问题
+  // 2. 在浏览器环境下，优先使用当前页面的 host
+  // 这样无论是在 5173 (Vite) 还是 80 (Nginx) 下，都能正确走对应的代理
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const isDev = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
-    if (isDev) {
-      // 开发环境：直接连接后端，确保所有前端实例连接到同一个后端
-      return 'ws://127.0.0.1:8001';
-    }
-    // 生产环境：使用当前 origin
-    return window.location.origin.replace(/^http/, 'ws');
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host; // 包含端口号
+    return `${protocol}//${host}`;
   }
   
-  return 'ws://localhost:8001';
+  // 3. 服务端渲染或其他情况的兜底（开发环境后端默认端口）
+  return 'ws://127.0.0.1:8000';
 }

@@ -56,7 +56,7 @@ export default defineConfig({
     port: 4173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
         secure: false,
@@ -65,7 +65,7 @@ export default defineConfig({
         proxyTimeout: 300000, // 5 minutes
       },
       '/ai': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
         secure: false,
@@ -74,7 +74,7 @@ export default defineConfig({
         proxyTimeout: 300000, // 5 minutes
       },
       '/v1': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
         secure: false,
@@ -90,7 +90,7 @@ export default defineConfig({
     open: false,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true, // 支持 WebSocket 代理
         secure: false,
@@ -99,7 +99,7 @@ export default defineConfig({
         proxyTimeout: 300000, // 5 minutes
       },
       '/ai': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true, // 支持 WebSocket 代理
         secure: false,
@@ -108,7 +108,7 @@ export default defineConfig({
         proxyTimeout: 300000, // 5 minutes
       },
       '/v1': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
         secure: false,

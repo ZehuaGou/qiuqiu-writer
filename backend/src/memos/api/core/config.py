@@ -102,7 +102,7 @@ class Settings(BaseSettings):
     QDRANT_API_KEY: Optional[str] = None
 
     # AI服务配置
-    AI_API_BASE_URL: str = "http://localhost:8001"
+    AI_API_BASE_URL: str = "http://localhost:8000"
     AI_API_TIMEOUT: int = 120
     AI_MAX_RETRIES: int = 3
 
