@@ -78,6 +78,9 @@ web_modules/
 .next
 out
 
+# Backups
+backups/
+
 # Nuxt.js build / generate output
 .nuxt
 dist
@@ -139,4 +142,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 node_modules/
 
-models/
+/backend/models/
+# invitation_code.py
+# yjs_document.py
+# 这些文件不应该被忽略，因为它们是核心模型文件
+# 如果有其他特定的 models/ 需要忽略，请使用更具体的路径
+# models/
