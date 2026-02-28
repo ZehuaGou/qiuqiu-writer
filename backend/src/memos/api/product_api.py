@@ -1,6 +1,7 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from memos.api.exceptions import APIExceptionHandler
@@ -53,6 +54,8 @@ except Exception as e:
     logger.warning(f"⚠️  Failed to register chapters/works routers: {e}", exc_info=True)
 
 # Exception handlers
+app.exception_handler(RequestValidationError)(APIExceptionHandler.validation_error_handler)
+app.exception_handler(HTTPException)(APIExceptionHandler.http_error_handler)
 app.exception_handler(ValueError)(APIExceptionHandler.value_error_handler)
 app.exception_handler(Exception)(APIExceptionHandler.global_exception_handler)
 

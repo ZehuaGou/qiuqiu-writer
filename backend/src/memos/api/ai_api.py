@@ -17,6 +17,7 @@ if os.getenv("HF_LOCAL_FILES_ONLY", "true").lower() in ("true", "1", "yes"):
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi.exceptions import RequestValidationError, HTTPException
 from memos.api.exceptions import APIExceptionHandler
 from memos.api.middleware.request_context import RequestContextMiddleware
 from memos.api.routers.ai_router import router as ai_router
@@ -147,6 +148,8 @@ async def shutdown_yjs():
         logger.error(f"❌ Failed to persist Yjs documents: {e}")
 
 # 异常处理
+app.exception_handler(RequestValidationError)(APIExceptionHandler.validation_error_handler)
+app.exception_handler(HTTPException)(APIExceptionHandler.http_error_handler)
 app.exception_handler(ValueError)(APIExceptionHandler.value_error_handler)
 app.exception_handler(Exception)(APIExceptionHandler.global_exception_handler)
 
