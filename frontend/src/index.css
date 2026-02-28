@@ -302,7 +302,7 @@ select.full-width {
     --bg-secondary: #2C2824;   /* 稍亮的暖灰黑 */
     --bg-tertiary: #3A3530;    /* 明显的暖灰色 */
     --bg-sidebar: #1F1D1B;
-    
+
     /* 渐变色：使用同色系 */
     --bg-gradient-start: #1F1D1B;
     --bg-gradient-end: #141211;
@@ -346,6 +346,115 @@ select.full-width {
     --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.35);
     --shadow-xl: 0 18px 40px rgba(0, 0, 0, 0.4);
   }
+}
+
+/* ============================================
+   深色主题 — 科技蓝暗色
+   ============================================ */
+:root[data-theme="dark"] {
+  /* 页面背景 */
+  --page-gradient: linear-gradient(160deg, #06091a 0%, #0c1630 45%, #06091a 100%);
+
+  /* 核心背景/文字/边框 */
+  --bg-primary: #111827;
+  --bg-secondary: rgba(255, 255, 255, 0.04);
+  --bg-tertiary: rgba(255, 255, 255, 0.08);
+  --bg-sidebar: #111827;
+  --text-primary: #e2e8f0;
+  --text-secondary: rgba(148, 163, 184, 0.85);
+  --text-tertiary: rgba(100, 116, 139, 0.75);
+  --text-inverse: #060d1b;
+  --border-color: rgba(255, 255, 255, 0.09);
+  --border-light: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.18);
+
+  /* 主题蓝色强调 */
+  --accent-primary: #3b82f6;
+  --accent-color: #3b82f6;
+  --accent-secondary: #2563eb;
+  --accent-tertiary: #60a5fa;
+  --accent-hover: #60a5fa;
+  --accent-light: rgba(59, 130, 246, 0.15);
+  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.55);
+
+  /* 毛玻璃 */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-strong: rgba(255, 255, 255, 0.06);
+  --glass-bg-hover: rgba(255, 255, 255, 0.07);
+  --glass-bg-input: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(255, 255, 255, 0.12);
+  --glass-border-hover: rgba(255, 255, 255, 0.20);
+  --glass-dropdown-bg: rgba(10, 20, 45, 0.95);
+
+  /* 落地页专用 */
+  --hero-badge-bg: rgba(59, 130, 246, 0.10);
+  --hero-badge-border: rgba(59, 130, 246, 0.28);
+  --hero-badge-color: #93c5fd;
+  --hero-title-gradient: linear-gradient(135deg, #ffffff 0%, #bfdbfe 45%, #93c5fd 100%);
+  --hero-subtitle-color: rgba(148, 163, 184, 0.8);
+  --section-label-color: #60a5fa;
+  --section-title-color: #f1f5f9;
+  --feature-title-color: #e2e8f0;
+  --cta-title-color: #f1f5f9;
+}
+
+/* ============================================
+   浅色主题 — 清新蓝白
+   ============================================ */
+:root[data-theme="light"] {
+  /* 页面背景 */
+  --page-gradient: linear-gradient(160deg, #eef2ff 0%, #e0eaff 45%, #f0f4ff 100%);
+
+  /* 核心背景/文字/边框（覆盖 :root 的黑色强调） */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #eef1f5;
+  --bg-sidebar: #fafafb;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-inverse: #ffffff;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --border-hover: #94a3b8;
+
+  /* 蓝色强调 */
+  --accent-primary: #2563eb;
+  --accent-color: #2563eb;
+  --accent-secondary: #1d4ed8;
+  --accent-tertiary: #3b82f6;
+  --accent-hover: #1d4ed8;
+  --accent-light: rgba(37, 99, 235, 0.10);
+  --accent-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+
+  /* 毛玻璃（浅色） */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-strong: rgba(255, 255, 255, 0.85);
+  --glass-bg-hover: rgba(255, 255, 255, 0.92);
+  --glass-bg-input: rgba(255, 255, 255, 0.80);
+  --glass-border: rgba(37, 99, 235, 0.12);
+  --glass-border-strong: rgba(37, 99, 235, 0.20);
+  --glass-border-hover: rgba(37, 99, 235, 0.30);
+  --glass-dropdown-bg: rgba(255, 255, 255, 0.97);
+
+  /* 落地页专用 */
+  --hero-badge-bg: rgba(37, 99, 235, 0.08);
+  --hero-badge-border: rgba(37, 99, 235, 0.25);
+  --hero-badge-color: #2563eb;
+  --hero-title-gradient: linear-gradient(135deg, #0f172a 0%, #1e40af 50%, #2563eb 100%);
+  --hero-subtitle-color: rgba(71, 85, 105, 0.9);
+  --section-label-color: #2563eb;
+  --section-title-color: #0f172a;
+  --feature-title-color: #1e293b;
+  --cta-title-color: #0f172a;
 }
 
 /* ============================================

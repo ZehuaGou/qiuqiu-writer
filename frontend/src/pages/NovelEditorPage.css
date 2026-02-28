@@ -3,7 +3,7 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-primary);
+  background: var(--page-gradient, linear-gradient(160deg, #06091a 0%, #0c1630 45%, #06091a 100%));
   color: var(--text-primary);
   overflow: hidden;
   position: fixed;
@@ -2299,4 +2299,313 @@
       transform: translateY(0);
     }
   }
+}
+
+/* ============================================================
+   编辑器主题补充覆盖
+   ============================================================ */
+
+/* editor body / main / wrapper / work-info-manager 透明背景，让页面渐变透出（两个主题通用） */
+.novel-editor-page .novel-editor-body {
+  background: transparent;
+}
+
+.novel-editor-page .novel-editor-main {
+  background: transparent;
+}
+
+.novel-editor-page .novel-editor-wrapper {
+  background: transparent;
+}
+
+.novel-editor-page .work-info-manager {
+  background: transparent;
+}
+
+/* ── 深色主题 ── */
+:root[data-theme="dark"] .novel-editor-page .novel-editor-header {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .novel-editor-page .sidebar-wrapper .side-nav,
+:root[data-theme="dark"] .novel-editor-page .sidebar-wrapper .ai-assistant {
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .novel-editor-page .editor-with-header {
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="dark"] .novel-editor-page .editor-with-header .ProseMirror {
+  background: rgba(17, 24, 39, 0.92);
+}
+
+:root[data-theme="dark"] .novel-editor-page .editor-with-header .chapter-header-info {
+  background: rgba(17, 24, 39, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+:root[data-theme="dark"] .novel-editor-page .editor-toolbar {
+  background: rgba(17, 24, 39, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+:root[data-theme="dark"] .novel-editor-page .chapter-title-centered {
+  color: rgba(148, 163, 184, 0.65);
+}
+
+:root[data-theme="dark"] .novel-editor-page .placeholder-content {
+  color: rgba(100, 116, 139, 0.8);
+}
+
+:root[data-theme="dark"] .novel-editor-page .placeholder-content h2 {
+  color: #e2e8f0;
+}
+
+:root[data-theme="dark"] .novel-editor-page .sidebar-toggle-btn-header {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(148, 163, 184, 0.8);
+}
+
+:root[data-theme="dark"] .novel-editor-page .sidebar-toggle-btn-header:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #e2e8f0;
+}
+
+:root[data-theme="dark"] .novel-editor-page .sidebar-toggle-btn-header.collapsed {
+  background: rgba(59, 130, 246, 0.85);
+  border-color: rgba(59, 130, 246, 0.85);
+  color: white;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.3);
+}
+
+:root[data-theme="dark"] .novel-editor-page .sidebar-toggle-btn-header.collapsed:hover {
+  background: #3b82f6;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.45);
+}
+
+:root[data-theme="dark"] .novel-editor-page .toolbar-dropdown-menu {
+  background: rgba(13, 20, 40, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .novel-editor-page .tooltip {
+  background: rgba(13, 20, 40, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] .novel-editor-page .tooltip::before {
+  border-bottom-color: rgba(13, 20, 40, 0.96);
+}
+
+:root[data-theme="dark"] .novel-editor-page .word-count-tooltip {
+  background: rgba(13, 20, 40, 0.95) !important;
+  backdrop-filter: blur(16px) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45) !important;
+}
+
+:root[data-theme="dark"] .novel-editor-page .word-count-tooltip .tooltip-title {
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] .novel-editor-page .word-count-tooltip .tooltip-content {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+:root[data-theme="dark"] .novel-editor-page ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .novel-editor-page ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+:root[data-theme="dark"] .novel-editor-page ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── 浅色主题 ── */
+:root[data-theme="light"] .novel-editor-page .novel-editor-header {
+  border-bottom-color: rgba(37, 99, 235, 0.10);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="light"] .novel-editor-page .sidebar-wrapper .side-nav,
+:root[data-theme="light"] .novel-editor-page .sidebar-wrapper .ai-assistant {
+  background: rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="light"] .novel-editor-page .editor-with-header {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(37, 99, 235, 0.08);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="light"] .novel-editor-page .editor-with-header .ProseMirror {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+:root[data-theme="light"] .novel-editor-page .editor-with-header .chapter-header-info {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom-color: rgba(37, 99, 235, 0.08);
+}
+
+:root[data-theme="light"] .novel-editor-page .editor-toolbar {
+  background: rgba(255, 255, 255, 0.90);
+  border-bottom-color: rgba(37, 99, 235, 0.08);
+}
+
+:root[data-theme="light"] .novel-editor-page .chapter-title-centered {
+  color: rgba(71, 85, 105, 0.6);
+}
+
+:root[data-theme="light"] .novel-editor-page .placeholder-content {
+  color: rgba(100, 116, 139, 0.8);
+}
+
+:root[data-theme="light"] .novel-editor-page .placeholder-content h2 {
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .novel-editor-page .sidebar-toggle-btn-header {
+  background: rgba(255, 255, 255, 0.70);
+  border-color: rgba(37, 99, 235, 0.15);
+  color: var(--text-secondary);
+}
+
+:root[data-theme="light"] .novel-editor-page .sidebar-toggle-btn-header:hover {
+  background: rgba(255, 255, 255, 0.90);
+  border-color: rgba(37, 99, 235, 0.28);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .novel-editor-page .sidebar-toggle-btn-header.collapsed {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.3);
+}
+
+:root[data-theme="light"] .novel-editor-page .sidebar-toggle-btn-header.collapsed:hover {
+  background: #1d4ed8;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.45);
+}
+
+:root[data-theme="light"] .novel-editor-page .toolbar-dropdown-menu {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+}
+
+:root[data-theme="light"] .novel-editor-page .tooltip {
+  background: rgba(15, 23, 42, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+:root[data-theme="light"] .novel-editor-page .tooltip::before {
+  border-bottom-color: rgba(15, 23, 42, 0.90);
+}
+
+:root[data-theme="light"] .novel-editor-page .word-count-tooltip {
+  background: rgba(255, 255, 255, 0.97) !important;
+  backdrop-filter: blur(16px) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(37, 99, 235, 0.12) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10) !important;
+}
+
+:root[data-theme="light"] .novel-editor-page .word-count-tooltip .tooltip-title {
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] .novel-editor-page .word-count-tooltip .tooltip-content {
+  color: var(--text-secondary);
+}
+
+:root[data-theme="light"] .novel-editor-page ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root[data-theme="light"] .novel-editor-page ::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.18);
+  border-radius: 4px;
+}
+
+:root[data-theme="light"] .novel-editor-page ::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.30);
+}
+
+/* ── 作品信息面板 glass 效果 ── */
+:root[data-theme="dark"] .novel-editor-page .work-info-sidebar {
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] .novel-editor-page .work-info-content {
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="dark"] .novel-editor-page .work-info-content .module-header {
+  background: rgba(17, 24, 39, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+:root[data-theme="light"] .novel-editor-page .work-info-sidebar {
+  background: rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="light"] .novel-editor-page .work-info-content {
+  background: rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="light"] .novel-editor-page .work-info-content .module-header {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom-color: rgba(37, 99, 235, 0.08);
 }

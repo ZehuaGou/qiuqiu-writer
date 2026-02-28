@@ -686,3 +686,205 @@
     padding: 6px 12px;
   }
 }
+
+/* ============================================
+   首页/个人主页 — 通用渐变背景
+   ============================================ */
+.qiuqiu-layout.is-homepage,
+.qiuqiu-layout.is-profile-page {
+  background: var(--page-gradient, #060d1b);
+}
+
+.qiuqiu-layout.is-homepage .qiuqiu-content,
+.qiuqiu-layout.is-profile-page .qiuqiu-content {
+  background: transparent;
+}
+
+/* ============================================
+   首页深色透明导航栏覆盖（仅深色主题）
+   ============================================ */
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .qiuqiu-header {
+  position: sticky;
+  top: 0;
+  background: rgba(6, 13, 27, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+  z-index: 100;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .logo-link {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-btn {
+  color: rgba(226, 232, 240, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-btn.primary {
+  color: #ffffff;
+  background: rgba(59, 130, 246, 0.85);
+  border-color: rgba(59, 130, 246, 0.85);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-btn.primary:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.45);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .user-avatar-btn {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-create-dropdown,
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .user-menu-dropdown,
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .mobile-menu {
+  background: rgba(10, 20, 45, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-create-item,
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .menu-item,
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .mobile-menu-item {
+  color: rgba(226, 232, 240, 0.85);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .header-create-item:hover,
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .menu-item:hover,
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .mobile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .menu-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .user-name {
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-homepage .mobile-menu-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(226, 232, 240, 0.85);
+}
+
+/* ============================================
+   个人主页深色导航覆盖（仅深色主题）
+   ============================================ */
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .qiuqiu-header {
+  background: rgba(6, 13, 27, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .logo-link {
+  color: #f8fafc;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .nav-link {
+  color: rgba(148, 163, 184, 0.8);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .nav-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .nav-link.active {
+  background: transparent;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+/* profile-header 二级导航激活下划线改为蓝色 */
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .profile-header .nav-link.active {
+  border-bottom-color: #60a5fa;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-btn {
+  color: rgba(226, 232, 240, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-btn.primary {
+  color: #ffffff;
+  background: rgba(59, 130, 246, 0.85);
+  border-color: rgba(59, 130, 246, 0.85);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-btn.primary:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.4);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .user-avatar-btn {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-create-dropdown,
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .user-menu-dropdown,
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .mobile-menu {
+  background: rgba(10, 20, 45, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-create-item,
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .menu-item,
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .mobile-menu-item {
+  color: rgba(226, 232, 240, 0.85);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .header-create-item:hover,
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .menu-item:hover,
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .mobile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .menu-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .user-name {
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] .qiuqiu-layout.is-profile-page .mobile-menu-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(226, 232, 240, 0.85);
+}
+
+/* ============================================
+   浅色主题 — 个人主页导航蓝色激活
+   ============================================ */
+:root[data-theme="light"] .qiuqiu-layout.is-profile-page .profile-header .nav-link.active {
+  border-bottom-color: #2563eb;
+}

@@ -24,7 +24,7 @@ export default function ThemeSelector({ onClose }: ThemeSelectorProps) {
       if (!wrapperRef.current) return;
       const rect = wrapperRef.current.getBoundingClientRect();
       const padding = 8;
-      const dropdownHeight = 320;
+      const dropdownHeight = 160;
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - rect.bottom;
       const openBelow = spaceBelow >= dropdownHeight || spaceBelow >= rect.top;
@@ -74,6 +74,42 @@ export default function ThemeSelector({ onClose }: ThemeSelectorProps) {
     onClose?.();
   };
 
+  const renderThemeList = () => (
+    <div className="theme-list">
+      {themes.map((theme) => (
+        <button
+          key={theme.id}
+          type="button"
+          className={`theme-item ${currentThemeId === theme.id ? 'active' : ''}`}
+          onClick={() => handleThemeChange(theme.id)}
+        >
+          <div className="theme-preview">
+            <div
+              className="theme-color-preview"
+              style={{ background: theme.previewGradient }}
+            />
+            <div className="theme-info">
+              <span className="theme-name">{theme.name}</span>
+              <div className="theme-colors">
+                <span
+                  className="theme-color-dot"
+                  style={{ backgroundColor: theme.previewAccent }}
+                />
+                <span
+                  className="theme-color-dot"
+                  style={{ backgroundColor: theme.previewText }}
+                />
+              </div>
+            </div>
+          </div>
+          {currentThemeId === theme.id && (
+            <Check size={16} className="theme-check" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
   const renderDropdown = () => (
     <div
       ref={dropdownRef}
@@ -94,41 +130,7 @@ export default function ThemeSelector({ onClose }: ThemeSelectorProps) {
       <div className="theme-selector-header">
         <span>选择主题</span>
       </div>
-      <div className="theme-list">
-        {themes.map((theme) => (
-          <button
-            key={theme.id}
-            type="button"
-            className={`theme-item ${currentThemeId === theme.id ? 'active' : ''}`}
-            onClick={() => handleThemeChange(theme.id)}
-          >
-            <div className="theme-preview">
-              <div
-                className="theme-color-preview"
-                style={{
-                  background: `linear-gradient(135deg, ${theme.colors.bgGradientStart} 0%, ${theme.colors.bgGradientEnd} 100%)`,
-                }}
-              />
-              <div className="theme-info">
-                <span className="theme-name">{theme.name}</span>
-                <div className="theme-colors">
-                  <span
-                    className="theme-color-dot"
-                    style={{ backgroundColor: theme.colors.accentPrimary }}
-                  />
-                  <span
-                    className="theme-color-dot"
-                    style={{ backgroundColor: theme.colors.bgSecondary }}
-                  />
-                </div>
-              </div>
-            </div>
-            {currentThemeId === theme.id && (
-              <Check size={16} className="theme-check" />
-            )}
-          </button>
-        ))}
-      </div>
+      {renderThemeList()}
     </div>
   );
 
@@ -151,41 +153,7 @@ export default function ThemeSelector({ onClose }: ThemeSelectorProps) {
           <div className="theme-selector-header">
             <span>选择主题</span>
           </div>
-          <div className="theme-list">
-            {themes.map((theme) => (
-              <button
-                key={theme.id}
-                type="button"
-                className={`theme-item ${currentThemeId === theme.id ? 'active' : ''}`}
-                onClick={() => handleThemeChange(theme.id)}
-              >
-                <div className="theme-preview">
-                  <div
-                    className="theme-color-preview"
-                    style={{
-                      background: `linear-gradient(135deg, ${theme.colors.bgGradientStart} 0%, ${theme.colors.bgGradientEnd} 100%)`,
-                    }}
-                  />
-                  <div className="theme-info">
-                    <span className="theme-name">{theme.name}</span>
-                    <div className="theme-colors">
-                      <span
-                        className="theme-color-dot"
-                        style={{ backgroundColor: theme.colors.accentPrimary }}
-                      />
-                      <span
-                        className="theme-color-dot"
-                        style={{ backgroundColor: theme.colors.bgSecondary }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                {currentThemeId === theme.id && (
-                  <Check size={16} className="theme-check" />
-                )}
-              </button>
-            ))}
-          </div>
+          {renderThemeList()}
         </div>
       )}
 

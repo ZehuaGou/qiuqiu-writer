@@ -162,10 +162,11 @@ export default function MainLayout() {
 
   const isHomePage = location.pathname === '/';
   const isMyProfilePage = userInfo && location.pathname === `/users/${userInfo.id}`;
+  const isUserPage = location.pathname.startsWith('/users/');
   const needLoginPrompt = !isAuthenticated && (location.state as { needLogin?: boolean })?.needLogin;
 
   return (
-    <div className="qiuqiu-layout">
+    <div className={`qiuqiu-layout${isHomePage ? ' is-homepage' : ''}${isUserPage ? ' is-profile-page' : ''}`}>
       {needLoginPrompt && (
         <div className="login-prompt-banner">
           <span>请先登录以继续访问</span>
@@ -175,7 +176,7 @@ export default function MainLayout() {
         </div>
       )}
       {/* GitHub风格的顶部导航栏 */}
-      <header className={`qiuqiu-header ${isMyProfilePage ? 'profile-header' : ''}`}>
+      <header className={`qiuqiu-header${isMyProfilePage ? ' profile-header' : ''}${isHomePage ? ' home-header' : ''}`}>
         <div className="header-container">
           <div className="header-left">
             <Link to="/" className="logo-link">
