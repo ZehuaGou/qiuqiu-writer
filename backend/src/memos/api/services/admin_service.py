@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from memos.api.core.id_utils import generate_id
+from memos.api.core.config import get_settings
 from memos.api.core.security import get_password_hash, verify_password, create_access_token
 from memos.api.models.admin import AdminUser
 from memos.api.models.user import User
@@ -20,6 +21,7 @@ from memos.api.schemas.admin import (
     SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse
 )
 
+settings = get_settings()
 logger = logging.getLogger(__name__)
 
 class AdminService:
@@ -328,6 +330,26 @@ class AdminService:
         # Note: We might want a separate secret or scope for admins, but using standard one for now
         access_token = create_access_token(subject=admin.id, additional_claims={"role": "admin"})
         
+        # Store session in Redis
+        try:
+            from memos.api.core.redis import redis_client
+            session_data = {
+                "user_id": admin.id,
+                "username": admin.username,
+                "email": admin.email,
+                "status": admin.status,
+                "role": "admin",
+                "last_activity": str(admin.last_login_at),
+            }
+            # Use redis_client wrapper which handles json.dumps automatically
+            await redis_client.set(
+                f"session:{admin.id}",
+                session_data,
+                ttl=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            )
+        except Exception as e:
+            logger.warning(f"Redis admin session storage failed: {e}")
+
         # Safe response
         admin_resp = AdminUserResponse(
             id=admin.id,

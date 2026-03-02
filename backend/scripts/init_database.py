@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 # 添加 src 目录到 Python 路径
-backend_dir = Path(__file__).parent
+script_dir = Path(__file__).parent
+backend_dir = script_dir.parent
 src_dir = backend_dir / "src"
 sys.path.insert(0, str(src_dir))
 
