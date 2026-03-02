@@ -26,7 +26,7 @@ const AuditLogs: React.FC = () => {
     action: '',
   });
 
-  const fetchData = async (page = 1, size = 20) => {
+  const fetchData = async (page = 1, size = pagination.pageSize) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('admin_token');
@@ -40,7 +40,7 @@ const AuditLogs: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setData(res.data.items);
-      setPagination({ ...pagination, current: page, total: res.data.total });
+      setPagination(prev => ({ ...prev, current: page, pageSize: size, total: res.data.total }));
     } catch (error) {
       // message.error('Failed to load audit logs');
     } finally {
@@ -49,8 +49,8 @@ const AuditLogs: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [pagination.current]);
+    fetchData(pagination.current, pagination.pageSize);
+  }, []);
 
   const handleSearch = () => {
     setPagination({ ...pagination, current: 1 });
