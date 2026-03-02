@@ -190,7 +190,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
       // 关键修复：在加载新章节前，先清空编辑器内容，避免显示旧内容
       // 清空编辑器时使用 emitUpdate: false，不触发更新事件，同时清除历史
       // 即使 emitUpdate: false，TipTap 可能仍会触发某些内部事件，所以我们已经提前更新了 currentChapterIdRef
-            editor.commands.setContent('<p></p>', { emitUpdate: false });
+            editor.commands.setContent('<p></p>', false);
       
       // 等待编辑器清空完成
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -450,9 +450,7 @@ export async function loadChapterContent(params: LoadChapterContentParams): Prom
                     
           // 关键修复：设置内容时确保格式被正确解析和保留
           // TipTap 会自动规范化HTML，但我们需要确保格式信息不丢失
-          editor.commands.setContent(normalizedContent, { 
-            emitUpdate: false
-          });
+          editor.commands.setContent(normalizedContent, false);
           
           // 🔍 [调试] 设置编辑器内容后的状态
           setTimeout(() => {

@@ -16,9 +16,7 @@ export default function NovelEditor({
 }: NovelEditorProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        underline: false,
-      }),
+      StarterKit.configure(),
       UnderlineExtension,
       Placeholder.configure({
         placeholder: '开始写作...支持 Markdown 格式，如 **粗体**、*斜体*、`代码`、# 标题等',
