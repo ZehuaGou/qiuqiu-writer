@@ -25,10 +25,17 @@ cp .env.example .env
 
 ### 2. 只启动基础设施（推荐本地开发）
 
-应用在本机运行，仅用 Docker 提供数据库与中间件：
+应用在本机运行，仅用 Docker 提供数据库与中间件。使用 `--no-recreate` 可确保容器在已存在时不会重新创建：
 
 ```bash
-docker compose up -d postgres redis mongodb
+cd docker
+docker compose up -d --no-recreate postgres redis mongodb
+```
+
+或者，如果容器已经创建但已停止，可以使用：
+
+```bash
+docker compose start postgres redis mongodb
 ```
 
 本机后端 `.env` 使用：
@@ -46,8 +53,16 @@ docker compose up -d postgres redis mongodb qdrant neo4j
 
 ### 4. 连同后端一起用 Docker 跑
 
+如果您希望在生产或完整环境中运行，可以使用：
+
 ```bash
-docker compose up -d
+docker compose up -d --no-recreate
+```
+
+如果您更新了代码并需要重新编译后端镜像，请使用：
+
+```bash
+docker compose up -d --build backend frontend admin
 ```
 
 此时后端容器内已通过服务名连接：`postgres`、`redis`、`mongodb`、`qdrant`、`neo4j`，无需改 `.env` 中的 host。

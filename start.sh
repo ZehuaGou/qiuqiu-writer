@@ -1,8 +1,23 @@
 #!/bin/bash
 # QiuQiuWriter 统一启动脚本
 
+# 参数解析
+USE_DOCKER=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --docker) USE_DOCKER=true ;;
+        *) echo "未知参数: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 echo "=========================================="
 echo "启动 QiuQiuWriter 项目"
+if [ "$USE_DOCKER" = true ]; then
+    echo "运行模式: Docker 容器化"
+else
+    echo "运行模式: 本地开发"
+fi
 echo "=========================================="
 echo ""
 
@@ -20,7 +35,37 @@ else
     fi
 fi
 
-echo ""
+if [ "$USE_DOCKER" = true ]; then
+    # ---------- Docker 模式 ----------
+    echo "🐳 正在启动 Docker 容器..."
+    cd "$(dirname "$0")/docker" || exit 1
+    
+    # 基础设施：不重新创建
+    echo "  - 启动基础设施 (postgres, redis, mongodb...)"
+    docker-compose up -d --no-recreate postgres redis mongodb qdrant neo4j
+    
+    # 应用容器
+    echo "  - 启动应用服务 (backend, frontend, admin)"
+    docker-compose up -d backend frontend admin
+    
+    echo ""
+    echo "=========================================="
+    echo "✅ 所有服务已在 Docker 中启动！"
+    echo "=========================================="
+    echo "前端: http://localhost:81"
+    echo "管理后台: http://localhost:8889"
+    echo "后端 API: http://localhost:8000"
+    echo "API 文档: http://localhost:8000/docs"
+    echo ""
+    echo "使用 'docker-compose logs -f' 查看实时日志"
+    echo "按 Ctrl+C 退出日志查看（容器将继续运行）"
+    echo ""
+    
+    docker-compose logs -f
+    exit 0
+fi
+
+# ---------- 本地模式 (默认) ----------
 
 # 启动后端
 echo "启动后端服务..."
@@ -37,8 +82,8 @@ export ENABLE_PREFERENCE_MEMORY=false
 # 启动依赖服务
 if command -v docker &> /dev/null && docker info > /dev/null 2>&1; then
     echo "检查依赖服务..."
-    cd docker
-    docker-compose up -d qdrant neo4j 2>/dev/null
+    cd ../docker || exit 1
+    docker-compose up -d --no-recreate postgres redis mongodb qdrant neo4j 2>/dev/null
     cd ..
     echo "✓ 依赖服务已启动"
 fi
@@ -78,9 +123,8 @@ echo ""
 echo "按 Ctrl+C 停止所有服务"
 echo ""
 
-# 启动前端（前台运行，方便查看日志）
-npm run dev
-
 # 清理：当脚本退出时停止后端
 trap "kill $BACKEND_PID 2>/dev/null" EXIT
 
+# 启动前端（前台运行，方便查看日志）
+npm run dev

@@ -58,12 +58,11 @@ npm run dev
 我们提供了便捷的启动脚本：
 
 ```bash
-# 启动所有服务
+# 模式 1：本地开发模式（前后端在本机运行，仅数据库用 Docker）
 ./start.sh
 
-# 或者分别启动
-./start-backend.sh   # 启动后端
-./start-frontend.sh  # 启动前端
+# 模式 2：全容器化模式（前后端及数据库全部在 Docker 中运行）
+./start.sh --docker
 ```
 
 ## 功能特性
