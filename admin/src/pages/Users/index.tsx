@@ -88,6 +88,12 @@ const Users: React.FC = () => {
 
   const columns = [
     {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
       title: 'Username',
       dataIndex: 'username',
       key: 'username',
