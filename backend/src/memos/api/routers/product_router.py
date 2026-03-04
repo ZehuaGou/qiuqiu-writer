@@ -40,6 +40,7 @@ from memos.api.product_models import (
     BaseResponse,
     ChatCompleteRequest,
     ChatRequest,
+    ChatResponse,
     GetMemoryRequest,
     MemoryCreateRequest,
     MemoryResponse,

@@ -133,7 +133,7 @@ class SearchResponse(BaseResponse[dict]):
     """Response model for search operations."""
 
 
-class ChatResponse(BaseResponse[str]):
+class ChatResponse(BaseResponse[dict]):
     """Response model for chat operations."""
 
 
