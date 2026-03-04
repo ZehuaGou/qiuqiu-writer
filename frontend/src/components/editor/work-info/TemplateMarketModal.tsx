@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Search, Save, Download, Globe, User, Edit2, Trash2 } from 'lucide-react';
+import { X, Search, Save, Globe, User, Edit2, Trash2, MoreHorizontal, Download } from 'lucide-react';
 import { templatesApi } from '../../../utils/templatesApi';
 import type { WorkTemplate, TemplateConfig } from '../../../utils/templatesApi';
 import { authApi } from '../../../utils/authApi';
@@ -33,6 +33,7 @@ export default function TemplateMarketModal({
     is_public: false
   });
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   const [messageState, setMessageState] = useState<{
     isOpen: boolean;
@@ -47,18 +48,24 @@ export default function TemplateMarketModal({
   });
 
   const showMessage = (message: string, type: MessageType = 'info', title?: string, onConfirm?: () => void) => {
-    setMessageState({
-      isOpen: true,
-      type,
-      message,
-      title,
-      onConfirm,
-    });
+    setMessageState({ isOpen: true, type, message, title, onConfirm });
   };
 
   const closeMessage = () => {
     setMessageState(prev => ({ ...prev, isOpen: false }));
   };
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    if (openMenuId === null) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.card-menu-wrap')) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openMenuId]);
 
   useEffect(() => {
     const loadUserInfo = async () => {
@@ -77,15 +84,15 @@ export default function TemplateMarketModal({
     try {
       const isPublic = activeTab === 'market';
       const data = await templatesApi.listTemplates({
-        is_public: isPublic ? true : undefined, 
+        is_public: isPublic ? true : undefined,
         search: searchQuery || undefined,
       });
-      
+
       let filteredData = data;
       if (activeTab === 'mine' && userInfo) {
         filteredData = data.filter(t => t.creator_id !== undefined && String(t.creator_id) === String(userInfo.id));
       }
-      
+
       setTemplates(filteredData);
     } catch {
       // ignore
@@ -126,7 +133,7 @@ export default function TemplateMarketModal({
 
     const configToSave = targetTemplateConfig || currentTemplateConfig;
     if (!configToSave || !saveForm.name) return;
-    
+
     try {
       await templatesApi.createTemplate({
         name: saveForm.name,
@@ -136,7 +143,7 @@ export default function TemplateMarketModal({
         is_public: saveForm.is_public,
         source_template_id: sourceTemplateId
       });
-      
+
       showMessage('模板保存成功！', 'success');
       setShowSaveForm(false);
       setSaveForm({ name: '', description: '', is_public: false });
@@ -146,8 +153,8 @@ export default function TemplateMarketModal({
         fetchTemplates();
       }
     } catch {
-        showMessage('保存失败，请重试', 'error');
-      }
+      showMessage('保存失败，请重试', 'error');
+    }
   };
 
   const openSaveForm = (config?: TemplateConfig, fromTemplateId?: number) => {
@@ -181,6 +188,21 @@ export default function TemplateMarketModal({
     });
   };
 
+  const handleSaveAs = (tpl: WorkTemplate) => {
+    let config: TemplateConfig | undefined;
+    if (tpl.template_config) {
+      if (Array.isArray(tpl.template_config)) {
+        config = { modules: tpl.template_config };
+      } else if (typeof tpl.template_config === 'object') {
+        config = tpl.template_config as TemplateConfig;
+      }
+    }
+    if (config) {
+      openSaveForm(config, tpl.id);
+    } else {
+      showMessage('无法读取该模板配置', 'error');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -191,34 +213,34 @@ export default function TemplateMarketModal({
           <h3>模板市场</h3>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
         </div>
-        
+
         <div className="market-toolbar">
           <div className="tab-group">
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'market' ? 'active' : ''}`}
               onClick={() => setActiveTab('market')}
             >
               <Globe size={16} /> 公共市场
             </button>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'mine' ? 'active' : ''}`}
               onClick={() => setActiveTab('mine')}
             >
               <User size={16} /> 我的模板
             </button>
           </div>
-          
+
           <div className="search-box">
             <Search size={16} />
-            <input 
-              type="text" 
-              placeholder="搜索模板..." 
+            <input
+              type="text"
+              placeholder="搜索模板..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-          
-          <button 
+
+          <button
             className="save-template-btn"
             onClick={() => openSaveForm(undefined)}
             title="创建一个全新的模板（基于当前编辑的内容）"
@@ -227,91 +249,82 @@ export default function TemplateMarketModal({
           </button>
         </div>
 
-          <div className="market-content">
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>加载中...</div>
-            ) : (
-              <div className="templates-grid">
-                {templates.map(tpl => {
+        <div className="market-content">
+          {loading ? (
+            <div className="template-loading-state">加载中...</div>
+          ) : (
+            <div className="templates-grid">
+              {templates.map(tpl => {
                 const isCurrent = currentTemplateConfig?.templateId === tpl.id.toString();
+                const canEditDelete = userInfo?.is_superuser ||
+                  (!tpl.is_public && (activeTab === 'mine' || tpl.creator_id === userInfo?.id));
+
                 return (
-                <div key={tpl.id} className={`template-card ${isCurrent ? 'active' : ''}`}>
-                  {isCurrent && (
-                    <div className="current-badge">
-                      当前使用
+                  <div key={tpl.id} className={`template-card ${isCurrent ? 'active' : ''}`}>
+                    {isCurrent && <div className="current-badge">当前使用</div>}
+
+                    <div className="card-header">
+                      <h4>{tpl.name}</h4>
+                      {tpl.is_public && <span className="public-tag">公开</span>}
                     </div>
-                  )}
-                  <div className="card-header">
-                    <h4>{tpl.name}</h4>
-                    {tpl.is_public && <span className="public-tag">公开</span>}
-                  </div>
-                  <p className="card-desc">
-                    {tpl.description || '暂无描述'}
-                  </p>
-                  <div className="card-footer">
-                    {((userInfo?.is_superuser) || (!tpl.is_public && (activeTab === 'mine' || tpl.creator_id === userInfo?.id))) && (
-                      <>
-                      <button 
-                        className="card-btn edit"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditForm(tpl);
-                        }}
-                        title="编辑模板信息"
+
+                    <p className="card-desc">{tpl.description || '暂无描述'}</p>
+
+                    <div className="card-footer">
+                      {!tpl.is_public && (
+                        <button
+                          className="card-use-btn"
+                          onClick={() => onSelectTemplate(tpl)}
+                        >
+                          <Download size={13} /> 使用
+                        </button>
+                      )}
+
+                      <button
+                        className="card-saveas-btn"
+                        onClick={() => handleSaveAs(tpl)}
+                        title="基于此模板创建新模板"
                       >
-                        <Edit2 size={14} /> <span className="btn-text">编辑</span>
+                        <Save size={13} /> 另存为
                       </button>
-                      <button 
-                        className="card-btn delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTemplate(tpl.id);
-                        }}
-                        title="删除模板"
-                      >
-                        <Trash2 size={14} /> <span className="btn-text">删除</span>
-                      </button>
-                      </>
-                    )}
-                    <button 
-                      className={`card-btn save-as ${tpl.is_public ? 'public' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Extract modules/config from template
-                        let config: TemplateConfig | undefined;
-                        if (tpl.template_config) {
-                          if (Array.isArray(tpl.template_config)) {
-                            config = { modules: tpl.template_config };
-                          } else if (typeof tpl.template_config === 'object') {
-                             config = tpl.template_config as TemplateConfig;
-                          }
-                        }
-                        if (config) {
-                           openSaveForm(config, tpl.id);
-                        } else {
-                           showMessage('无法读取该模板配置', 'error');
-                        }
-                      }}
-                      title="基于此模板创建新模板"
-                    >
-                      <Save size={14} /> <span className="btn-text">另存为</span>
-                    </button>
-                    {!tpl.is_public && (
-                    <button 
-                      className="card-btn use"
-                      onClick={() => onSelectTemplate(tpl)}
-                    >
-                      <Download size={14} /> <span className="btn-text">使用</span>
-                    </button>
-                    )}
+
+                      {canEditDelete && (
+                        <div className="card-menu-wrap">
+                          <button
+                            className="card-menu-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === tpl.id ? null : tpl.id);
+                            }}
+                            title="更多操作"
+                          >
+                            <MoreHorizontal size={15} />
+                          </button>
+
+                          {openMenuId === tpl.id && (
+                            <div className="card-dropdown">
+                              <button
+                                className="dropdown-item"
+                                onClick={() => { openEditForm(tpl); setOpenMenuId(null); }}
+                              >
+                                <Edit2 size={13} /> 编辑
+                              </button>
+                              <button
+                                className="dropdown-item danger"
+                                onClick={() => { handleDeleteTemplate(tpl.id); setOpenMenuId(null); }}
+                              >
+                                <Trash2 size={13} /> 删除
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
+                );
               })}
               {templates.length === 0 && (
-                <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-                  未找到相关模板
-                </div>
+                <div className="template-empty-state">未找到相关模板</div>
               )}
             </div>
           )}
@@ -323,30 +336,30 @@ export default function TemplateMarketModal({
               <h3>{editingTemplate ? '编辑模板' : '保存为新模板'}</h3>
               <div className="form-group">
                 <label>模板名称</label>
-                <input 
-                  type="text" 
-                  value={saveForm.name} 
-                  onChange={e => setSaveForm({...saveForm, name: e.target.value})}
+                <input
+                  type="text"
+                  value={saveForm.name}
+                  onChange={e => setSaveForm({ ...saveForm, name: e.target.value })}
                   placeholder="请输入模板名称"
                 />
               </div>
               <div className="form-group">
                 <label>描述</label>
-                <textarea 
-                  value={saveForm.description} 
-                  onChange={e => setSaveForm({...saveForm, description: e.target.value})}
+                <textarea
+                  value={saveForm.description}
+                  onChange={e => setSaveForm({ ...saveForm, description: e.target.value })}
                   placeholder="请输入模板描述"
                   rows={3}
                 />
               </div>
-              <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+              <div className="form-group form-group--inline">
                 {userInfo?.is_superuser && (
                   <>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       id="is_public"
                       checked={saveForm.is_public}
-                      onChange={e => setSaveForm({...saveForm, is_public: e.target.checked})}
+                      onChange={e => setSaveForm({ ...saveForm, is_public: e.target.checked })}
                     />
                     <label htmlFor="is_public" style={{ margin: 0 }}>设为公开模板</label>
                   </>
