@@ -3,7 +3,7 @@ AI接口的数据模型定义
 包含章节分析相关的请求和响应模型
 """
 
-from typing import Generic, Literal, Optional, TypeVar, List
+from typing import Any, Dict, Generic, Literal, Optional, TypeVar, List
 
 from pydantic import BaseModel, Field
 
@@ -229,10 +229,10 @@ class GenerateChapterContentRequest(BaseModel):
 class GenerateComponentDataRequest(BaseModel):
     """生成组件数据请求模型"""
 
-    work_id: int = Field(
+    work_id: str = Field(
         ...,
         description="作品ID",
-        json_schema_extra={"example": 1},
+        json_schema_extra={"example": "abc123"},
     )
     component_id: str = Field(
         ...,
@@ -254,10 +254,24 @@ class GenerateComponentDataRequest(BaseModel):
         description="生成prompt内容（如果generate_prompt_id未提供则使用此字段）",
         json_schema_extra={"example": "请生成角色列表"},
     )
+    work_template_id: Optional[int] = Field(
+        None,
+        description="作品模板ID（用于自动查找组件的 generate prompt，优先级高于从 metadata 解析）",
+        json_schema_extra={"example": 8},
+    )
+    component_type: Optional[str] = Field(
+        None,
+        description="组件类型（如 textarea/text/character-card 等，用于决定AI输出格式）",
+        json_schema_extra={"example": "textarea"},
+    )
     chapter_id: Optional[int] = Field(
         None,
         description="章节ID（可选，用于获取章节上下文）",
         json_schema_extra={"example": 1},
+    )
+    component_data: Optional[Dict[str, Any]] = Field(
+        None,
+        description="前端当前所有组件的值（dataKey → value），用于覆盖数据库中保存的 component_data，让 prompt 使用最新数据",
     )
     settings: AnalysisSettings | None = Field(
         default_factory=AnalysisSettings,

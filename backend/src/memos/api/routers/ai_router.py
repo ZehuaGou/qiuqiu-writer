@@ -1694,6 +1694,20 @@ async def create_work_from_file(
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
 
 
+def _build_additional_vars(request: "GenerateComponentDataRequest", work: "Work") -> dict:
+    """将前端传来的当前组件数据合并进 additional_vars，供 format_prompt 使用。
+    前端数据优先级高于数据库中已保存的 component_data。
+    """
+    if not request.component_data:
+        return {}
+    saved = (work.work_metadata or {}).get("component_data", {})
+    merged = {**saved, **request.component_data}
+    return {
+        "component_data": merged,
+        "组件数据": merged,
+    }
+
+
 @router.post(
     "/generate-component-data",
     summary="生成组件数据接口",
@@ -1737,66 +1751,96 @@ async def generate_component_data(
         if not await work_service.can_access_work(current_user_id, request.work_id):
             raise HTTPException(status_code=403, detail="无权访问该作品")
         
-        # 验证prompt参数
-        if not request.generate_prompt_id and not request.generate_prompt:
-            raise HTTPException(status_code=400, detail="必须提供 generate_prompt_id 或 generate_prompt")
-        
         # 获取AI服务
         ai_service = get_ai_service()
         if not ai_service.is_healthy():
             raise HTTPException(status_code=503, detail="AI服务不可用")
-        
+
         # 初始化Prompt上下文服务
         from memos.api.services.prompt_context_service import PromptContextService
         prompt_service = PromptContextService(db)
         await prompt_service.initialize()
-        
+
         # 获取或构建prompt
-        formatted_prompt = None
+        # 优先级：generate_prompt_id > generate_prompt > 按 work_template_id+component_id 自动查找
+        template = None
         if request.generate_prompt_id:
-            # 使用prompt模板
             template = await prompt_service.get_prompt_template(
                 template_type="component_generate",
                 template_id=request.generate_prompt_id
             )
             if not template:
-                raise HTTPException(status_code=404, detail=f"Prompt模板 {request.generate_prompt_id} 不存在")
-            
-            # 格式化prompt（自动收集上下文）
-        else:
-            # 直接使用提供的prompt内容，但仍需要进行变量替换
-            if not request.generate_prompt:
-                raise HTTPException(status_code=400, detail="必须提供 generate_prompt_id 或 generate_prompt")
-            
-            # 创建一个临时模板对象用于变量替换
+                logger.warning(f"指定的 Prompt模板 {request.generate_prompt_id} 不存在，尝试自动查找")
+
+        if template is None and not request.generate_prompt:
+            # 通过作品关联的模板自动查找该组件的 generate prompt
+            # 优先使用请求中直接提供的 work_template_id，否则从 work 的 metadata 解析
+            wt_id: Optional[int] = request.work_template_id
+            if wt_id is None and work.work_metadata:
+                tc = work.work_metadata.get("template_config", {})
+                raw_id = tc.get("templateId", "")
+                try:
+                    # templateId 可能是 "8" 或 "db-8" 格式，取最后一段数字
+                    wt_id = int(str(raw_id).split("-")[-1])
+                except (ValueError, TypeError):
+                    pass
+
+            if wt_id is not None:
+                try:
+                    stmt = select(PromptTemplate).where(
+                        and_(
+                            PromptTemplate.work_template_id == wt_id,
+                            PromptTemplate.component_id == request.component_id,
+                            PromptTemplate.prompt_category == "generate",
+                            PromptTemplate.is_active == True,
+                        )
+                    )
+                    result = await db.execute(stmt)
+                    template = result.scalar_one_or_none()
+                    if template:
+                        logger.info(f"自动查找到 Prompt 模板: id={template.id}, component={request.component_id}, work_template_id={wt_id}")
+                except Exception as e:
+                    logger.warning(f"自动查找 Prompt 失败: {e}")
+
+        if template is None and not request.generate_prompt:
+            raise HTTPException(
+                status_code=400,
+                detail=f"未找到组件 {request.component_id} 的 generate prompt，请在模板中配置或直接提供 generate_prompt"
+            )
+
+        if template is None:
+            # 使用直接提供的 prompt 内容
             template = PromptTemplate()
             template.prompt_content = request.generate_prompt
-            
-            # 格式化prompt（自动收集上下文）
+
         formatted_prompt = await prompt_service.format_prompt(
             template=template,
             work_id=request.work_id,
             chapter_id=request.chapter_id,
-            auto_build_context=True
+            auto_build_context=True,
+            additional_vars=_build_additional_vars(request, work),
         )
-        
+
         if not formatted_prompt:
             raise HTTPException(status_code=400, detail="无法获取有效的prompt")
         
-        logger.info(f"开始生成组件数据: work_id={request.work_id}, component_id={request.component_id}, data_key={request.data_key}")
+        logger.info(f"开始生成组件数据: work_id={request.work_id}, component_id={request.component_id}, component_type={request.component_type}, data_key={request.data_key}")
         logger.debug(f"Formatted prompt (前500字符): {formatted_prompt[:500]}")
-        
-        # 获取该 dataKey 的现有数据，用于构建格式提示（与分析章节逻辑相同）
-        component_data = work.work_metadata.get("component_data", {}) if work.work_metadata else {}
-        existing_data = component_data.get(request.data_key, [])
-        
-        # 构建现有数据的描述，用于指导模型生成合适的数据结构
+
+        # 文本类组件（输出纯文本，不需要JSON格式提示）
+        TEXT_COMPONENT_TYPES = {"text", "textarea", "select", "multiselect", "tags", "image"}
+        is_text_component = request.component_type in TEXT_COMPONENT_TYPES
+
+        # 仅对结构化组件（JSON输出）添加现有数据结构参考
         existing_data_context = ""
-        if existing_data and isinstance(existing_data, list) and len(existing_data) > 0:
-            import json
-            # 只展示前3个数据作为示例，避免 prompt 过长
-            example_data = existing_data[:3]
-            existing_data_context = f"""
+        if not is_text_component:
+            component_data = work.work_metadata.get("component_data", {}) if work.work_metadata else {}
+            existing_data = component_data.get(request.data_key, [])
+
+            if existing_data and isinstance(existing_data, list) and len(existing_data) > 0:
+                import json
+                example_data = existing_data[:3]
+                existing_data_context = f"""
 # 现有作品数据结构参考
 以下是该作品已有的 {request.data_key} 数据结构示例（请参考此结构生成新数据）：
 
@@ -1808,11 +1852,10 @@ async def generate_component_data(
 2. 如果生成的数据与已存在的数据有重复（通过唯一标识字段匹配，如 name、id、title 等），请保持该数据的现有字段结构，只更新或补充新信息
 3. 如果生成新数据，请按照上述数据结构格式生成完整的信息
 """
-            logger.debug(f"找到现有数据，共 {len(existing_data)} 条，将使用前3条作为格式参考")
-        elif existing_data and not isinstance(existing_data, list):
-            # 如果现有数据不是列表，也提供格式参考
-            import json
-            existing_data_context = f"""
+                logger.debug(f"找到现有数据，共 {len(existing_data)} 条，将使用前3条作为格式参考")
+            elif existing_data:
+                import json
+                existing_data_context = f"""
 # 现有作品数据结构参考
 以下是该作品已有的 {request.data_key} 数据结构示例（请参考此结构生成新数据）：
 
@@ -1822,35 +1865,32 @@ async def generate_component_data(
 **重要提示：**
 新生成的数据应该与上述数据结构保持一致。
 """
-            logger.debug(f"找到现有数据（非列表格式），将作为格式参考")
-        else:
-            logger.debug(f"未找到现有数据（data_key: {request.data_key}），将直接生成新数据")
-        
-        # 在 formatted_prompt 前添加现有数据结构上下文
+                logger.debug(f"找到现有数据（非列表格式），将作为格式参考")
+
         if existing_data_context:
             formatted_prompt = existing_data_context + "\n\n" + formatted_prompt
             logger.debug(f"添加现有数据上下文后，formatted_prompt 长度: {len(formatted_prompt)}")
-        
+
         # 获取AI设置
         analysis_settings = request.settings or AnalysisSettings()
         model = analysis_settings.model or ai_service.default_model
         # 对于生成任务，使用更高的温度（默认0.9）以增加创造性和多样性
-        # 如果用户没有指定settings或使用默认温度0.7，则使用0.9；否则使用用户指定的值
         if request.settings is None or (request.settings and request.settings.temperature == 0.7):
             temperature = 0.9
         else:
             temperature = analysis_settings.temperature
         max_tokens = analysis_settings.max_tokens
-        
+
         # 调用AI生成内容（非流式，一次性返回）
+        # 文本类组件强制不使用JSON格式；结构化组件也暂不强制，由prompt控制
         ai_response = await ai_service.get_ai_response(
-            content="",  # 对于生成任务，content可以为空
+            content="",
             prompt=formatted_prompt,
-            system_prompt=None,  # 使用默认系统prompt
+            system_prompt=None,
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            use_json_format=False,  # 生成内容不需要强制JSON格式
+            use_json_format=False,
         )
         
         logger.info(f"✅ 组件数据生成完成: component_id={request.component_id}, data_key={request.data_key}, 响应长度={len(ai_response)}")

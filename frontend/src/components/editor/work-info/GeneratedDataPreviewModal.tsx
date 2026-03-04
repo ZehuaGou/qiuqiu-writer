@@ -72,12 +72,28 @@ export function GeneratedDataPreviewModal({
   }, [content, dataKey]);
 
   const handleSave = () => {
-    if (!validateJSON(content)) return;
-    
-    if (parsedData) {
-      onSave(parsedData);
-      onClose();
+    const trimmed = content.trim();
+    if (!trimmed) return;
+
+    // 尝试解析 JSON
+    try {
+      const parsed = JSON.parse(trimmed);
+      let finalData: unknown = parsed;
+      // 按 dataKey 提取子字段
+      if (dataKey && !Array.isArray(parsed) && typeof parsed === 'object' && parsed !== null) {
+        if (Object.prototype.hasOwnProperty.call(parsed, dataKey)) {
+          const extracted = (parsed as Record<string, unknown>)[dataKey];
+          if (extracted !== null && extracted !== undefined) {
+            finalData = extracted;
+          }
+        }
+      }
+      onSave(finalData);
+    } catch {
+      // 非 JSON → 作为纯文本字符串保存
+      onSave(trimmed);
     }
+    onClose();
   };
 
   const renderPreview = () => {
@@ -253,13 +269,14 @@ export function GeneratedDataPreviewModal({
         </div>
         
         <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '16px' }}>
-          {dataKey && !error && (
+          {dataKey && (
              <div className="info-message" style={{ fontSize: '12px', color: '#666', marginRight: 'auto' }}>
-               将保存到数据键: <strong>{dataKey}</strong>
+               将保存到: <strong>{dataKey}</strong>
+               {error && <span style={{ color: '#f59e0b', marginLeft: '8px' }}>（非标准 JSON，将作为文本保存）</span>}
              </div>
           )}
           <button onClick={onClose}>取消</button>
-          <button className="primary" onClick={handleSave} disabled={!!error}>确认并保存</button>
+          <button className="primary" onClick={handleSave} disabled={!content.trim()}>确认并保存</button>
         </div>
       </div>
     </div>

@@ -27,7 +27,7 @@ import KeyValueEditor from './work-info/KeyValueEditor';
 import MultiSelectEditor from './work-info/MultiSelectEditor';
 import TemplateMarketModal from './work-info/TemplateMarketModal';
 import { IconMap } from './work-info/config';
-import { getDependencyCharacters } from './work-info/utils';
+import { getDependencyCharacters, extractComponentDataFromTemplate } from './work-info/utils';
 import type { 
   ComponentConfig, 
   WorkData, 
@@ -435,24 +435,34 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
   // 处理组件数据生成
   const handleGenerateData = async (comp: ComponentConfig, moduleId: string, tabsComponentId?: string, tabId?: string) => {
-    // 检查是否有 prompt
     const prompt = comp.generatePrompt;
-    const promptId = comp.generatePromptId;
-    
-    if (!prompt && !promptId) {
-      showMessage('请先在组件配置中设置生成 Prompt', 'warning');
-      return;
+    // 不使用 comp.generatePromptId：模板配置中存储的 ID 可能是旧值（如指向章节分析 prompt），
+    // 改为依赖后端通过 work_template_id + component_id 自动查找正确的 prompt。
+
+    // 从当前模板的 templateId（如 "db-8"）解析出数字 ID，传给后端自动查找 prompt
+    let workTemplateId: number | undefined;
+    if (template?.templateId) {
+      const parsed = parseInt(template.templateId.split('-').pop() || '', 10);
+      if (!isNaN(parsed)) workTemplateId = parsed;
     }
-    
+
+    // 提取当前所有组件的值，传给后端拼接 prompt 上下文
+    const currentComponentData = template ? extractComponentDataFromTemplate(template.modules) : undefined;
+
     setGeneratingComponents(prev => ({ ...prev, [comp.id]: true }));
-    
+
     try {
        const result = await generateComponentData(
-         workId || '', 
+         workId || '',
          comp.id,
          comp.dataKey || comp.id,
-         promptId,
-         prompt
+         undefined,
+         prompt,
+         undefined,
+         undefined,
+         comp.type,
+         workTemplateId,
+         currentComponentData,
        );
        
        if (result && result.generated_data) {

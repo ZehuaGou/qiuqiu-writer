@@ -1011,21 +1011,32 @@ export async function generateComponentData(
   generatePromptId?: number,
   generatePrompt?: string,
   chapterId?: number,
-  settings?: AnalysisSettings
+  settings?: AnalysisSettings,
+  componentType?: string,
+  workTemplateId?: number,
+  componentData?: Record<string, unknown>,
 ): Promise<{ component_id: string; data_key: string; generated_data: string }> {
     const body: Record<string, unknown> = {
       work_id: workId,
       component_id: componentId,
       data_key: dataKey,
     };
+    if (componentType) {
+      body.component_type = componentType;
+    }
+    if (workTemplateId) {
+      body.work_template_id = workTemplateId;
+    }
+    if (componentData && Object.keys(componentData).length > 0) {
+      body.component_data = componentData;
+    }
 
     if (generatePromptId) {
       body.generate_prompt_id = generatePromptId;
     } else if (generatePrompt) {
       body.generate_prompt = generatePrompt;
-    } else {
-      throw new Error('必须提供 generate_prompt_id 或 generate_prompt');
     }
+    // 不提供时由后端通过 work_id + component_id 自动查找 prompt
 
     if (chapterId) {
       body.chapter_id = chapterId;
