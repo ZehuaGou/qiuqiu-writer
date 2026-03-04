@@ -21,6 +21,7 @@ from fastapi.exceptions import RequestValidationError, HTTPException
 from memos.api.exceptions import APIExceptionHandler
 from memos.api.middleware.request_context import RequestContextMiddleware
 from memos.api.routers.ai_router import router as ai_router
+from memos.api.routers.product_router import router as product_router
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -50,8 +51,11 @@ app.add_middleware(RequestContextMiddleware, source="ai_api")
 try:
     app.include_router(ai_router)
     logger.info("✅ AI router registered successfully")
+    
+    app.include_router(product_router)
+    logger.info("✅ Product router registered successfully")
 except Exception as e:
-    logger.error(f"❌ Failed to register AI router: {e}")
+    logger.error(f"❌ Failed to register AI/Product router: {e}")
 
 # 注册WriterAI应用路由
 # 使用直接导入路由文件的方式，避免触发 memos.__init__.py 的导入
