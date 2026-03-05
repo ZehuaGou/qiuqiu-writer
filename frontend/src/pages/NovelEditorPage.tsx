@@ -616,6 +616,8 @@ export default function NovelEditorPage() {
     };
   }, [editor]);
 
+  const handleSelectionAIChatRef = useRef<() => void>(() => {});
+
   const handleSelectionAIChat = () => {
     if (selectedChapter) {
       setInitialSelectionRef({
@@ -632,6 +634,29 @@ export default function NovelEditorPage() {
     setSelectionPopup((prev) => ({ ...prev, visible: false }));
     setTimeout(() => setInitialSelectionRef(null), 500);
   };
+
+  // 保持 ref 与最新的 handleSelectionAIChat 同步，避免 Ctrl+U 监听器中闭包过期
+  useEffect(() => {
+    handleSelectionAIChatRef.current = handleSelectionAIChat;
+  });
+
+  // Ctrl+U 快捷键：选中文本时直接打开 AI 对话
+  useEffect(() => {
+    if (!editor) return;
+    const handleCtrlU = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+        const { from, to } = editor.state.selection;
+        if (from !== to) {
+          e.preventDefault();
+          handleSelectionAIChatRef.current();
+        }
+      }
+    };
+    editor.view.dom.addEventListener('keydown', handleCtrlU);
+    return () => {
+      editor.view.dom.removeEventListener('keydown', handleCtrlU);
+    };
+  }, [editor]);
 
   const handleSelectionOptimize = async (text: string) => {
     if (!editor || !workId) return;
