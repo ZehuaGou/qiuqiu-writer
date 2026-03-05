@@ -122,6 +122,26 @@ class YjsConnectionManager {
   }
 
   /**
+   * 为新创建的章节初始化空的 Y.XmlFragment
+   * 防止切换到新章节时，Collaboration 扩展将旧章节内容写入空片段
+   */
+  initializeEmptyChapterFragment(workId: string, chapterId: string): void {
+    const conn = this.connections.get(workId);
+    if (!conn) return; // 无活跃连接时跳过，首次打开章节会自然创建
+
+    const fragment = conn.ydoc.getXmlFragment(`chapter_${chapterId}`);
+
+    if (fragment.length === 0) {
+      conn.ydoc.transact(() => {
+        const paragraph = new Y.XmlElement('paragraph');
+        fragment.insert(0, [paragraph]);
+      });
+    }
+
+    conn.chapterFragments.set(chapterId, fragment);
+  }
+
+  /**
    * 断开所有连接
    */
   disconnectAll(): void {

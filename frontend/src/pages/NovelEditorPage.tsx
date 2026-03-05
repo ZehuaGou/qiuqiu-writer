@@ -678,9 +678,9 @@ export default function NovelEditorPage() {
     openChapterModal(mode, volumeId, volumeTitle, chapterData);
   };
   
-  const handleOpenVolumeModal = (mode: 'create' | 'edit', volumeId?: string) => {
+  const handleOpenVolumeModal = (mode: 'create' | 'edit', volumeId?: string, defaultTitle?: string) => {
     if (mode === 'create') {
-      openNewVolumePopup();
+      openNewVolumePopup(defaultTitle);
     } else if (volumeId) {
       const volume = volumes.find((v: { id: string }) => v.id === volumeId);
       if (volume) {

@@ -22,7 +22,7 @@ export interface UseVolumeManagementReturn {
   editingVolumeTitle: string;
   editingVolumeOutline: string;
   editingVolumeDetailOutline: string;
-  openNewVolumePopup: () => void;
+  openNewVolumePopup: (defaultTitle?: string) => void;
   openEditVolumePopup: (volume: VolumeData) => void;
   closeVolumePopup: () => void;
   handleSaveVolume: (title: string, volumeId?: string, outline?: string, detailOutline?: string) => Promise<void>;
@@ -39,10 +39,10 @@ export function useVolumeManagement(options: UseVolumeManagementOptions): UseVol
   const [editingVolumeOutline, setEditingVolumeOutline] = useState('');
   const [editingVolumeDetailOutline, setEditingVolumeDetailOutline] = useState('');
 
-  const openNewVolumePopup = useCallback(() => {
+  const openNewVolumePopup = useCallback((defaultTitle?: string) => {
     setCurrentEditingVolume(null);
     setIsCreatingNewVolume(true);
-    setEditingVolumeTitle('');
+    setEditingVolumeTitle(defaultTitle || '');
     setEditingVolumeOutline('');
     setEditingVolumeDetailOutline('');
     setIsVolumePopupOpen(true);
@@ -81,6 +81,11 @@ export function useVolumeManagement(options: UseVolumeManagementOptions): UseVol
           outline,
           detail_outline: detailOutline,
         });
+        setVolumes(prev => prev.map(vol =>
+          vol.id === volumeId
+            ? { ...vol, title, outline: outline || '', detailOutline: detailOutline || '' }
+            : vol,
+        ));
       } else {
         // 创建新卷（或迁移虚拟卷）
         let volumeNumber = 1;
@@ -112,20 +117,23 @@ export function useVolumeManagement(options: UseVolumeManagementOptions): UseVol
             );
           }
         }
-      }
 
-      // 更新本地卷数据
-      setVolumes(prev => {
-        if (volumeId && !isVirtual) {
-          return prev.map(vol =>
-            vol.id === volumeId
-              ? { ...vol, title, outline: outline || '', detailOutline: detailOutline || '' }
-              : vol,
-          );
-        }
-        // 对于新建卷，触发外部 updateTrigger 重新加载即可
-        return prev;
-      });
+        // 用真实卷替换虚拟卷（或追加新卷）
+        setVolumes(prev => {
+          const realVolume: VolumeData = {
+            id: String(savedVolume.id),
+            title,
+            volume_number: volumeNumber,
+            outline: outline || '',
+            detailOutline: detailOutline || '',
+            chapters: isVirtual ? (prev.find(v => v.id === volumeId)?.chapters ?? []) : [],
+          };
+          if (isVirtual && volumeId) {
+            return prev.map(v => v.id === volumeId ? realVolume : v);
+          }
+          return [...prev, realVolume];
+        });
+      }
 
       closeVolumePopup();
     } catch {

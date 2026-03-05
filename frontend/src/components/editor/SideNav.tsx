@@ -57,13 +57,13 @@ interface SideNavProps {
 // 导出 Chapter, Volume, SideNavProps 类型供外部使用
 export type { Chapter, Volume, SideNavProps };
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onOpenVolumeModal, onChapterDelete, deletedChapters = [], loadDeletedChapters, onRestoreChapter, volumes: externalVolumes, onVolumesChange }: SideNavProps) {
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onOpenVolumeModal, onChapterDelete, deletedChapters = [], loadDeletedChapters, onRestoreChapter, volumes: externalVolumes }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
   const [recycleExpanded, setRecycleExpanded] = useState(false);
   
   // 卷和章节数据 - 使用外部传入的或内部状态
-  const [internalVolumes, setInternalVolumes] = useState<Volume[]>([
+  const [internalVolumes] = useState<Volume[]>([
     {
       id: 'vol1',
       title: '第一卷',
@@ -82,7 +82,6 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     },
   ]);
   const volumes = externalVolumes || internalVolumes;
-  const setVolumes = onVolumesChange || setInternalVolumes;
 
   const [volumesExpanded, setVolumesExpanded] = useState<Record<string, boolean>>({
     vol1: true,
@@ -96,18 +95,12 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
     }));
   };
 
-  // 添加新卷
+  // 添加新卷：打开创建弹窗，保证卷持久化到服务器
   const handleAddVolume = (e: React.MouseEvent) => {
     e.stopPropagation();
     const volumeNumber = volumes.length + 1;
-    const volumeId = `vol${volumeNumber}`;
-    const newVolume: Volume = {
-      id: volumeId,
-      title: `第${getVolumeNumber(volumeNumber)}卷`,
-      chapters: [],
-    };
-    setVolumes([...volumes, newVolume]);
-    setVolumesExpanded(prev => ({ ...prev, [volumeId]: true }));
+    const defaultTitle = `第${getVolumeNumber(volumeNumber)}卷`;
+    onOpenVolumeModal?.('create', undefined, defaultTitle);
   };
 
   // 打开新建章节弹框

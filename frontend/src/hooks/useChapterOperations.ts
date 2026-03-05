@@ -5,6 +5,7 @@
 
 import { useCallback } from 'react';
 import { chaptersApi, type ChapterUpdate } from '../utils/chaptersApi';
+import { yjsConnectionManager } from '../utils/yjsConnectionManager';
 
 /** 章节保存数据（与 ChapterSettingsModal 的 onSave 回调参数一致） */
 export interface ChapterSaveData {
@@ -107,6 +108,9 @@ export function useChapterOperations(options: UseChapterOperationsOptions): UseC
         }
 
         const newChapter = await chaptersApi.createChapter(createPayload);
+
+        // 立即初始化新章节的 Yjs 片段（空段落），防止切换时将当前章节内容写入新章节
+        yjsConnectionManager.initializeEmptyChapterFragment(workId, newChapter.id.toString());
 
         if (newChapter && !createPayload.chapter_metadata && (data.outline || data.detailOutline || data.characters?.length || data.locations?.length)) {
           await chaptersApi.updateChapter(newChapter.id, {
