@@ -7,6 +7,7 @@ import Users from './pages/Users';
 import Works from './pages/Works';
 import PromptTemplates from './pages/PromptTemplates';
 import WorkTemplateDetail from './pages/PromptTemplates/WorkTemplateDetail';
+import GlobalPrompts from './pages/GlobalPrompts';
 import SystemSettings from './pages/SystemSettings';
 import AuditLogs from './pages/AuditLogs';
 import Cubes from './pages/Cubes';
@@ -42,6 +43,7 @@ const App: React.FC = () => {
           <Route path="cubes" element={<Cubes />} />
           <Route path="prompt-templates" element={<PromptTemplates />} />
           <Route path="prompt-templates/:id" element={<WorkTemplateDetail />} />
+          <Route path="global-prompts" element={<GlobalPrompts />} />
           <Route path="system-settings" element={<SystemSettings />} />
           <Route path="maintenance" element={<Maintenance />} />
           <Route path="invitation-codes" element={<InvitationCodes />} />

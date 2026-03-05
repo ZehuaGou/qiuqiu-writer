@@ -79,7 +79,7 @@ class AdminService:
         items = [AuditLogResponse.model_validate(log) for log in logs]
         return AuditLogListResponse(total=total, items=items, page=page, size=size)
 
-    async def get_prompt_templates(self, page: int = 1, size: int = 20, keyword: Optional[str] = None, template_type: Optional[str] = None) -> PromptTemplateListResponse:
+    async def get_prompt_templates(self, page: int = 1, size: int = 20, keyword: Optional[str] = None, template_type: Optional[str] = None, global_only: bool = False) -> PromptTemplateListResponse:
         query = select(PromptTemplate)
         if keyword:
             query = query.where(
@@ -88,6 +88,8 @@ class AdminService:
             )
         if template_type:
             query = query.where(PromptTemplate.template_type == template_type)
+        if global_only:
+            query = query.where(PromptTemplate.work_template_id == None)
         
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

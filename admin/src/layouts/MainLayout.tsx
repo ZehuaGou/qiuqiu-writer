@@ -73,7 +73,12 @@ const MainLayout: React.FC = () => {
     {
       key: '/prompt-templates',
       icon: <FileTextOutlined />,
-      label: 'Prompt Templates',
+      label: '作品模板',
+    },
+    {
+      key: '/global-prompts',
+      icon: <FileTextOutlined />,
+      label: '全局 Prompt',
     },
     {
       key: '/system-settings',

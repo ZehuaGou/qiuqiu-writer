@@ -205,11 +205,12 @@ async def get_prompt_templates(
     size: int = 20,
     keyword: str = None,
     template_type: str = None,
+    global_only: bool = False,
     db: AsyncSession = Depends(get_async_db),
     admin_id: str = Depends(get_current_admin)
 ):
     service = AdminService(db)
-    return await service.get_prompt_templates(page, size, keyword, template_type)
+    return await service.get_prompt_templates(page, size, keyword, template_type, global_only=global_only)
 
 @router.post("/prompt-templates", response_model=PromptTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_prompt_template(
