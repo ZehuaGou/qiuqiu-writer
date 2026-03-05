@@ -167,9 +167,6 @@ def _parse_continue_chapter_user_description(query: str) -> str | None:
     return rest if rest else None
 
 
-get_mos_product_instance()
-
-
 @router.post("/configure", summary="Configure MOSProduct", response_model=SimpleResponse)
 def set_config(config):
     """Set MOSProduct configuration."""
