@@ -27,6 +27,9 @@ import EditorSelectionPopup from '../components/editor/EditorSelectionPopup';
 import OnboardingGuide from '../components/common/OnboardingGuide';
 import HeaderSettingsMenu from '../components/editor/HeaderSettingsMenu';
 import FeedbackModal from '../components/common/FeedbackModal';
+import ExportModal from '../components/editor/ExportModal';
+
+// HooksExportModal from '../components/editor/ExportModal';
 
 // Hooks
 import { useYjsEditor } from '../hooks/useYjsEditor';
@@ -92,6 +95,7 @@ export default function NovelEditorPage() {
   // ===== 功能引导状态 =====
   const [tipsEnabled, setTipsEnabled] = useState(true);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   useEffect(() => {
     const checkTipsEnabled = () => {
@@ -1022,6 +1026,7 @@ export default function NovelEditorPage() {
                 tipsEnabled={tipsEnabled}
                 onToggleTips={toggleTips}
                 onDeleteWork={handleDeleteWork}
+                onExport={() => setIsExportModalOpen(true)}
                 isMobile={true}
               />
             </>
@@ -1054,6 +1059,7 @@ export default function NovelEditorPage() {
                   tipsEnabled={tipsEnabled}
                   onToggleTips={toggleTips}
                   onDeleteWork={handleDeleteWork}
+                  onExport={() => setIsExportModalOpen(true)}
                 />
               </div>
 
@@ -1472,6 +1478,14 @@ export default function NovelEditorPage() {
       </button>
 
       {/* 问题反馈弹窗 */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        workId={workId || ''}
+        workTitle={work?.title || '未命名作品'}
+        volumes={volumes}
+      />
+
       <FeedbackModal
         isOpen={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}

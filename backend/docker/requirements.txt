@@ -165,3 +165,4 @@ psycopg2-binary>=2.9.9
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 pycrdt>=0.12.0
+python-docx>=1.1.2

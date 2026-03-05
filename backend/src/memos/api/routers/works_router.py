@@ -3,7 +3,11 @@
 """
 
 from typing import Any, Dict, List, Optional
+import io
+import re
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, or_
 
@@ -11,9 +15,12 @@ from memos.api.core.database import get_async_db
 from memos.api.core.security import get_current_user_id
 from memos.api.services.work_service import WorkService
 from memos.api.services.template_service import TemplateService
+from memos.api.services.chapter_service import ChapterService
+from memos.api.services.sharedb_service import ShareDBService
 from memos.api.schemas.work import (
     WorkCreate, WorkUpdate, WorkResponse, WorkListResponse,
-    WorkCollaboratorCreate, WorkCollaboratorUpdate, WorkCollaboratorResponse
+    WorkCollaboratorCreate, WorkCollaboratorUpdate, WorkCollaboratorResponse,
+    WorkExportRequest
 )
 from memos.api.models.work import Work, WorkCollaborator
 import logging
@@ -185,6 +192,141 @@ async def list_works(
         }
     }
 
+
+@router.post("/{work_id}/export", summary="导出作品")
+async def export_work(
+    work_id: str,
+    export_req: WorkExportRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """
+    导出作品为指定格式（TXT或Word）
+    """
+    work_service = WorkService(db)
+    work = await work_service.get_work_by_id(work_id)
+    
+    if not work:
+        raise HTTPException(status_code=404, detail="作品不存在")
+        
+    if work.owner_id != current_user_id:
+        raise HTTPException(status_code=403, detail="没有导出该作品的权限")
+        
+    # 获取章节列表
+    chapter_service = ChapterService(db)
+    # 按卷号和章节号排序
+    all_chapters, _ = await chapter_service.get_chapters(
+        filters={"work_id": work_id, "include_deleted": False},
+        page=1,
+        size=10000, # 获取所有章节
+        sort_by="chapter_number",
+        sort_order="asc"
+    )
+    
+    # 过滤章节
+    if export_req.chapter_ids:
+        chapters_to_export = [c for c in all_chapters if c.id in export_req.chapter_ids]
+    else:
+        chapters_to_export = all_chapters
+        
+    # 按卷号和章节号排序
+    chapters_to_export.sort(key=lambda c: (c.volume_number or 0, c.chapter_number or 0))
+    
+    # 获取内容
+    sharedb_service = ShareDBService()
+    await sharedb_service.initialize()
+    
+    export_content = []
+    
+    for chapter in chapters_to_export:
+        doc_id = f"work_{work_id}_chapter_{chapter.id}"
+        doc = await sharedb_service.get_document(doc_id)
+        
+        content = ""
+        if doc:
+            content = doc.get("content", "")
+            # 如果是 HTML，需要转换为纯文本 (简单处理)
+            if content and isinstance(content, str) and ("<" in content and ">" in content):
+                 content = re.sub(r'<[^>]+>', '', content)
+                 # 处理常见的 HTML 实体
+                 content = content.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+        
+        export_content.append({
+            "title": chapter.title,
+            "content": content,
+            "volume": chapter.volume_number
+        })
+        
+    # 生成文件
+    filename = f"{work.title}"
+    
+    if export_req.format == "text":
+        output = io.StringIO()
+        output.write(f"{work.title}\n")
+        if work.description:
+            output.write(f"{work.description}\n")
+        output.write("\n" + "="*20 + "\n\n")
+        
+        current_volume = None
+        for item in export_content:
+            if item['volume'] != current_volume and item['volume'] is not None:
+                current_volume = item['volume']
+                output.write(f"\n\n## 第{current_volume}卷 ##\n\n")
+                
+            output.write(f"\n\n### {item['title']} ###\n\n")
+            output.write(item['content'])
+            output.write("\n")
+            
+        filename += ".txt"
+        output.seek(0)
+        # 必须编码为 bytes
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/plain",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+        )
+        
+    elif export_req.format == "word":
+        try:
+            from docx import Document
+        except ImportError:
+            raise HTTPException(status_code=500, detail="Word导出功能不可用：缺少python-docx依赖")
+
+        doc = Document()
+        doc.add_heading(work.title, 0)
+        
+        if work.description:
+            doc.add_paragraph(work.description)
+            
+        doc.add_page_break()
+        
+        current_volume = None
+        for item in export_content:
+            if item['volume'] != current_volume and item['volume'] is not None:
+                current_volume = item['volume']
+                doc.add_heading(f"第{current_volume}卷", level=1)
+                
+            doc.add_heading(item['title'], level=2)
+            # 处理段落
+            paragraphs = item['content'].split('\n')
+            for p in paragraphs:
+                if p.strip():
+                    doc.add_paragraph(p.strip())
+            doc.add_page_break()
+            
+        output = io.BytesIO()
+        doc.save(output)
+        output.seek(0)
+        filename += ".docx"
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+        )
+        
+    else:
+        raise HTTPException(status_code=400, detail="不支持的导出格式")
 
 @router.get("/public", response_model=WorkListResponse)
 async def get_public_works(

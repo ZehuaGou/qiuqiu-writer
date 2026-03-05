@@ -199,46 +199,33 @@ class WorksApiClient extends BaseApiClient {
   async getPublicWorks(params?: {
     page?: number;
     size?: number;
-    work_type?: FrontendWorkType | string;
     category?: string;
     genre?: string;
     search?: string;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
   }): Promise<WorkListResponse> {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          // 如果是 work_type，需要转换为后端类型
-          if (key === 'work_type' && typeof value === 'string') {
-            const frontendType = value as FrontendWorkType;
-            if (WORK_TYPE_MAP[frontendType]) {
-              queryParams.append(key, mapWorkTypeToBackend(frontendType));
-            } else {
-              queryParams.append(key, String(value));
-            }
-          } else {
-            queryParams.append(key, String(value));
-          }
-        }
-      });
+    return this.get<WorkListResponse>('/api/v1/works/public', params);
+  }
+
+  /**
+   * 导出作品
+   */
+  async exportWork(workId: string, params: {
+    format: 'text' | 'word';
+    chapter_ids?: string[];
+  }): Promise<Blob> {
+    const response = await this.requestRaw(`/api/v1/works/${workId}/export`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+       const errorData = await response.json().catch(() => ({}));
+       throw new Error(errorData.detail || '导出失败');
     }
-    // 转换 work_type 参数
-    const backendParams = params ? {
-      ...params,
-      work_type: params.work_type && typeof params.work_type === 'string' && WORK_TYPE_MAP[params.work_type as FrontendWorkType]
-        ? mapWorkTypeToBackend(params.work_type as FrontendWorkType)
-        : params.work_type
-    } : undefined;
-    
-    const response = await this.get<WorkListResponseBackend>('/api/v1/works/public', backendParams);
-    
-    // 转换作品类型
-    return {
-      ...response,
-      works: response.works?.map((work) => this.mapBackendWork(work)) || [],
-    };
+
+    return await response.blob();
   }
 
   /**

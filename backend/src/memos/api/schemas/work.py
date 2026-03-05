@@ -121,7 +121,12 @@ class WorkUpdate(BaseModel):
         return v
 
 
-class WorkResponse(BaseModel):
+class WorkExportRequest(BaseModel):
+    """导出作品请求"""
+    format: str = "text"  # text, word
+    chapter_ids: Optional[List[int]] = None
+
+class WorkResponse(WorkBase):
     """作品响应模式"""
     id: str
     title: str
