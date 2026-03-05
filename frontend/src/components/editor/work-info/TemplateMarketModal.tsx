@@ -41,6 +41,8 @@ export default function TemplateMarketModal({
     message: string;
     title?: string;
     onConfirm?: () => void;
+    toast?: boolean;
+    autoCloseMs?: number;
   }>({
     isOpen: false,
     type: 'info',
@@ -49,6 +51,10 @@ export default function TemplateMarketModal({
 
   const showMessage = (message: string, type: MessageType = 'info', title?: string, onConfirm?: () => void) => {
     setMessageState({ isOpen: true, type, message, title, onConfirm });
+  };
+
+  const showToast = (message: string, type: MessageType = 'success', autoCloseMs = 2000) => {
+    setMessageState({ isOpen: true, type, message, toast: true, autoCloseMs });
   };
 
   const closeMessage = () => {
@@ -180,7 +186,7 @@ export default function TemplateMarketModal({
     showMessage('确定要删除这个模板吗？此操作无法撤销。', 'warning', '确认删除', async () => {
       try {
         await templatesApi.deleteTemplate(templateId);
-        showMessage('模板删除成功', 'success');
+        showToast('模板删除成功');
         fetchTemplates();
       } catch {
         showMessage('删除失败，请重试', 'error');
@@ -381,6 +387,8 @@ export default function TemplateMarketModal({
           title={messageState.title}
           message={messageState.message}
           type={messageState.type}
+          toast={messageState.toast}
+          autoCloseMs={messageState.autoCloseMs}
           onConfirm={() => {
             closeMessage();
             if (messageState.onConfirm) messageState.onConfirm();

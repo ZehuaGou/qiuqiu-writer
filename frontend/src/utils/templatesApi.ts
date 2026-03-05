@@ -82,14 +82,14 @@ class TemplatesApiClient extends BaseApiClient {
       tags?: string[];
     }
   ): Promise<WorkTemplate> {
-    return this.put<WorkTemplate>(`/api/v1/templates/${templateId}/`, templateData);
+    return this.put<WorkTemplate>(`/api/v1/templates/${templateId}`, templateData);
   }
 
   /**
    * 删除模板
    */
   async deleteTemplate(templateId: number): Promise<void> {
-    return this.delete<void>(`/api/v1/templates/${templateId}/`);
+    return this.delete<void>(`/api/v1/templates/${templateId}`);
   }
 
   /**
