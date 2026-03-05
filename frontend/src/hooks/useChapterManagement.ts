@@ -45,6 +45,10 @@ export interface UseChapterManagementReturn {
   updateChapterLocally: (chapterId: string, data: ChapterSaveData) => void;
   /** 删除章节后立即从本地状态移除（乐观更新），避免界面仍显示已删章节 */
   removeChapterLocally: (chapterId: string) => void;
+  /** 各章节从 API 加载时的字数（chapterId -> word_count） */
+  apiChapterWordCounts: Record<string, number>;
+  /** 手动更新某章节的字数（用于实时编辑时覆盖 API 值） */
+  updateChapterWordCount: (chapterId: string, wordCount: number) => void;
   /** 已软删除的章节列表（回收站） */
   deletedChapters: Chapter[];
   /** 加载回收站列表（status=deleted） */
@@ -92,6 +96,7 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
   const [chaptersData, setChaptersData] = useState<Record<string, ChapterFullData>>({});
   const [volumes, setVolumes] = useState<VolumeData[]>([]);
   const [deletedChapters, setDeletedChapters] = useState<Chapter[]>([]);
+  const [apiChapterWordCounts, setApiChapterWordCounts] = useState<Record<string, number>>({});
 
   // 用 ref 避免闭包旧值问题
   const chaptersDataRef = useRef<Record<string, ChapterFullData>>({});
@@ -347,6 +352,13 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
         });
         setChaptersData(chaptersDataMap);
 
+        // 记录每章 API 字数，用于页面实时总字数计算
+        const wordCountMap: Record<string, number> = {};
+        allChapters.forEach(chapter => {
+          wordCountMap[String(chapter.id)] = chapter.word_count ?? 0;
+        });
+        setApiChapterWordCounts(wordCountMap);
+
         // 选择章节：优先 URL → 刷新前选中的章节（仍在列表中）→ 最后一章，避免保存后跳到最后一章
         if (allChapters.length > 0) {
           const urlChapterId = searchParams.get('chapterId');
@@ -410,6 +422,10 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
     updateChapterNumber,
     updateChapterLocally,
     removeChapterLocally,
+    apiChapterWordCounts,
+    updateChapterWordCount: (chapterId: string, wordCount: number) => {
+      setApiChapterWordCounts(prev => ({ ...prev, [chapterId]: wordCount }));
+    },
     deletedChapters,
     loadDeletedChapters,
   };

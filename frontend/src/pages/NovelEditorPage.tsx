@@ -179,6 +179,8 @@ export default function NovelEditorPage() {
     updateChapterNumber,
     updateChapterLocally,
     removeChapterLocally,
+    apiChapterWordCounts,
+    updateChapterWordCount,
     deletedChapters,
     loadDeletedChapters,
   } = useChapterManagement({
@@ -286,6 +288,7 @@ export default function NovelEditorPage() {
       hasUserEdited.current = true;
       const wordCount = countCharacters(content);
       setCurrentChapterWordCount(wordCount);
+      if (selectedChapter) updateChapterWordCount(selectedChapter, wordCount);
       
       // 更新本地缓存
       // 关键修复：既然正在使用 Yjs 进行实时同步，我们将本地缓存标记为“已同步”
@@ -516,13 +519,13 @@ export default function NovelEditorPage() {
         const content = editor.getHTML();
         const wordCount = countCharacters(content);
         setCurrentChapterWordCount(wordCount);
+        updateChapterWordCount(selectedChapter, wordCount);
       }, 100);
       return () => clearTimeout(timer);
     } else if (!selectedChapter) {
-      // 没有选中章节时，重置字数
       setCurrentChapterWordCount(0);
     }
-  }, [selectedChapter, editor]);
+  }, [selectedChapter, editor]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // ===== 移动端点击外部关闭 tooltip =====
   useEffect(() => {
@@ -932,7 +935,7 @@ export default function NovelEditorPage() {
                 <span className="stats-divider">·</span>
                 <span>本章字数：{currentChapterWordCount}</span>
                 <span className="stats-divider">·</span>
-                <span>总字数：{work?.word_count ?? 0}</span>
+                <span>总字数：{Object.values(apiChapterWordCounts).reduce((sum, n) => sum + n, 0)}</span>
                 <span 
                   className="word-count-tooltip-wrapper"
                   data-tooltip-visible={showWordCountTooltip}
