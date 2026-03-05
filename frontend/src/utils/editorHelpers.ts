@@ -3,7 +3,8 @@ export function countCharacters(html: string): number {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = html;
   const text = tempDiv.textContent || tempDiv.innerText || '';
-  return text.length;
+  const matches = text.match(/[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]/g);
+  return matches ? matches.length : 0;
 }
 
 export function convertTextToHtml(text: string): string {

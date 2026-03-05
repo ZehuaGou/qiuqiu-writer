@@ -179,6 +179,8 @@ export default function NovelEditorPage() {
     updateChapterNumber,
     updateChapterLocally,
     removeChapterLocally,
+    apiChapterWordCounts,
+    updateChapterWordCount,
     deletedChapters,
     loadDeletedChapters,
   } = useChapterManagement({
@@ -286,6 +288,7 @@ export default function NovelEditorPage() {
       hasUserEdited.current = true;
       const wordCount = countCharacters(content);
       setCurrentChapterWordCount(wordCount);
+      if (selectedChapter) updateChapterWordCount(selectedChapter, wordCount);
       
       // 更新本地缓存
       // 关键修复：既然正在使用 Yjs 进行实时同步，我们将本地缓存标记为“已同步”
@@ -516,13 +519,13 @@ export default function NovelEditorPage() {
         const content = editor.getHTML();
         const wordCount = countCharacters(content);
         setCurrentChapterWordCount(wordCount);
+        updateChapterWordCount(selectedChapter, wordCount);
       }, 100);
       return () => clearTimeout(timer);
     } else if (!selectedChapter) {
-      // 没有选中章节时，重置字数
       setCurrentChapterWordCount(0);
     }
-  }, [selectedChapter, editor]);
+  }, [selectedChapter, editor]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // ===== 移动端点击外部关闭 tooltip =====
   useEffect(() => {
@@ -553,7 +556,10 @@ export default function NovelEditorPage() {
   // ===== 选中文本浮动菜单（AI 对话 / 在编辑器中优化句子） =====
   useEffect(() => {
     if (!editor) return;
-    const onSelectionUpdate = () => {
+
+    let isMouseDown = false;
+
+    const showPopupForSelection = () => {
       const { from, to } = editor.state.selection;
       const doc = editor.state.doc;
       if (from === to) {
@@ -582,8 +588,30 @@ export default function NovelEditorPage() {
         endChar,
       });
     };
+
+    const onMouseDown = () => {
+      isMouseDown = true;
+      setSelectionPopup((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+    };
+
+    const onMouseUp = () => {
+      isMouseDown = false;
+      // 等 TipTap 处理完选区后再显示
+      setTimeout(showPopupForSelection, 30);
+    };
+
+    const onSelectionUpdate = () => {
+      // 鼠标拖选中不显示，松开后 mouseup 触发；键盘选择时直接显示
+      if (isMouseDown) return;
+      showPopupForSelection();
+    };
+
+    editor.view.dom.addEventListener('mousedown', onMouseDown);
+    editor.view.dom.addEventListener('mouseup', onMouseUp);
     editor.on('selectionUpdate', onSelectionUpdate);
     return () => {
+      editor.view.dom.removeEventListener('mousedown', onMouseDown);
+      editor.view.dom.removeEventListener('mouseup', onMouseUp);
       editor.off('selectionUpdate', onSelectionUpdate);
     };
   }, [editor]);
@@ -907,7 +935,7 @@ export default function NovelEditorPage() {
                 <span className="stats-divider">·</span>
                 <span>本章字数：{currentChapterWordCount}</span>
                 <span className="stats-divider">·</span>
-                <span>总字数：{work?.word_count ?? 0}</span>
+                <span>总字数：{Object.values(apiChapterWordCounts).reduce((sum, n) => sum + n, 0)}</span>
                 <span 
                   className="word-count-tooltip-wrapper"
                   data-tooltip-visible={showWordCountTooltip}
