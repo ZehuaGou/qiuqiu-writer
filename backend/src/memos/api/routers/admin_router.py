@@ -11,6 +11,7 @@ from memos.api.schemas.admin import (
     SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse,
     SystemMonitorResponse, CubeListResponse, CubeResponse,
     InvitationCodeListResponse, InvitationCodeResponse, GenerateInvitationCodesResponse,
+    WorkTemplateAdminCreate, WorkTemplateAdminUpdate,
 )
 from memos.api.services.admin_service import AdminService
 from memos.api.services.invitation_code_service import InvitationCodeService
@@ -142,6 +143,61 @@ async def get_audit_logs(
 ):
     service = AdminService(db)
     return await service.get_audit_logs(page, size, user_id, action)
+
+@router.get("/work-templates")
+async def get_work_templates(
+    search: str = None,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    return await service.get_work_templates(search=search)
+
+@router.get("/work-templates/{template_id}")
+async def get_work_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    result = await service.get_work_template(template_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Work template not found")
+    return result
+
+@router.post("/work-templates", status_code=status.HTTP_201_CREATED)
+async def create_work_template(
+    data: WorkTemplateAdminCreate,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    return await service.create_work_template(data, admin_id=admin_id)
+
+@router.put("/work-templates/{template_id}")
+async def update_work_template(
+    template_id: int,
+    data: WorkTemplateAdminUpdate,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    result = await service.update_work_template(template_id, data, admin_id=admin_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Work template not found")
+    return result
+
+@router.delete("/work-templates/{template_id}")
+async def delete_work_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    success = await service.delete_work_template(template_id, admin_id=admin_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Work template not found")
+    return {"success": True}
 
 @router.get("/prompt-templates", response_model=PromptTemplateListResponse)
 async def get_prompt_templates(

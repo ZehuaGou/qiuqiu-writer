@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional, List, Dict
 
 class AdminLoginRequest(BaseModel):
     username: str
@@ -97,6 +97,7 @@ class PromptTemplateResponse(BaseModel):
     component_id: str | None = None
     component_type: str | None = None
     prompt_category: str | None = None
+    work_template_id: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -124,6 +125,7 @@ class PromptTemplateCreate(BaseModel):
     component_type: str | None = None
     prompt_category: str | None = None
     data_key: str | None = None
+    work_template_id: int | None = None
 
 class SystemSettingResponse(BaseModel):
     id: int
@@ -204,6 +206,29 @@ class PromptTemplateUpdate(BaseModel):
     component_type: str | None = None
     prompt_category: str | None = None
     data_key: str | None = None
+    work_template_id: int | None = None
+
+
+class WorkTemplateAdminCreate(BaseModel):
+    name: str
+    description: str | None = None
+    work_type: str = "novel"
+    category: str | None = None
+    is_public: bool = False
+    is_system: bool = False
+    tags: List[str] | None = None
+    template_config: Dict[str, Any] | None = None
+
+
+class WorkTemplateAdminUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    work_type: str | None = None
+    category: str | None = None
+    is_public: bool | None = None
+    is_system: bool | None = None
+    tags: List[str] | None = None
+    template_config: Dict[str, Any] | None = None
 
 
 class InvitationCodeResponse(BaseModel):

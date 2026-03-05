@@ -1,46 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Input, Space, Tag, Modal, Form, Select, message, Popconfirm, Card } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  Table, Button, Input, Space, Tag, Modal, Form, Select,
+  message, Popconfirm, Card, Switch,
+} from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, RightOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-interface PromptTemplate {
+interface WorkTemplate {
   id: number;
   name: string;
-  description: string;
-  template_type: string;
-  prompt_content: string;
-  version: string;
-  is_default: boolean;
-  is_active: boolean;
-  variables: any;
-  metadata: any;
-  usage_count: number;
-  created_at: string;
+  description?: string;
+  work_type: string;
+  is_system?: boolean;
+  is_public?: boolean;
+  creator_id?: string;
+  category?: string;
+  usage_count?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
+const authHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem('admin_token')}`,
+});
+
 const PromptTemplates: React.FC = () => {
+  const navigate = useNavigate();
+  const [data, setData] = useState<WorkTemplate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<PromptTemplate[]>([]);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
-  const [keyword, setKeyword] = useState('');
-  
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+
+  // Create modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
-  const fetchData = async (page = 1, size = 20) => {
+  const fetchData = async (keyword?: string) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('admin_token');
-      const res = await axios.get('/api/v1/admin/prompt-templates', {
-        params: { page, size, keyword },
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await axios.get('/api/v1/admin/work-templates', {
+        params: keyword ? { search: keyword } : {},
+        headers: authHeaders(),
       });
-      setData(res.data.items);
-      setPagination({ ...pagination, current: page, total: res.data.total });
-    } catch (error) {
-      message.error('Failed to load prompt templates');
+      setData(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      message.error('加载作品模板失败');
     } finally {
       setLoading(false);
     }
@@ -48,133 +54,117 @@ const PromptTemplates: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [pagination.current, keyword]);
+  }, []);
 
-  const handleTableChange = (newPagination: any) => {
-    fetchData(newPagination.current, newPagination.pageSize);
-  };
-
-  const handleEdit = (record: PromptTemplate) => {
-    setEditingId(record.id);
-    form.setFieldsValue({
-      ...record,
-      variables: JSON.stringify(record.variables, null, 2),
-      metadata: JSON.stringify(record.metadata, null, 2),
-    });
-    setIsModalVisible(true);
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    fetchData(val);
   };
 
   const handleDelete = async (id: number) => {
     try {
-      const token = localStorage.getItem('admin_token');
-      await axios.delete(`/api/v1/admin/prompt-templates/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      message.success('Template deleted successfully');
-      fetchData(pagination.current);
-    } catch (error) {
-      message.error('Failed to delete template');
+      await axios.delete(`/api/v1/admin/work-templates/${id}`, { headers: authHeaders() });
+      message.success('已删除');
+      fetchData(search);
+    } catch {
+      message.error('删除失败');
     }
   };
 
-  const handleOk = async () => {
+  const handleCreate = async () => {
     try {
       const values = await form.validateFields();
-      const token = localStorage.getItem('admin_token');
-      
-      // Parse JSON fields
-      try {
-        if (values.variables) values.variables = JSON.parse(values.variables);
-        if (values.metadata) values.metadata = JSON.parse(values.metadata);
-      } catch (e) {
-        message.error('Invalid JSON format in Variables or Metadata');
-        return;
-      }
-
-      if (editingId) {
-        await axios.put(`/api/v1/admin/prompt-templates/${editingId}`, values, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        message.success('Template updated successfully');
-      } else {
-        await axios.post('/api/v1/admin/prompt-templates', values, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        message.success('Template created successfully');
-      }
-      setIsModalVisible(false);
-      fetchData(pagination.current);
-    } catch (error) {
-      message.error('Failed to save template');
+      setSaving(true);
+      await axios.post('/api/v1/admin/work-templates', values, { headers: authHeaders() });
+      message.success('创建成功');
+      setModalOpen(false);
+      form.resetFields();
+      fetchData(search);
+    } catch {
+      message.error('创建失败');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const columns: ColumnsType<PromptTemplate> = [
+  const columns: ColumnsType<WorkTemplate> = [
+    { title: 'ID', dataIndex: 'id', width: 70 },
     {
-      title: 'ID',
-      dataIndex: 'id',
-      width: 80,
-    },
-    {
-      title: 'Name',
+      title: '模板名称',
       dataIndex: 'name',
-      width: 200,
-    },
-    {
-      title: 'Type',
-      dataIndex: 'template_type',
-      width: 150,
-      render: (type) => <Tag color="blue">{type}</Tag>,
-    },
-    {
-      title: 'Version',
-      dataIndex: 'version',
-      width: 100,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'is_active',
-      width: 100,
-      render: (active) => (
-        <Tag color={active ? 'green' : 'red'}>
-          {active ? 'Active' : 'Inactive'}
-        </Tag>
+      render: (name, record) => (
+        <Button
+          type="link"
+          style={{ padding: 0, fontWeight: 500 }}
+          onClick={() => navigate(`/prompt-templates/${record.id}`)}
+        >
+          {name}
+        </Button>
       ),
     },
     {
-      title: 'Default',
-      dataIndex: 'is_default',
-      width: 100,
-      render: (def) => (def ? <Tag color="gold">Default</Tag> : '-'),
+      title: '描述',
+      dataIndex: 'description',
+      ellipsis: true,
+      render: (v) => v || '-',
     },
     {
-      title: 'Usage',
+      title: '作品类型',
+      dataIndex: 'work_type',
+      width: 100,
+      render: (v) => <Tag>{v}</Tag>,
+    },
+    {
+      title: '分类',
+      dataIndex: 'category',
+      width: 100,
+      render: (v) => v || '-',
+    },
+    {
+      title: '公开',
+      dataIndex: 'is_public',
+      width: 70,
+      render: (v) => <Tag color={v ? 'green' : 'default'}>{v ? '是' : '否'}</Tag>,
+    },
+    {
+      title: '系统',
+      dataIndex: 'is_system',
+      width: 70,
+      render: (v) => v ? <Tag color="blue">系统</Tag> : '-',
+    },
+    {
+      title: '使用次数',
       dataIndex: 'usage_count',
-      width: 100,
+      width: 90,
     },
     {
-      title: 'Actions',
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 160,
+      render: (v) => v ? v.slice(0, 19).replace('T', ' ') : '-',
+    },
+    {
+      title: '操作',
       key: 'actions',
-      width: 150,
+      width: 120,
       render: (_, record) => (
         <Space>
-          <Button 
-            type="primary" 
-            icon={<EditOutlined />} 
-            size="small" 
-            onClick={() => handleEdit(record)}
-          />
-          <Popconfirm
-            title="Delete this template?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Yes"
-            cancelText="No"
+          <Button
+            type="default"
+            icon={<RightOutlined />}
+            size="small"
+            onClick={() => navigate(`/prompt-templates/${record.id}`)}
           >
-            <Button 
-              danger 
-              icon={<DeleteOutlined />} 
-              size="small" 
-            />
+            详情
+          </Button>
+          <Popconfirm
+            title="确认删除此作品模板？删除后关联的 Prompt 模板也将一并删除。"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确认删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button danger icon={<DeleteOutlined />} size="small" />
           </Popconfirm>
         </Space>
       ),
@@ -182,139 +172,85 @@ const PromptTemplates: React.FC = () => {
   ];
 
   return (
-    <div>
-      <Card 
-        title="Prompt Templates" 
-        extra={
-          <Space>
-            <Input 
-              placeholder="Search templates" 
-              prefix={<SearchOutlined />} 
-              onChange={(e) => setKeyword(e.target.value)}
-              style={{ width: 200 }}
-            />
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={() => {
-                setEditingId(null);
-                form.resetFields();
-                form.setFieldsValue({
-                  version: '1.0',
-                  is_active: true,
-                  is_default: false,
-                  variables: '{}',
-                  metadata: '{}'
-                });
-                setIsModalVisible(true);
-              }}
-            >
-              Add New
-            </Button>
-          </Space>
-        }
-      >
-        <Table 
-          columns={columns} 
-          dataSource={data} 
-          rowKey="id"
-          pagination={pagination}
-          loading={loading}
-          onChange={handleTableChange}
-        />
-      </Card>
+    <Card
+      title="作品模板"
+      extra={
+        <Space>
+          <Input.Search
+            placeholder="搜索模板名称/描述"
+            prefix={<SearchOutlined />}
+            onSearch={handleSearch}
+            onChange={(e) => !e.target.value && fetchData()}
+            allowClear
+            style={{ width: 240 }}
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              form.resetFields();
+              form.setFieldsValue({ work_type: 'novel', is_public: false, is_system: false });
+              setModalOpen(true);
+            }}
+          >
+            新建模板
+          </Button>
+        </Space>
+      }
+    >
+      <Table
+        columns={columns}
+        dataSource={data}
+        rowKey="id"
+        loading={loading}
+        pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+      />
 
       <Modal
-        title={editingId ? "Edit Template" : "New Template"}
-        open={isModalVisible}
-        onOk={handleOk}
-        onCancel={() => setIsModalVisible(false)}
-        width={800}
+        title="新建作品模板"
+        open={modalOpen}
+        onOk={handleCreate}
+        onCancel={() => setModalOpen(false)}
+        confirmLoading={saving}
+        okText="创建"
+        cancelText="取消"
+        width={560}
       >
-        <Form
-          form={form}
-          layout="vertical"
-        >
-          <Form.Item
-            name="name"
-            label="Name"
-            rules={[{ required: true, message: 'Please enter template name' }]}
-          >
-            <Input />
-          </Form.Item>
-          
-          <Form.Item
-            name="description"
-            label="Description"
-          >
-            <Input.TextArea rows={2} />
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="name" label="模板名称" rules={[{ required: true, message: '请输入模板名称' }]}>
+            <Input placeholder="如：网络小说标准模板" />
           </Form.Item>
 
-          <Space style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-            <Form.Item
-              name="template_type"
-              label="Type"
-              rules={[{ required: true, message: 'Please enter type' }]}
-              style={{ width: 200 }}
-            >
-              <Input placeholder="e.g. book_analysis" />
-            </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea rows={2} placeholder="模板用途说明" />
+          </Form.Item>
 
-            <Form.Item
-              name="version"
-              label="Version"
-              style={{ width: 100 }}
-            >
-              <Input />
-            </Form.Item>
-
-            <Form.Item
-              name="is_active"
-              label="Active"
-              valuePropName="checked"
-            >
+          <Space style={{ display: 'flex' }} align="start">
+            <Form.Item name="work_type" label="作品类型" rules={[{ required: true }]} style={{ width: 160 }}>
               <Select options={[
-                { label: 'Active', value: true },
-                { label: 'Inactive', value: false }
+                { label: '小说', value: 'novel' },
+                { label: '散文', value: 'essay' },
+                { label: '剧本', value: 'script' },
+                { label: '其他', value: 'other' },
               ]} />
             </Form.Item>
 
-            <Form.Item
-              name="is_default"
-              label="Default"
-              valuePropName="checked"
-            >
-               <Select options={[
-                { label: 'Yes', value: true },
-                { label: 'No', value: false }
-              ]} />
+            <Form.Item name="category" label="分类" style={{ width: 160 }}>
+              <Input placeholder="如：网络文学" />
             </Form.Item>
           </Space>
 
-          <Form.Item
-            name="prompt_content"
-            label="Prompt Content"
-            rules={[{ required: true, message: 'Please enter prompt content' }]}
-          >
-            <Input.TextArea rows={10} showCount />
-          </Form.Item>
-
-          <Form.Item
-            name="variables"
-            label="Variables (JSON)"
-          >
-            <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="metadata"
-            label="Metadata (JSON)"
-          >
-            <Input.TextArea rows={4} style={{ fontFamily: 'monospace' }} />
-          </Form.Item>
+          <Space style={{ display: 'flex' }} align="center">
+            <Form.Item name="is_public" label="公开" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="is_system" label="系统模板" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Space>
         </Form>
       </Modal>
-    </div>
+    </Card>
   );
 };
 

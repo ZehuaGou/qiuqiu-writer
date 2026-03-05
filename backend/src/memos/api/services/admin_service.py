@@ -14,11 +14,13 @@ from memos.api.models.user import User
 from memos.api.models.work import Work
 from memos.api.models.prompt_template import PromptTemplate
 from memos.api.models.system import SystemSetting, AuditLog
+from memos.api.models.template import WorkTemplate
 from memos.api.schemas.admin import (
     AdminCreateRequest, AdminLoginRequest, TokenResponse, AdminUserResponse,
     UserListResponse, UserResponse, WorkListResponse, WorkResponse,
     PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate,
-    SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse
+    SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse,
+    WorkTemplateAdminCreate, WorkTemplateAdminUpdate,
 )
 
 settings = get_settings()
@@ -116,7 +118,8 @@ class AdminService:
             component_id=data.component_id,
             component_type=data.component_type,
             prompt_category=data.prompt_category,
-            data_key=data.data_key
+            data_key=data.data_key,
+            work_template_id=data.work_template_id,
         )
         self.db.add(template)
         
@@ -235,6 +238,111 @@ class AdminService:
         )
         self.db.add(audit_log)
         
+        await self.db.commit()
+        return True
+
+    async def get_work_templates(self, search: Optional[str] = None):
+        """获取所有作品模板（不过滤用户）"""
+        query = select(WorkTemplate).order_by(WorkTemplate.created_at.desc())
+        if search:
+            query = query.where(
+                (WorkTemplate.name.ilike(f"%{search}%")) |
+                (WorkTemplate.description.ilike(f"%{search}%"))
+            )
+        result = await self.db.execute(query)
+        templates = result.scalars().all()
+        return [
+            {
+                "id": t.id,
+                "name": t.name,
+                "description": t.description,
+                "work_type": t.work_type,
+                "is_system": t.is_system,
+                "is_public": t.is_public,
+                "creator_id": t.creator_id,
+                "category": t.category,
+                "usage_count": t.usage_count or 0,
+                "created_at": str(t.created_at) if t.created_at else None,
+                "updated_at": str(t.updated_at) if t.updated_at else None,
+            }
+            for t in templates
+        ]
+
+    async def get_work_template(self, template_id: int):
+        """获取单个作品模板"""
+        t = await self.db.get(WorkTemplate, template_id)
+        if not t:
+            return None
+        return {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "work_type": t.work_type,
+            "is_system": t.is_system,
+            "is_public": t.is_public,
+            "creator_id": t.creator_id,
+            "category": t.category,
+            "tags": t.tags,
+            "usage_count": t.usage_count or 0,
+            "template_config": t.template_config,
+            "created_at": str(t.created_at) if t.created_at else None,
+            "updated_at": str(t.updated_at) if t.updated_at else None,
+        }
+
+    async def create_work_template(self, data: WorkTemplateAdminCreate, admin_id: str = "admin"):
+        """创建作品模板"""
+        template = WorkTemplate(
+            name=data.name,
+            description=data.description,
+            work_type=data.work_type,
+            category=data.category,
+            is_public=data.is_public,
+            is_system=data.is_system,
+            tags=data.tags or [],
+            template_config=data.template_config or {},
+        )
+        self.db.add(template)
+        self.db.add(AuditLog(
+            user_id=admin_id,
+            action="create",
+            target_type="work_template",
+            details={"name": data.name, "work_type": data.work_type}
+        ))
+        await self.db.commit()
+        await self.db.refresh(template)
+        return await self.get_work_template(template.id)
+
+    async def update_work_template(self, template_id: int, data: WorkTemplateAdminUpdate, admin_id: str = "admin"):
+        """更新作品模板"""
+        t = await self.db.get(WorkTemplate, template_id)
+        if not t:
+            return None
+        for field in ("name", "description", "work_type", "category", "is_public", "is_system", "tags", "template_config"):
+            val = getattr(data, field, None)
+            if val is not None:
+                setattr(t, field, val)
+        self.db.add(AuditLog(
+            user_id=admin_id,
+            action="update",
+            target_type="work_template",
+            details={"id": template_id}
+        ))
+        await self.db.commit()
+        await self.db.refresh(t)
+        return await self.get_work_template(t.id)
+
+    async def delete_work_template(self, template_id: int, admin_id: str = "admin") -> bool:
+        """删除作品模板"""
+        t = await self.db.get(WorkTemplate, template_id)
+        if not t:
+            return False
+        self.db.add(AuditLog(
+            user_id=admin_id,
+            action="delete",
+            target_type="work_template",
+            details={"id": template_id, "name": t.name}
+        ))
+        await self.db.delete(t)
         await self.db.commit()
         return True
 
