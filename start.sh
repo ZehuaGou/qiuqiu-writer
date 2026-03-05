@@ -5,6 +5,8 @@
 USE_DOCKER=false
 START_INFRA=false
 START_APP=false
+BUILD_FRONTEND=false
+BUILD_ADMIN=false
 
 # 检查参数
 for arg in "$@"; do
@@ -18,6 +20,16 @@ for arg in "$@"; do
         --app)
             START_APP=true
             ;;
+        --build-frontend)
+            BUILD_FRONTEND=true
+            ;;
+        --build-admin)
+            BUILD_ADMIN=true
+            ;;
+        --build-all)
+            BUILD_FRONTEND=true
+            BUILD_ADMIN=true
+            ;;
         *)
             echo "未知参数: $arg"
             exit 1
@@ -29,6 +41,23 @@ done
 if [ "$USE_DOCKER" = true ] && [ "$START_INFRA" = false ] && [ "$START_APP" = false ]; then
     START_INFRA=true
     START_APP=true
+fi
+
+# ---------- 构建前端项目 ----------
+if [ "$BUILD_FRONTEND" = true ]; then
+    echo "📦 构建 Frontend..."
+    cd "$(dirname "$0")/frontend" || exit 1
+    npm install && npm run build
+    echo "✅ Frontend 构建完成"
+    cd - > /dev/null || exit 1
+fi
+
+if [ "$BUILD_ADMIN" = true ]; then
+    echo "📦 构建 Admin..."
+    cd "$(dirname "$0")/admin" || exit 1
+    npm install && npm run build
+    echo "✅ Admin 构建完成"
+    cd - > /dev/null || exit 1
 fi
 
 echo "=========================================="

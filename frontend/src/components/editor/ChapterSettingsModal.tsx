@@ -5,7 +5,6 @@ import { formatOutlineForEditor, formatDetailedOutlineForEditor } from '../../ut
 import LoadingSpinner from '../common/LoadingSpinner';
 import MessageModal from '../common/MessageModal';
 import type { MessageType } from '../common/MessageModal';
-import { parseError } from '../../utils/errorUtils';
 import './ChapterSettingsModal.css';
 
 interface Character {
@@ -251,10 +250,6 @@ export default function ChapterSettingsModal({
 
   const showMessage = (message: string, type: MessageType = 'info', title?: string, onConfirm?: () => void) => {
     setMessageState({ isOpen: true, type, message, title, onConfirm });
-  };
-
-  const showToast = (message: string, type: MessageType = 'success') => {
-    setMessageState({ isOpen: true, type, message, toast: true, autoCloseMs: 2000 });
   };
 
   const closeMessage = () => {

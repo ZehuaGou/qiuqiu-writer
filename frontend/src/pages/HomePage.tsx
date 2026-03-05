@@ -107,7 +107,6 @@ export default function HomePage() {
         navigate(`/novel/editor?workId=${newWork.id}`);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '操作失败';
       showMessage(parseError(err), 'error', '操作失败');
     } finally {
       setCreating(false);
