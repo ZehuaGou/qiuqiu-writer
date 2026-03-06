@@ -773,7 +773,7 @@ export default function NovelEditorPage() {
           showMessage('作品已删除', 'success', undefined, undefined, { toast: true, autoCloseMs: 2000 });
           const uid = authApi.getUserInfo()?.id;
           navigate(uid ? `/users/${uid}` : '/');
-        } catch (err) {
+        } catch {
 
           showMessage('删除作品失败', 'error');
         }
