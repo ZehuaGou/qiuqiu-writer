@@ -24,9 +24,13 @@ help:
 	@echo "  make logs     - 查看所有日志"
 	@echo "  make logs-app - 查看应用日志"
 	@echo "  make status   - 查看容器状态"
+	@echo "  make down-infra     - 停止基础设施容器"
+	@echo "  make down-app     	 - 停止应用容器"
 	@echo "  make build-frontend - 构建前端项目"
 	@echo "  make build-admin    - 构建后台管理项目"
 	@echo "  make build-all      - 构建所有前端项目"
+	@echo "  make build-backend  - 构建后端 Docker 镜像"
+	@echo "  make rebuild        - 重新构建所有并重启服务"
 	@echo "=========================================="
 
 # 检查 Docker 是否运行 (仅作为简单检查)
@@ -72,6 +76,18 @@ build-admin:
 build-all: build-frontend build-admin
 	@echo "✅ 所有前端项目构建完成"
 
+# 构建后端 Docker 镜像
+.PHONY: build-image-backend
+build-image-backend:
+	@echo "📦 构建 Backend Docker 镜像..."
+	docker build -t qiuqiuwriter-backend:latest -f backend/docker/Dockerfile backend
+	@echo "✅ Backend 镜像构建完成"
+
+# 重新构建应用并重启 (不影响 infra)
+.PHONY: rebuild
+rebuild: down-app build-all build-image-backend app
+	@echo "✅ 应用已重新构建并重启"
+
 # 启动所有
 .PHONY: up
 up: infra app
@@ -83,6 +99,13 @@ down:
 	$(DOCKER_COMPOSE) $(APP_COMPOSE) down
 	$(DOCKER_COMPOSE) $(INFRA_COMPOSE) down
 	@echo "✅ 所有服务已停止"
+
+# 仅停止应用
+.PHONY: down-app
+down-app:
+	@echo "🛑 停止应用服务..."
+	$(DOCKER_COMPOSE) $(APP_COMPOSE) down
+	@echo "✅ 应用服务已停止"
 
 # 重启
 .PHONY: restart

@@ -7,6 +7,8 @@ START_INFRA=false
 START_APP=false
 BUILD_FRONTEND=false
 BUILD_ADMIN=false
+BUILD_BACKEND=false
+REBUILD=false
 
 # 检查参数
 for arg in "$@"; do
@@ -26,9 +28,20 @@ for arg in "$@"; do
         --build-admin)
             BUILD_ADMIN=true
             ;;
+        --build-backend)
+            BUILD_BACKEND=true
+            ;;
         --build-all)
             BUILD_FRONTEND=true
             BUILD_ADMIN=true
+            ;;
+        --rebuild)
+            REBUILD=true
+            USE_DOCKER=true
+            START_APP=true
+            BUILD_FRONTEND=true
+            BUILD_ADMIN=true
+            BUILD_BACKEND=true
             ;;
         *)
             echo "未知参数: $arg"
@@ -41,6 +54,20 @@ done
 if [ "$USE_DOCKER" = true ] && [ "$START_INFRA" = false ] && [ "$START_APP" = false ]; then
     START_INFRA=true
     START_APP=true
+fi
+
+# ---------- 停止旧容器 (Rebuild 模式) ----------
+if [ "$REBUILD" = true ]; then
+    echo "🛑 正在停止应用容器以进行重建..."
+    # 仅停止 app 相关的容器
+    docker-compose -f docker/docker-compose.app.yml -p qiuqiuwriter-app down
+fi
+
+# ---------- 构建后端 Docker 镜像 ----------
+if [ "$BUILD_BACKEND" = true ]; then
+    echo "📦 构建 Backend Docker 镜像..."
+    docker build -t qiuqiuwriter-backend:latest -f backend/docker/Dockerfile backend
+    echo "✅ Backend 镜像构建完成"
 fi
 
 # ---------- 构建前端项目 ----------
