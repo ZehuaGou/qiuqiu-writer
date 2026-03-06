@@ -1830,9 +1830,13 @@ class ShareDBService:
                             
                             # 计算章节字数（去除HTML标签，统计纯文本字符数）
                             import re as re_module
+                            import html
                             text_content = re_module.sub(r'<[^>]+>', '', document["content"])
-                            # 统计字符数（包括所有字符，与前端保持一致）
-                            chapter_word_count = len(text_content)
+                            # 解码HTML实体（如 &nbsp; &lt; 等）
+                            text_content = html.unescape(text_content)
+                            # 统计字符数（只统计汉字、英文字母和数字，去除空格、换行、标点等，与前端保持一致）
+                            matches = re_module.findall(r'[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]', text_content)
+                            chapter_word_count = len(matches)
                             
                             # 获取章节服务
                             session = db_session

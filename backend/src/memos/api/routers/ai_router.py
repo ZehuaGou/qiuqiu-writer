@@ -1604,10 +1604,15 @@ async def create_work_from_file(
                 if chapter_data.content:
                     # 如果内容是HTML，需要提取纯文本
                     import re
+                    import html
                     # 简单的HTML标签去除
                     text_content = re.sub(r'<[^>]+>', '', chapter_data.content)
-                    # 统计字符数（包括所有字符，与前端保持一致）
-                    chapter_word_count = len(text_content)
+                    # 解码HTML实体（如 &nbsp; &lt; 等）
+                    text_content = html.unescape(text_content)
+                    # 统计字符数（只统计汉字、英文字母和数字，去除空格、换行、标点等，与前端保持一致）
+                    # 前端逻辑: text.match(/[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]/g)
+                    matches = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbfa-zA-Z0-9]', text_content)
+                    chapter_word_count = len(matches)
                 
                 # 创建章节
                 chapter = await chapter_service.create_chapter(
