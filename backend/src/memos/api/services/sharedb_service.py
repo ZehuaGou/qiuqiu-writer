@@ -34,10 +34,11 @@ class ShareDBService:
 
     async def initialize(self):
         """初始化服务"""
-        if self._initialized:
+        # 如果已用 MongoDB 成功初始化，直接返回
+        if self._initialized and self.use_mongodb:
             return
 
-        # 优先尝试使用MongoDB
+        # 优先尝试使用MongoDB（每次 use_mongodb=False 时都重试，解决启动时序问题）
         try:
             self.mongodb_db = await get_mongodb_db()
             # 测试MongoDB连接
@@ -45,17 +46,23 @@ class ShareDBService:
             self.use_mongodb = True
             self._initialized = True
             logger.info("ShareDB服务初始化成功（使用MongoDB）")
+            return
         except Exception as e:
             logger.warning(f"MongoDB连接失败，回退到Redis: {e}")
-            # 如果MongoDB不可用，回退到Redis
-            try:
-                self.redis_client = await get_redis()
-                self.use_mongodb = False
-                self._initialized = True
-                logger.info("ShareDB服务初始化成功（使用Redis）")
-            except Exception as redis_err:
-                logger.error(f"Redis连接也失败: {redis_err}")
-                raise
+
+        # 如果已经用 Redis 初始化过，不需要重复初始化
+        if self._initialized:
+            return
+
+        # 首次初始化：回退到 Redis
+        try:
+            self.redis_client = await get_redis()
+            self.use_mongodb = False
+            self._initialized = True
+            logger.info("ShareDB服务初始化成功（使用Redis，后续调用将持续重试MongoDB）")
+        except Exception as redis_err:
+            logger.error(f"Redis连接也失败: {redis_err}")
+            raise
 
     async def create_document(self, document_id: str, initial_content: Dict[str, Any]):
         """创建新文档"""

@@ -292,26 +292,35 @@ async def export_work(
         except ImportError:
             raise HTTPException(status_code=500, detail="Word导出功能不可用：缺少python-docx依赖")
 
+        # XML 1.0 只允许: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+        _xml_illegal = re.compile(
+            r'[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]'
+        )
+
+        def sanitize(text: str) -> str:
+            return _xml_illegal.sub('', text) if text else ''
+
         doc = Document()
-        doc.add_heading(work.title, 0)
-        
+        doc.add_heading(sanitize(work.title), 0)
+
         if work.description:
-            doc.add_paragraph(work.description)
-            
+            doc.add_paragraph(sanitize(work.description))
+
         doc.add_page_break()
-        
+
         current_volume = None
         for item in export_content:
             if item['volume'] != current_volume and item['volume'] is not None:
                 current_volume = item['volume']
                 doc.add_heading(f"第{current_volume}卷", level=1)
-                
-            doc.add_heading(item['title'], level=2)
+
+            doc.add_heading(sanitize(item['title']), level=2)
             # 处理段落
             paragraphs = item['content'].split('\n')
             for p in paragraphs:
-                if p.strip():
-                    doc.add_paragraph(p.strip())
+                cleaned = sanitize(p).strip()
+                if cleaned:
+                    doc.add_paragraph(cleaned)
             doc.add_page_break()
             
         output = io.BytesIO()

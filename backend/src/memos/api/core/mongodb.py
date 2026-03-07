@@ -45,7 +45,12 @@ async def get_mongodb_client() -> AsyncIOMotorClient:
                 serverSelectionTimeoutMS=5000,
             )
             # 测试连接
-            await _mongodb_client.admin.command('ping')
+            try:
+                await _mongodb_client.admin.command('ping')
+            except Exception:
+                # ping 失败时重置缓存，避免后续调用复用坏连接
+                _mongodb_client = None
+                raise
             logger.info(f"MongoDB连接成功: {log_url}")
         except Exception as e:
             error_str = str(e)
@@ -61,7 +66,11 @@ async def get_mongodb_client() -> AsyncIOMotorClient:
                         serverSelectionTimeoutMS=5000,
                     )
                     # 测试连接
-                    await _mongodb_client.admin.command('ping')
+                    try:
+                        await _mongodb_client.admin.command('ping')
+                    except Exception:
+                        _mongodb_client = None
+                        raise
                     logger.info(f"MongoDB连接成功（无认证模式）: {no_auth_url}")
                     logger.warning(
                         "MongoDB 未启用访问控制，使用无认证连接。"
