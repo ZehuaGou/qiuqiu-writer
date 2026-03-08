@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { worksApi, type WorkCollaborator } from '../utils/worksApi';
 import './ShareWorkModal.css';
@@ -40,21 +40,53 @@ function PermSelect({ value, onChange }: { value: string; onChange: (v: string) 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     
     const updatePosition = () => {
       if (btnRef.current) {
         const rect = btnRef.current.getBoundingClientRect();
-        // Dropdown width is 240px (from CSS)
-        // Align right edge of dropdown with right edge of button
-        const left = Math.max(10, rect.right - 240); 
-        const top = rect.bottom + 4;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Measure dropdown height if available
+        let dropdownHeight = 0;
+        if (dropdownRef.current) {
+          dropdownHeight = dropdownRef.current.offsetHeight;
+        }
+
+        // Horizontal positioning: align right edge, but clamp to viewport
+        // Default: align right edge of dropdown with right edge of button
+        let left = rect.right - 240; 
+        
+        // If aligning right pushes it off the left edge, align left edge instead
+        if (left < 10) {
+          left = Math.max(10, rect.left);
+        }
+        
+        // Ensure it doesn't overflow right edge
+        if (left + 240 > viewportWidth - 10) {
+          left = viewportWidth - 250; 
+        }
+
+        // Vertical positioning: default below
+        let top = rect.bottom + 4;
+        
+        // Check if there's enough space below
+        const spaceBelow = viewportHeight - rect.bottom;
+        // If not enough space below, and there is space above, flip it
+        if (spaceBelow < (dropdownHeight || 200) + 10 && rect.top > (dropdownHeight || 200) + 10) {
+          top = rect.top - (dropdownHeight || 200) - 4;
+        }
+
         setCoords({ top, left });
       }
     };
 
     updatePosition();
+    
+    // Use requestAnimationFrame to re-check after render for height measurement
+    const rafId = requestAnimationFrame(updatePosition);
     
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -72,6 +104,7 @@ function PermSelect({ value, onChange }: { value: string; onChange: (v: string) 
     window.addEventListener('scroll', updatePosition, true);
     
     return () => {
+      cancelAnimationFrame(rafId);
       document.removeEventListener('mousedown', handler);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);

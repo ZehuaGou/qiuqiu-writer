@@ -423,3 +423,66 @@
   from { opacity: 0; transform: translate(-50%, -10px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
+
+@keyframes swm-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Mobile Adaptation */
+@media (max-width: 640px) {
+  .swm-overlay {
+    align-items: flex-end;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .swm-dialog {
+    width: 100%;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    animation: swm-slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .swm-list {
+    max-height: 60vh;
+  }
+
+  /* Mobile Invite Row adaptation */
+  .swm-invite-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .swm-invite-input-wrap {
+    min-width: 100%;
+  }
+
+  .swm-perm-wrap {
+    flex: 1;
+  }
+  
+  .swm-perm-btn {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .swm-invite-btn {
+    flex: 1;
+  }
+  
+  .swm-toast {
+    max-width: 90vw;
+    white-space: normal;
+    text-align: center;
+  }
+}

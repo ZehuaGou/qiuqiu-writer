@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Info, Menu, X, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, MessageCircleQuestion } from 'lucide-react';
+import { ArrowLeft, Info, Menu, X, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, MessageCircleQuestion, Share2 } from 'lucide-react';
 import { EditorContent } from '@tiptap/react';
 
 // 组件
@@ -1027,6 +1027,12 @@ export default function NovelEditorPage() {
         <div className="header-right">
           {isMobile ? (
             <>
+              <button
+                className="mobile-share-btn"
+                onClick={() => setIsShareModalOpen(true)}
+              >
+                <Share2 size={24} />
+              </button>
               <button
                 className="mobile-menu-btn"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

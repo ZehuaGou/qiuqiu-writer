@@ -2075,7 +2075,8 @@
 @media (max-width: 768px) {
   /* 移动端菜单按钮 */
   .mobile-menu-btn,
-  .mobile-chat-btn {
+  .mobile-chat-btn,
+  .mobile-share-btn {
     width: 40px;
     height: 40px;
     display: flex;
@@ -2092,12 +2093,14 @@
   }
 
   .mobile-menu-btn:hover,
-  .mobile-chat-btn:hover {
+  .mobile-chat-btn:hover,
+  .mobile-share-btn:hover {
     background: var(--bg-tertiary, #f0f0f0);
   }
 
   .mobile-menu-btn:active,
-  .mobile-chat-btn:active {
+  .mobile-chat-btn:active,
+  .mobile-share-btn:active {
     transform: scale(0.95);
   }
 
