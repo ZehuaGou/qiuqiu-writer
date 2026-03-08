@@ -10,6 +10,7 @@ interface ChapterEditorToolbarProps {
   onOpenHistory?: () => void;
   headingMenuOpen: boolean;
   setHeadingMenuOpen: (open: boolean) => void;
+  readOnly?: boolean;
 }
 
 export default function ChapterEditorToolbar({
@@ -19,7 +20,10 @@ export default function ChapterEditorToolbar({
   onOpenHistory,
   headingMenuOpen,
   setHeadingMenuOpen,
+  readOnly,
 }: ChapterEditorToolbarProps) {
+  if (readOnly) return null;
+
   const headingMenuRef = useRef<HTMLDivElement>(null);
   const headingButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);

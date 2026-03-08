@@ -75,7 +75,7 @@ const LocationNode = ({ data }: { data: LocationNodeData }) => {
   );
 };
 
-export default function MapView() {
+export default function MapView({ readOnly }: { readOnly?: boolean }) {
   const [locations, setLocations] = useState<MapLocation[]>(initialLocations);
   const [connections, setConnections] = useState<MapConnection[]>(initialConnections);
   const [editingLocation, setEditingLocation] = useState<string | null>(null);
@@ -396,20 +396,40 @@ export default function MapView() {
     setConnections((prev) => prev.filter((c) => c.id !== connectionId));
   };
 
+  const handleSaveConnection = () => {
+    if (editingConnection) {
+      setConnections((prev) =>
+        prev.map((c) =>
+          c.id === editingConnection
+            ? {
+                ...c,
+                type: editForm.connectionType || c.type,
+                description: editForm.connectionDescription || c.description,
+              }
+            : c
+        )
+      );
+      setEditingConnection(null);
+      setEditForm({});
+    }
+  };
+
   return (
     <div className="map-view">
       <div className="map-header">
         <h2 className="map-title">地图</h2>
-        <div className="map-actions">
-          <button className="action-btn" onClick={handleAddLocation}>
-            <Plus size={16} />
-            <span>添加地点</span>
-          </button>
-          <button className="action-btn" onClick={handleAddConnection}>
-            <Plus size={16} />
-            <span>添加连接</span>
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="map-actions">
+            <button className="action-btn" onClick={handleAddLocation}>
+              <Plus size={16} />
+              <span>添加地点</span>
+            </button>
+            <button className="action-btn" onClick={handleAddConnection}>
+              <Plus size={16} />
+              <span>添加连接</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="map-content">
@@ -437,18 +457,20 @@ export default function MapView() {
                       <div className="location-description">{location.description}</div>
                     )}
                   </div>
-                  <div className="location-actions">
-                    <button
-                      className="action-icon-btn"
-                      title="删除"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteLocation(location.id);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {!readOnly && (
+                    <div className="location-actions">
+                      <button
+                        className="action-icon-btn"
+                        title="删除"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteLocation(location.id);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -482,18 +504,20 @@ export default function MapView() {
                     {connection.description && (
                       <div className="connection-description">{connection.description}</div>
                     )}
-                    <div className="connection-actions">
-                      <button
-                        className="action-icon-btn"
-                        title="删除"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteConnection(connection.id);
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                    {!readOnly && (
+                      <div className="connection-actions">
+                        <button
+                          className="action-icon-btn"
+                          title="删除"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConnection(connection.id);
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -628,7 +652,7 @@ export default function MapView() {
       {editingLocation && (
         <div className="edit-modal-overlay" onClick={() => { setEditingLocation(null); setEditForm({}); }}>
           <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>编辑地点</h4>
+            <h4>{readOnly ? '查看地点' : '编辑地点'}</h4>
             <div className="modal-form">
               <label>
                 <span>地点名称</span>
@@ -639,6 +663,7 @@ export default function MapView() {
                   className="edit-input"
                   placeholder="地点名称"
                   autoFocus
+                  disabled={readOnly}
                 />
               </label>
               <label>
@@ -647,8 +672,9 @@ export default function MapView() {
                   value={editForm.locationDescription || ''}
                   onChange={(e) => setEditForm({ ...editForm, locationDescription: e.target.value })}
                   className="edit-textarea"
-                  placeholder="地点描述"
+                  placeholder="描述这个地点..."
                   rows={3}
+                  disabled={readOnly}
                 />
               </label>
               <div className="modal-actions">
@@ -659,73 +685,74 @@ export default function MapView() {
                     setEditForm({});
                   }}
                 >
-                  取消
+                  {readOnly ? '关闭' : '取消'}
                 </button>
-                <div className="footer-spacer" />
-                <button className="save-btn" onClick={handleSaveLocation}>
-                  保存
-                </button>
+                {!readOnly && (
+                  <>
+                    <div className="footer-spacer" />
+                    <button className="save-btn" onClick={handleSaveLocation}>
+                      保存
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* 连接信息弹窗 */}
-      {editingConnection && (() => {
-        const connection = connections.find((c) => c.id === editingConnection);
-        const fromLoc = locations.find((l) => l.id === connection?.from);
-        const toLoc = locations.find((l) => l.id === connection?.to);
-        return connection ? (
-          <div className="edit-modal-overlay" onClick={() => { setEditingConnection(null); setEditForm({}); }}>
-            <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-              <h4>连接详情</h4>
-              <div className="modal-form">
-                <div className="relation-info-display">
-                  <div className="relation-characters">
-                    <span className="relation-char-name">{fromLoc?.name || '未知'}</span>
-                    <ArrowRight size={20} />
-                    <span className="relation-type-display">{connection.type}</span>
-                    <ArrowRight size={20} />
-                    <span className="relation-char-name">{toLoc?.name || '未知'}</span>
-                  </div>
-                  {connection.description && (
-                    <div className="relation-desc-display">
-                      <span className="desc-label">连接描述：</span>
-                      <span className="desc-text">{connection.description}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="modal-actions">
-                  <button
-                    className="cancel-btn"
-                    onClick={() => {
-                      setEditingConnection(null);
-                      setEditForm({});
-                    }}
-                  >
-                    关闭
-                  </button>
-                  <div className="footer-spacer" />
-                  <button
-                    className="save-btn"
-                    onClick={() => {
-                      setEditingConnection(null);
-                      setEditForm({
-                        connectionType: connection.type,
-                        connectionDescription: connection.description,
-                      });
-                      // 可以在这里添加编辑表单
-                    }}
-                  >
-                    编辑
-                  </button>
-                </div>
+      {/* 编辑连接弹窗 */}
+      {editingConnection && (
+        <div className="edit-modal-overlay" onClick={() => { setEditingConnection(null); setEditForm({}); }}>
+          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
+            <h4>{readOnly ? '查看连接' : '编辑连接'}</h4>
+            <div className="modal-form">
+              <label>
+                <span>连接类型</span>
+                <input
+                  type="text"
+                  value={editForm.connectionType || ''}
+                  onChange={(e) => setEditForm({ ...editForm, connectionType: e.target.value })}
+                  className="edit-input"
+                  placeholder="例如：道路、河流、传送门等"
+                  autoFocus
+                  disabled={readOnly}
+                />
+              </label>
+              <label>
+                <span>连接描述</span>
+                <textarea
+                  value={editForm.connectionDescription || ''}
+                  onChange={(e) => setEditForm({ ...editForm, connectionDescription: e.target.value })}
+                  className="edit-textarea"
+                  placeholder="描述这个连接..."
+                  rows={3}
+                  disabled={readOnly}
+                />
+              </label>
+              <div className="modal-actions">
+                <button
+                  className="cancel-btn"
+                  onClick={() => {
+                    setEditingConnection(null);
+                    setEditForm({});
+                  }}
+                >
+                  {readOnly ? '关闭' : '取消'}
+                </button>
+                {!readOnly && (
+                  <>
+                    <div className="footer-spacer" />
+                    <button className="save-btn" onClick={handleSaveConnection}>
+                      保存
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
-        ) : null;
-      })()}
+        </div>
+      )}
       
       <MessageModal
         isOpen={messageState.isOpen}

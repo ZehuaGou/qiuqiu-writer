@@ -20,6 +20,7 @@ export interface EditorSelectionPopupProps {
   onClose: () => void;
   /** 优化中时禁用按钮 */
   optimizing?: boolean;
+  readOnly?: boolean;
 }
 
 export default function EditorSelectionPopup({
@@ -33,6 +34,7 @@ export default function EditorSelectionPopup({
   onOptimizeInEditor,
   onClose,
   optimizing = false,
+  readOnly,
 }: EditorSelectionPopupProps) {
   useEffect(() => {
     if (!visible) return;
@@ -65,25 +67,29 @@ export default function EditorSelectionPopup({
       <div className="editor-selection-popup-range" title="选中范围在本章中的字数位置">
         第{startChar}-{endChar}字
       </div>
-      <button
-        type="button"
-        className="editor-selection-popup-btn"
-        onClick={() => onAIChat()}
-        title="用选中内容发起 AI 对话"
-      >
-        <MessageSquare size={16} />
-        <span>AI 对话</span>
-      </button>
-      <button
-        type="button"
-        className="editor-selection-popup-btn"
-        onClick={() => onOptimizeInEditor(selectedText)}
-        disabled={optimizing}
-        title="在编辑器中用 AI 优化该段文字"
-      >
-        <Sparkles size={16} />
-        <span>{optimizing ? '优化中…' : '在编辑器中优化句子'}</span>
-      </button>
+      {!readOnly && (
+        <>
+          <button
+            type="button"
+            className="editor-selection-popup-btn"
+            onClick={() => onAIChat()}
+            title="用选中内容发起 AI 对话"
+          >
+            <MessageSquare size={16} />
+            <span>AI 对话</span>
+          </button>
+          <button
+            type="button"
+            className="editor-selection-popup-btn"
+            onClick={() => onOptimizeInEditor(selectedText)}
+            disabled={optimizing}
+            title="在编辑器中用 AI 优化该段文字"
+          >
+            <Sparkles size={16} />
+            <span>{optimizing ? '优化中…' : '在编辑器中优化句子'}</span>
+          </button>
+        </>
+      )}
     </div>
   );
 }

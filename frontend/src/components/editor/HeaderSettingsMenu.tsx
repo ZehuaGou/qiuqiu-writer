@@ -12,6 +12,7 @@ interface HeaderSettingsMenuProps {
   onShare: () => void;
   isMobile?: boolean;
   hasPendingRequests?: boolean;
+  readOnly?: boolean;
 }
 
 export default function HeaderSettingsMenu({
@@ -23,6 +24,7 @@ export default function HeaderSettingsMenu({
   onShare,
   isMobile = false,
   hasPendingRequests = false,
+  readOnly,
 }: HeaderSettingsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -106,28 +108,32 @@ export default function HeaderSettingsMenu({
             <span>导出作品</span>
           </button>
 
-          <button 
-            className="menu-item" 
-            onClick={() => {
-              onShare();
-              setIsOpen(false);
-            }}
-          >
-            <Users size={16} />
-            <span>添加协作者</span>
-            {hasPendingRequests && <span className="menu-item-badge" />}
-          </button>
+          {!readOnly && (
+            <button 
+              className="menu-item" 
+              onClick={() => {
+                onShare();
+                setIsOpen(false);
+              }}
+            >
+              <Users size={16} />
+              <span>添加协作者</span>
+              {hasPendingRequests && <span className="menu-item-badge" />}
+            </button>
+          )}
 
-          <button 
-            className="menu-item delete-item" 
-            onClick={() => {
-              onDeleteWork();
-              setIsOpen(false);
-            }}
-          >
-            <Trash2 size={16} />
-            <span>删除作品</span>
-          </button>
+          {!readOnly && (
+            <button 
+              className="menu-item delete-item" 
+              onClick={() => {
+                onDeleteWork();
+                setIsOpen(false);
+              }}
+            >
+              <Trash2 size={16} />
+              <span>删除作品</span>
+            </button>
+          )}
         </div>
       )}
     </div>
