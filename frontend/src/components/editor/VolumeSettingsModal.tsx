@@ -12,6 +12,7 @@ interface VolumeSettingsModalProps {
   onClose: () => void;
   onSave: (title: string, volumeId?: string, outline?: string, detailOutline?: string) => void;
   onDelete?: (volumeId: string) => void;
+  readOnly?: boolean;
 }
 
 export default function VolumeSettingsModal({
@@ -23,7 +24,8 @@ export default function VolumeSettingsModal({
   initialDetailOutline = '',
   onClose,
   onSave,
-  onDelete
+  onDelete,
+  readOnly
 }: VolumeSettingsModalProps) {
   const [title, setTitle] = useState(initialTitle);
   const [outline, setOutline] = useState(initialOutline || '');
@@ -67,6 +69,7 @@ export default function VolumeSettingsModal({
               placeholder="请输入卷名称"
               autoFocus
               className="volume-title-input"
+              disabled={readOnly}
             />
           </div>
 
@@ -79,6 +82,7 @@ export default function VolumeSettingsModal({
               placeholder="请输入卷大纲..."
               className="volume-textarea"
               rows={4}
+              disabled={readOnly}
             />
           </div>
 
@@ -91,34 +95,41 @@ export default function VolumeSettingsModal({
               placeholder="请输入卷细纲..."
               className="volume-textarea"
               rows={6}
+              disabled={readOnly}
             />
           </div>
 
           <div className="volume-modal-footer">
-            {mode === 'edit' && onDelete && volumeId && (
+            {!readOnly && mode === 'edit' && onDelete && volumeId && (
               <button 
                 type="button" 
-                className="volume-delete-btn"
+                className="volume-btn-delete"
                 onClick={() => {
-                  if (window.confirm('确定要删除此卷吗？卷内所有章节也将被删除！')) {
+                  if (window.confirm('确定要删除该卷吗？删除后卷内章节将保留但不再属于任何卷。')) {
                     onDelete(volumeId);
                     onClose();
                   }
                 }}
               >
-                <Trash2 size={16} />
-                <span>删除此卷</span>
+                <Trash2 size={16} /> 删除卷
               </button>
             )}
-            <div className="action-buttons">
-              <button type="button" className="volume-cancel-btn" onClick={onClose}>
-                取消
+            <button 
+              type="button" 
+              className="volume-btn-cancel" 
+              onClick={onClose}
+            >
+              取消
+            </button>
+            {!readOnly && (
+              <button 
+                type="submit" 
+                className="volume-btn-save"
+                disabled={!title.trim()}
+              >
+                <Save size={16} /> 保存
               </button>
-              <button type="submit" className="volume-save-btn" disabled={!title.trim()}>
-                <Save size={16} />
-                <span>保存</span>
-              </button>
-            </div>
+            )}
           </div>
         </form>
       </div>

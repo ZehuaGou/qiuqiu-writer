@@ -107,19 +107,21 @@ interface ChapterSettingsModalProps {
   onClose: () => void;
   onSave: (data: ChapterData) => void;
   onGenerateContent?: (content: string, isFinal?: boolean) => void;
+  readOnly?: boolean;
 }
 
 interface CharacterSelectionCardProps {
   character: Character;
   isSelected: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }
 
-function CharacterSelectionCard({ character, isSelected, onToggle }: CharacterSelectionCardProps) {
+function CharacterSelectionCard({ character, isSelected, onToggle, disabled }: CharacterSelectionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className={`character-selection-card ${isSelected ? 'selected' : ''}`}>
+    <div className={`character-selection-card ${isSelected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}>
       <div 
         className="card-header" 
         onClick={() => setIsExpanded(!isExpanded)}
@@ -128,10 +130,11 @@ function CharacterSelectionCard({ character, isSelected, onToggle }: CharacterSe
           <div 
             className="checkbox-wrapper"
             onClick={(e) => {
+              if (disabled) return;
               e.stopPropagation();
               onToggle();
             }}
-            style={{ cursor: 'pointer', display: 'flex' }}
+            style={{ cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', opacity: disabled ? 0.6 : 1 }}
           >
             {isSelected ? (
               <div style={{ 
@@ -225,6 +228,7 @@ export default function ChapterSettingsModal({
   chapterId,
   onClose,
   onSave,
+  readOnly,
 }: ChapterSettingsModalProps) {
   const [title, setTitle] = useState(initialData?.title || '');
   const [chapterNumber, setChapterNumber] = useState<number | undefined>(undefined);
@@ -664,6 +668,7 @@ export default function ChapterSettingsModal({
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="请输入章节名称，如：第1章 初遇"
                   autoFocus
+                  disabled={readOnly}
                 />
               </div>
 
@@ -680,6 +685,7 @@ export default function ChapterSettingsModal({
                         className="form-select"
                         value={selectedVolumeId}
                         onChange={(e) => setSelectedVolumeId(e.target.value)}
+                        disabled={readOnly}
                       >
                         {availableVolumes.map(vol => (
                           <option key={vol.id} value={vol.id}>
@@ -704,6 +710,7 @@ export default function ChapterSettingsModal({
                     value={chapterNumber || ''}
                     onChange={(e) => setChapterNumber(parseInt(e.target.value) || undefined)}
                     placeholder="自动生成"
+                    disabled={readOnly}
                   />
                   <div className="form-hint">留空则自动顺延</div>
                 </div>
@@ -729,15 +736,18 @@ export default function ChapterSettingsModal({
                       }
                     }}
                     placeholder="输入地点名称按回车添加"
+                    disabled={readOnly}
                   />
-                  <button 
-                    type="button"
-                    className="icon-btn add-location-btn"
-                    onClick={handleAddLocation}
-                    disabled={!newLocation.trim()}
-                  >
-                    <Plus size={18} />
-                  </button>
+                  {!readOnly && (
+                    <button 
+                      type="button"
+                      className="icon-btn add-location-btn"
+                      onClick={handleAddLocation}
+                      disabled={!newLocation.trim()}
+                    >
+                      <Plus size={18} />
+                    </button>
+                  )}
                 </div>
 
                 {/* 已选地点标签 */}
@@ -747,19 +757,21 @@ export default function ChapterSettingsModal({
                       <span key={index} className="location-tag">
                         <MapPin size={12} />
                         {loc}
-                        <button 
-                          className="tag-remove-btn"
-                          onClick={() => handleRemoveLocation(loc)}
-                        >
-                          <X size={12} />
-                        </button>
+                        {!readOnly && (
+                          <button 
+                            className="tag-remove-btn"
+                            onClick={() => handleRemoveLocation(loc)}
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
                       </span>
                     ))}
                   </div>
                 )}
 
                 {/* 推荐地点 */}
-                {locationsToShow.length > 0 && (
+                {!readOnly && locationsToShow.length > 0 && (
                   <div className="suggested-locations">
                     <span className="suggestion-label">推荐：</span>
                     <div className="suggestion-list">
@@ -791,19 +803,21 @@ export default function ChapterSettingsModal({
                     <BookOpen size={16} />
                     章节大纲
                   </label>
-                  <button 
-                    className="icon-btn"
-                    onClick={handleGenerateOutline}
-                    disabled={isGeneratingOutline}
-                    title="AI生成大纲"
-                    style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
-                  >
-                    {isGeneratingOutline ? (
-                      <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
-                    ) : (
-                      <Sparkles size={16} />
-                    )}
-                  </button>
+                  {!readOnly && (
+                    <button 
+                      className="icon-btn"
+                      onClick={handleGenerateOutline}
+                      disabled={isGeneratingOutline}
+                      title="AI生成大纲"
+                      style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
+                    >
+                      {isGeneratingOutline ? (
+                        <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
+                      ) : (
+                        <Sparkles size={16} />
+                      )}
+                    </button>
+                  )}
                 </div>
                 <textarea
                   className="form-textarea outline-textarea"
@@ -811,6 +825,7 @@ export default function ChapterSettingsModal({
                   onChange={(e) => setOutline(e.target.value)}
                   placeholder="在此输入本章的故事梗概..."
                   rows={6}
+                  disabled={readOnly}
                 />
               </div>
 
@@ -820,19 +835,21 @@ export default function ChapterSettingsModal({
                     <FileText size={16} />
                     详细细纲
                   </label>
-                  <button 
-                    className="icon-btn"
-                    onClick={handleGenerateDetailOutline}
-                    disabled={isGeneratingDetail}
-                    title="AI生成细纲"
-                    style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
-                  >
-                    {isGeneratingDetail ? (
-                      <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
-                    ) : (
-                      <Sparkles size={16} />
-                    )}
-                  </button>
+                  {!readOnly && (
+                    <button 
+                      className="icon-btn"
+                      onClick={handleGenerateDetailOutline}
+                      disabled={isGeneratingDetail}
+                      title="AI生成细纲"
+                      style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
+                    >
+                      {isGeneratingDetail ? (
+                        <span className="loading-spinner small" style={{ width: '16px', height: '16px', border: '2px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', display: 'block', animation: 'spin 1s linear infinite' }}></span>
+                      ) : (
+                        <Sparkles size={16} />
+                      )}
+                    </button>
+                  )}
                 </div>
                 <textarea
                   className="form-textarea detail-textarea"
@@ -840,6 +857,7 @@ export default function ChapterSettingsModal({
                   onChange={(e) => setDetailOutline(e.target.value)}
                   placeholder="在此输入详细的场景描写、对话要点等..."
                   rows={10}
+                  disabled={readOnly}
                 />
               </div>
 
@@ -922,6 +940,7 @@ export default function ChapterSettingsModal({
                       value={characterDataKey}
                       onChange={(e) => setCharacterDataKey(e.target.value)}
                       title="选择从作品设定中读取角色列表的数据 key"
+                      disabled={readOnly}
                     >
                       {CHARACTER_DATA_KEY_OPTIONS.map((opt) => (
                         <option key={opt.value || 'empty'} value={opt.value}>
@@ -944,6 +963,7 @@ export default function ChapterSettingsModal({
                       character={char}
                       isSelected={selectedCharacters.includes(String(char.id))}
                       onToggle={() => handleCharacterToggle(String(char.id))}
+                      disabled={readOnly}
                     />
                   ))}
                 </div>
@@ -967,9 +987,11 @@ export default function ChapterSettingsModal({
             取消
           </button>
           <div className="footer-spacer" />
-          <button className="modal-btn save" onClick={handleSave}>
-            {mode === 'create' ? '创建章节' : '保存修改'}
-          </button>
+          {!readOnly && (
+            <button className="modal-btn save" onClick={handleSave}>
+              {mode === 'create' ? '创建章节' : '保存修改'}
+            </button>
+          )}
         </div>
 
         <MessageModal

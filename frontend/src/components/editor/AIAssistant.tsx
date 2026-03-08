@@ -47,6 +47,7 @@ interface AIAssistantProps {
   }) => void;
   /** 从编辑器选中发起对话时，只传章节引用（不显示选中正文，只显示徽章 @chapter:x 第n-m字） */
   initialSelectionRef?: { chapterId: string; startChar: number; endChar: number } | null;
+  readOnly?: boolean;
 }
 
 const md = new MarkdownIt({
@@ -92,6 +93,7 @@ export default function AIAssistant({
   onGenerateChapterFromOutline,
   onUseContinueRecommendation,
   initialSelectionRef,
+  readOnly,
 }: AIAssistantProps) {
   const [message, setMessage] = useState('');
   const [charCount, setCharCount] = useState(0);
@@ -1027,6 +1029,7 @@ export default function AIAssistant({
                 className="chat-clear-btn"
                 onClick={handleClearMessages}
                 title="清空对话"
+                disabled={readOnly}
               >
                 <Trash2 size={16} />
               </button>
@@ -1080,6 +1083,7 @@ export default function AIAssistant({
                                       detailed_outline: rec.detailed_outline,
                                       next_chapter_number: (msg as MessageWithTime).continueChapterResult!.next_chapter_number,
                                     })}
+                                    disabled={readOnly}
                                   >
                                     使用此方案创建章节
                                   </button>
@@ -1141,6 +1145,7 @@ export default function AIAssistant({
           </div>
 
           <div className="chat-input-area">
+            {!readOnly && (
             <div className="input-actions">
               <button 
                 className="input-action-btn"
@@ -1165,7 +1170,12 @@ export default function AIAssistant({
                 <span>@引用</span>
               </button>
             </div>
-            {!isAuthenticated ? (
+            )}
+            {readOnly ? (
+              <div className="chat-login-prompt">
+                <p>当前为只读模式，无法使用AI助手</p>
+              </div>
+            ) : !isAuthenticated ? (
               <div className="chat-login-prompt">
                 <p>请先登录后再使用球球AI功能</p>
               </div>

@@ -52,12 +52,13 @@ interface SideNavProps {
   volumes?: Volume[];
   onVolumesChange?: (volumes: Volume[]) => void;
   workType?: 'long' | 'short' | 'script' | 'video';  // 作品类型：长篇支持分卷，短篇不分卷
+  readOnly?: boolean;
 }
 
 // 导出 Chapter, Volume, SideNavProps 类型供外部使用
 export type { Chapter, Volume, SideNavProps };
 
-export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onOpenVolumeModal, onChapterDelete, deletedChapters = [], loadDeletedChapters, onRestoreChapter, volumes: externalVolumes }: SideNavProps) {
+export default function SideNav({ activeNav, onNavChange, selectedChapter, onChapterSelect, onOpenChapterModal, onOpenVolumeModal, onChapterDelete, deletedChapters = [], loadDeletedChapters, onRestoreChapter, volumes: externalVolumes, readOnly }: SideNavProps) {
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
   const [isChaptersReversed, setIsChaptersReversed] = useState(false); // 章节排序状态
   const [recycleExpanded, setRecycleExpanded] = useState(false);
@@ -187,9 +188,11 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
               <ArrowUpDown size={14} />
             </button>
             {/* 显示添加卷按钮 */}
-            <button className="nav-add-btn" title="添加卷" onClick={handleAddVolume}>
-              <Plus size={14} />
-            </button>
+            {!readOnly && (
+              <button className="nav-add-btn" title="添加卷" onClick={handleAddVolume}>
+                <Plus size={14} />
+              </button>
+            )}
           </div>
         </div>
         {chaptersExpanded && (
@@ -207,27 +210,29 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                     <div className="nav-volume-item">
                       <span>{volume.title}</span>
                     </div>
-                    <button
-                      className="nav-volume-settings-btn"
-                      title="卷纲设置"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onOpenVolumeModal) {
-                          onOpenVolumeModal('edit', volume.id, volume.title, volume.outline, volume.detailOutline);
-                        } else {
-                          // No onOpenVolumeModal handler
-                        }
-                      }}
-                    >
-                      <Settings size={12} />
-                    </button>
-                    <button 
-                      className="nav-add-btn small" 
-                      title="添加章"
-                      onClick={(e) => handleAddChapter(volume.id, volume.title, e)}
-                    >
-                      <Plus size={12} />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        className="nav-volume-settings-btn"
+                        title="卷纲设置"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenVolumeModal) {
+                            onOpenVolumeModal('edit', volume.id, volume.title, volume.outline, volume.detailOutline);
+                          }
+                        }}
+                      >
+                        <Settings size={12} />
+                      </button>
+                    )}
+                    {!readOnly && (
+                      <button 
+                        className="nav-add-btn small" 
+                        title="添加章"
+                        onClick={(e) => handleAddChapter(volume.id, volume.title, e)}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    )}
                   </div>
                   {volumesExpanded[volume.id] && (
                     <div className="nav-chapters">
@@ -264,7 +269,7 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
                                 : chapter.title
                               }
                             </span>
-                                {selectedChapter === chapter.id && (
+                                {selectedChapter === chapter.id && !readOnly && (
                                   <div className="nav-chapter-actions">
                                     <button
                                       className="nav-chapter-edit-btn"
@@ -294,7 +299,7 @@ export default function SideNav({ activeNav, onNavChange, selectedChapter, onCha
       </div>
 
       {/* 回收站：已软删除的章节，可恢复 */}
-      {(loadDeletedChapters || deletedChapters.length > 0) && (
+      {!readOnly && (loadDeletedChapters || deletedChapters.length > 0) && (
         <div className="nav-section">
           <div className="nav-volume-header">
             <button

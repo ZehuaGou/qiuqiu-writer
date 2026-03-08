@@ -8,6 +8,10 @@ interface TagCategory {
   tags: string[];
 }
 
+interface TagsManagerProps {
+  readOnly?: boolean;
+}
+
 const tagCategories: TagCategory[] = [
   {
     name: '题材',
@@ -44,7 +48,7 @@ const tagCategories: TagCategory[] = [
   },
 ];
 
-export default function TagsManager() {
+export default function TagsManager({ readOnly }: TagsManagerProps = {}) {
   const [selectedTags, setSelectedTags] = useState<Record<string, string[]>>({
     题材: [],
     情节: [],
@@ -110,13 +114,15 @@ export default function TagsManager() {
                     {selected.map((tag) => (
                       <span key={tag} className="selected-tag">
                         {tag}
-                        <button
-                          className="remove-tag-btn"
-                          onClick={() => removeTag(category.name, tag)}
-                          title="移除"
-                        >
-                          <X size={14} />
-                        </button>
+                        {!readOnly && (
+                          <button
+                            className="remove-tag-btn"
+                            onClick={() => removeTag(category.name, tag)}
+                            title="移除"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -129,7 +135,7 @@ export default function TagsManager() {
                           type="checkbox"
                           checked={false}
                           onChange={() => handleTagSelect(category.name, tag)}
-                          disabled={isLimitReached}
+                          disabled={isLimitReached || readOnly}
                         />
                         <span>{tag}</span>
                       </label>
@@ -157,6 +163,7 @@ export default function TagsManager() {
             onChange={(e) => setTextInfo(e.target.value)}
             placeholder="输入文本信息..."
             rows={4}
+            disabled={readOnly}
           />
         </div>
 
@@ -171,6 +178,7 @@ export default function TagsManager() {
             onChange={(e) => setBackground(e.target.value)}
             placeholder="输入背景信息..."
             rows={4}
+            disabled={readOnly}
           />
         </div>
 
@@ -178,24 +186,26 @@ export default function TagsManager() {
         <div className="tag-category">
           <div className="category-header">
             <h3 className="category-name">等级体系</h3>
-            <button
-              className="btn btn-add"
-              onClick={() => {
-                const newFaction = {
-                  id: String(Date.now()),
-                  name: '新等级体系',
-                  levels: [],
-                  summary: '',
-                  details: '',
-                };
-                setFactions([...factions, newFaction]);
-                setEditingFaction(newFaction.id);
-                setFactionForm({ name: '新等级体系', levels: [], summary: '', details: '' });
-              }}
-              title="添加等级体系"
-            >
-              <Plus size={16} />
-            </button>
+            {!readOnly && (
+              <button
+                className="btn btn-add"
+                onClick={() => {
+                  const newFaction = {
+                    id: String(Date.now()),
+                    name: '新等级体系',
+                    levels: [],
+                    summary: '',
+                    details: '',
+                  };
+                  setFactions([...factions, newFaction]);
+                  setEditingFaction(newFaction.id);
+                  setFactionForm({ name: '新等级体系', levels: [], summary: '', details: '' });
+                }}
+                title="添加等级体系"
+              >
+                <Plus size={16} />
+              </button>
+            )}
           </div>
           <div className="factions-list">
             {factions.length === 0 ? (
@@ -355,32 +365,34 @@ export default function TagsManager() {
                           <p className="faction-info-text">{faction.details}</p>
                         </div>
                       )}
-                      <div className="faction-actions-display">
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => {
-                            setEditingFaction(faction.id);
-                            setFactionForm({ 
-                              name: faction.name, 
-                              levels: [...faction.levels],
-                              summary: faction.summary || '',
-                              details: faction.details || '',
-                            });
-                          }}
-                          title="编辑"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          className="btn btn-icon btn-icon-sm btn-danger-outline"
-                          onClick={() => {
-                            setFactions(factions.filter((f) => f.id !== faction.id));
-                          }}
-                          title="删除"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
+                      {!readOnly && (
+                        <div className="faction-actions-display">
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              setEditingFaction(faction.id);
+                              setFactionForm({ 
+                                name: faction.name, 
+                                levels: [...faction.levels],
+                                summary: faction.summary || '',
+                                details: faction.details || '',
+                              });
+                            }}
+                            title="编辑"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            className="btn btn-icon btn-icon-sm btn-danger-outline"
+                            onClick={() => {
+                              setFactions(factions.filter((f) => f.id !== faction.id));
+                            }}
+                            title="删除"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

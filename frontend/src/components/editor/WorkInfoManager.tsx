@@ -118,10 +118,11 @@ interface WorkInfoManagerProps {
   onActiveModuleChange?: (moduleId: string) => void;
   onPreviewDataChange?: (data: PreviewItem[]) => void;
   onWorkInfoUpdate?: (info: { title?: string; cover?: string; description?: string }) => void;
+  readOnly?: boolean;
 }
 
 export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
-  const { workId, workData, activeModuleId, onActiveModuleChange, onPreviewDataChange, onWorkInfoUpdate } = props;
+  const { workId, workData, activeModuleId, onActiveModuleChange, onPreviewDataChange, onWorkInfoUpdate, readOnly } = props;
   
   // 模板管理状态
   const [userTemplates, setUserTemplates] = useState<WorkTemplate[]>([]);
@@ -564,7 +565,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             value={(comp.value as string) || ''}
             onChange={(e) => updateValue(e.target.value)}
             placeholder={comp.config.placeholder}
-            disabled={!isEditMode && false} // 浏览模式也可以编辑值
+            disabled={readOnly}
           />
         );
         
@@ -579,6 +580,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             onChange={(e) => updateValue(e.target.value)}
             placeholder={comp.config.placeholder}
             rows={5}
+            disabled={readOnly}
           />
         );
 
@@ -596,6 +598,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
             onChange={(val) => updateValue(val)}
             options={options}
             placeholder={comp.config.placeholder || '请选择'}
+            disabled={readOnly}
           />
         );
       }
@@ -607,36 +610,40 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                     {Array.isArray(comp.value) && (comp.value as string[]).map((tag, i) => (
                         <span key={i} className="tag-item">
                             {tag}
-                            <button onClick={() => {
-                                const newTags = (comp.value as string[]).filter((_, idx) => idx !== i);
-                                updateValue(newTags);
-                            }}><X size={12} /></button>
+                            {!readOnly && (
+                              <button onClick={() => {
+                                  const newTags = (comp.value as string[]).filter((_, idx) => idx !== i);
+                                  updateValue(newTags);
+                              }}><X size={12} /></button>
+                            )}
                         </span>
                     ))}
                 </div>
-                 <input 
-                    type="text" 
-                    placeholder="输入标签按回车添加"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            const val = e.currentTarget.value.trim();
-                            if (val) {
-                                const currentTags = Array.isArray(comp.value) ? comp.value as string[] : [];
-                                if (!currentTags.includes(val)) {
-                                    updateValue([...currentTags, val]);
-                                }
-                                e.currentTarget.value = '';
-                            }
-                        }
-                    }}
-                    className="comp-input"
-                 />
+                 {!readOnly && (
+                   <input 
+                      type="text" 
+                      placeholder="输入标签按回车添加"
+                      onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                              const val = e.currentTarget.value.trim();
+                              if (val) {
+                                  const currentTags = Array.isArray(comp.value) ? comp.value as string[] : [];
+                                  if (!currentTags.includes(val)) {
+                                      updateValue([...currentTags, val]);
+                                  }
+                                  e.currentTarget.value = '';
+                              }
+                          }
+                      }}
+                      className="comp-input"
+                   />
+                 )}
             </div>
         );
 
       case 'multiselect':
         return (
-          <div id={`guided-comp-${comp.id}`}>
+          <div id={`guided-comp-${comp.id}`} style={readOnly ? { pointerEvents: 'none', opacity: 0.7 } : {}}>
             <MultiSelectEditor
               value={(comp.value as string[]) || []}
               onChange={(val) => updateValue(val)}
@@ -649,7 +656,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
       case 'list':
         return (
-          <div id={`guided-comp-${comp.id}`}>
+          <div id={`guided-comp-${comp.id}`} style={readOnly ? { pointerEvents: 'none', opacity: 0.7 } : {}}>
             <ListEditor
               value={(comp.value as string[]) || []}
               onChange={(val) => updateValue(val)}
@@ -660,7 +667,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
       case 'keyvalue':
         return (
-          <div id={`guided-comp-${comp.id}`}>
+          <div id={`guided-comp-${comp.id}`} style={readOnly ? { pointerEvents: 'none', opacity: 0.7 } : {}}>
             <KeyValueEditor
               value={(comp.value as any[]) || []} // eslint-disable-line @typescript-eslint/no-explicit-any
               onChange={(val) => updateValue(val)}
@@ -674,16 +681,18 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
              {comp.value ? (
                <div className="image-preview">
                  <img src={comp.value as string} alt="Uploaded" />
-                 <button className="remove-btn" onClick={() => updateValue('')}><X size={14} /></button>
+                 {!readOnly && <button className="remove-btn" onClick={() => updateValue('')}><X size={14} /></button>}
                </div>
              ) : (
-               <div className="upload-placeholder" onClick={() => {
-                    setCurrentImageId(comp.id);
-                    fileInputRef.current?.click();
-               }}>
-                   <div className="icon"><span className="lucide lucide-image"></span></div>
-                   <span>点击上传封面</span>
-               </div>
+               !readOnly && (
+                 <div className="upload-placeholder" onClick={() => {
+                      setCurrentImageId(comp.id);
+                      fileInputRef.current?.click();
+                 }}>
+                     <div className="icon"><span className="lucide lucide-image"></span></div>
+                     <span>点击上传封面</span>
+                 </div>
+               )
              )}
           </div>
         );
@@ -736,7 +745,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
       case 'timeline':
         return (
-          <div id={`guided-comp-${comp.id}`}>
+          <div id={`guided-comp-${comp.id}`} style={readOnly ? { pointerEvents: 'none', opacity: 0.7 } : {}}>
             <TimelineEditor
               component={comp}
               onChange={(newEvents) => updateValue(newEvents)}
@@ -748,7 +757,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
 
       case 'character-card':
         return (
-          <div id={`guided-comp-${comp.id}`}>
+          <div id={`guided-comp-${comp.id}`} style={readOnly ? { pointerEvents: 'none', opacity: 0.7 } : {}}>
             <CharacterCard
               component={comp}
               onChange={(newData) => updateValue(newData)}
@@ -759,7 +768,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
         
       case 'faction':
          return (
-            <div id={`guided-comp-${comp.id}`}>
+            <div id={`guided-comp-${comp.id}`} style={readOnly ? { pointerEvents: 'none', opacity: 0.7 } : {}}>
               <FactionEditor
                 component={comp}
                 onChange={(newData) => updateValue(newData)}
@@ -791,7 +800,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                 key={`relation-graph-${comp.id}`}
                 data={graphData}
                 dependencyKeys={comp.dataDependencies || []}
-                onChange={(newData) => {
+                onChange={readOnly ? undefined : (newData) => {
                   updateValue({
                     characters: newData.characters || [],
                     relations: newData.relations || []
@@ -1038,6 +1047,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                className="btn-secondary header-btn"
                onClick={() => setShowTemplateMarket(true)}
                title="模板市场"
+               disabled={readOnly}
              >
                <LayoutGrid size={16} /> <span className="btn-text">模板市场</span>
              </button>
@@ -1045,7 +1055,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
              <button 
                className="btn-secondary header-btn"
                onClick={saveData}
-               disabled={isSaving}
+               disabled={isSaving || readOnly}
                title="保存数据"
              >
                <Save size={16} /> <span className="btn-text">{isSaving ? '保存中...' : '保存'}</span>
@@ -1064,8 +1074,9 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                className={`edit-mode-btn header-btn ${isEditMode ? 'active' : ''}`}
                onClick={() => setIsEditMode(!isEditMode)}
                title = {isEditMode ? '完成编辑' : '编辑模板'}
+               disabled={readOnly}
              >
-               {isEditMode ? <Settings size={16} /> : <Settings size={16} />}
+               <Settings size={16} />
              </button>
              {/* </GuideTip> */}
              {isEditMode && (
@@ -1097,7 +1108,7 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                 <button 
                   className="icon-btn"
                   onClick={() => handleGenerateData(comp, activeModule.id)}
-                  disabled={generatingComponents[comp.id]}
+                  disabled={generatingComponents[comp.id] || readOnly}
                   title="AI生成内容"
                   style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#3b82f6' }}
                 >
@@ -1118,7 +1129,9 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
                   setEditingComponentId(comp.id);
                   setEditingComponentData(comp);
                   setShowAddComponent(true);
-                }}>
+                }}
+                disabled={readOnly}
+                >
                   <Settings size={14} />
                 </button>
              );

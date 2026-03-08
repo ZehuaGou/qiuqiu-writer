@@ -31,6 +31,7 @@ export interface VolumeData {
 export interface UseChapterManagementOptions {
   workId: string | null;
   updateTrigger: number;
+  onError?: (error: unknown) => void;
 }
 
 export interface UseChapterManagementReturn {
@@ -64,7 +65,7 @@ function getVolumeNumber(num: number): string {
 }
 
 export function useChapterManagement(options: UseChapterManagementOptions): UseChapterManagementReturn {
-  const { workId, updateTrigger } = options;
+  const { workId, updateTrigger, onError } = options;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // 从 URL 获取初始选中章节
@@ -215,8 +216,9 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
       try {
         // 并行获取卷列表和章节列表
         const [dbVolumes, allChapters] = await Promise.all([
-          volumesApi.listVolumes(workId).catch(() => {
-            
+          volumesApi.listVolumes(workId).catch((err) => {
+            console.error('Failed to load volumes:', err);
+            onError?.(err);
             return [] as Volume[];
           }),
           (async () => {
@@ -383,8 +385,9 @@ export function useChapterManagement(options: UseChapterManagementOptions): UseC
           // 统一通过 setSelectedChapter 更新，确保 URL 和状态同步
           setSelectedChapter(targetChapterId);
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error('Failed to load chapters:', err);
+        onError?.(err);
       }
     };
 

@@ -52,9 +52,10 @@ const mockCharacters: Character[] = [
 
 interface CharactersProps {
   availableCharacters?: Array<{ id: string; name: string; avatar?: string; gender?: string; description?: string; type?: string }>;
+  readOnly?: boolean;
 }
 
-export default function Characters({ availableCharacters = [] }: CharactersProps) {
+export default function Characters({ availableCharacters = [], readOnly }: CharactersProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'relationships' | 'timeline'>('list');
   const [selectedCharacter, setSelectedCharacter] = useState<{ id: string; name: string } | null>(null);
 
@@ -107,16 +108,18 @@ export default function Characters({ availableCharacters = [] }: CharactersProps
 
       {activeTab === 'list' && (
         <div className="characters-content">
-          <div className="characters-actions">
-            <button className="action-btn">
-              <Plus size={16} />
-              <span>添加角色</span>
-            </button>
-            <button className="action-btn">
-              <Sparkles size={16} />
-              <span>生成角色</span>
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="characters-actions">
+              <button className="action-btn">
+                <Plus size={16} />
+                <span>添加角色</span>
+              </button>
+              <button className="action-btn">
+                <Sparkles size={16} />
+                <span>生成角色</span>
+              </button>
+            </div>
+          )}
 
           {/* 主要角色 */}
           <div className="characters-section">
@@ -135,16 +138,18 @@ export default function Characters({ availableCharacters = [] }: CharactersProps
                         <span className="character-gender">{character.gender}</span>
                       </div>
                     </div>
-                    <button
-                      className="delete-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // 处理删除逻辑
-                      }}
-                      title="删除角色"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        className="delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // 处理删除逻辑
+                        }}
+                        title="删除角色"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                   <div className="character-description">
                     {character.description}
@@ -177,16 +182,18 @@ export default function Characters({ availableCharacters = [] }: CharactersProps
                           <span className="character-gender">{character.gender}</span>
                         </div>
                       </div>
-                      <button
-                        className="delete-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // 处理删除逻辑
-                        }}
-                        title="删除角色"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {!readOnly && (
+                        <button
+                          className="delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // 处理删除逻辑
+                          }}
+                          title="删除角色"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                     <div className="character-description">
                       {character.description}
@@ -195,16 +202,18 @@ export default function Characters({ availableCharacters = [] }: CharactersProps
                 ))}
               </div>
             )}
-            <div className="section-actions">
-              <button className="action-btn">
-                <Plus size={16} />
-                <span>添加角色</span>
-              </button>
-              <button className="action-btn">
-                <Sparkles size={16} />
-                <span>生成角色</span>
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="section-actions">
+                <button className="action-btn">
+                  <Plus size={16} />
+                  <span>添加角色</span>
+                </button>
+                <button className="action-btn">
+                  <Sparkles size={16} />
+                  <span>生成角色</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

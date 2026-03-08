@@ -64,7 +64,7 @@ const mockFactions: Faction[] = [
   },
 ];
 
-export default function Factions() {
+export default function Factions({ readOnly }: { readOnly?: boolean }) {
   const [factions, setFactions] = useState<Faction[]>(mockFactions);
   const [expandedFactions, setExpandedFactions] = useState<Record<string, boolean>>({
     '1': true,
@@ -390,29 +390,31 @@ export default function Factions() {
                         ))}
                       </div>
                     )}
-                    <div className="faction-actions-display">
-                      <button
-                        className="edit-faction-btn"
-                        onClick={() => handleEditFaction(faction.id)}
-                        title="编辑"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        className="add-child-btn"
-                        onClick={() => handleAddFaction(faction.id)}
-                        title="添加子势力"
-                      >
-                        <Plus size={14} />
-                      </button>
-                      <button
-                        className="delete-faction-btn"
-                        onClick={() => handleDeleteFaction(faction.id)}
-                        title="删除"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                    {!readOnly && (
+                      <div className="faction-actions-display">
+                        <button
+                          className="edit-faction-btn"
+                          onClick={() => handleEditFaction(faction.id)}
+                          title="编辑"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          className="add-child-btn"
+                          onClick={() => handleAddFaction(faction.id)}
+                          title="添加子势力"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          className="delete-faction-btn"
+                          onClick={() => handleDeleteFaction(faction.id)}
+                          title="删除"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -432,14 +434,16 @@ export default function Factions() {
     <div className="factions-page">
       <div className="factions-header">
         <h2 className="factions-title">势力管理</h2>
-        <button
-          className="add-faction-btn"
-          onClick={() => handleAddFaction()}
-          title="添加顶级势力"
-        >
-          <Plus size={16} />
-          <span>添加势力</span>
-        </button>
+        {!readOnly && (
+          <button
+            className="add-faction-btn"
+            onClick={() => handleAddFaction()}
+            title="添加顶级势力"
+          >
+            <Plus size={16} />
+            <span>添加势力</span>
+          </button>
+        )}
       </div>
 
       <div className="factions-content">

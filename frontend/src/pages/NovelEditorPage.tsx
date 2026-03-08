@@ -106,6 +106,19 @@ export default function NovelEditorPage() {
     return false;
   }, [work, currentUser]);
 
+  const canView = useMemo(() => {
+    if (!work || !currentUser) return false;
+    if (work.owner_id === currentUser.id) return true;
+    if (work.is_public) return true;
+    if (work.collaborators) {
+      const collaborator = work.collaborators.find(c => c.user_id === currentUser.id);
+      if (collaborator && ['admin', 'editor', 'reader'].includes(collaborator.permission)) {
+        return true;
+      }
+    }
+    return false;
+  }, [work, currentUser]);
+
   const isPending = useMemo(() => {
     if (!work || !currentUser) return false;
     if (work.collaborators) {
@@ -239,6 +252,13 @@ export default function NovelEditorPage() {
   } = useChapterManagement({
     workId,
     updateTrigger,
+    onError: (err: any) => {
+      // 忽略 404 (可能是新作品没有章节)
+      const msg = err?.message || String(err);
+      if (!msg.includes('404')) {
+        showMessage(`加载章节列表失败: ${msg}`, 'error');
+      }
+    }
   });
 
   // ===== 章节切换处理 =====
@@ -322,7 +342,7 @@ export default function NovelEditorPage() {
       }
     },
     placeholder: '开始写作...支持 Markdown 格式，如 **粗体**、*斜体*、`代码`、# 标题等',
-    editable: true,
+    editable: canEdit,
     onUpdate: (content) => {
       const wordCount = countCharacters(content);
       setCurrentChapterWordCount(wordCount);
@@ -871,7 +891,7 @@ export default function NovelEditorPage() {
   
   // 权限检查逻辑已移至组件顶部
 
-  if (work && !canEdit) {
+  if (work && !canView) {
     return (
       <div className="novel-editor-page" style={{ justifyContent: 'center', alignItems: 'center' }}>
         <div style={{ 
@@ -884,7 +904,7 @@ export default function NovelEditorPage() {
         }}>
           <h2 style={{ marginBottom: '16px', color: 'var(--text-primary, #e1e1e1)' }}>{work.title}</h2>
           <p style={{ marginBottom: '24px', color: 'var(--text-secondary, #a0a0a0)' }}>
-            您没有编辑该作品的权限，无法查看内容。
+            您没有访问该作品的权限，无法查看内容。
           </p>
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
             {isPending ? (
@@ -902,7 +922,7 @@ export default function NovelEditorPage() {
                 disabled={isApplying}
                 style={{ padding: '8px 24px' }}
               >
-                {isApplying ? '发送中...' : '申请编辑权限'}
+                {isApplying ? '发送中...' : '申请访问权限'}
               </button>
             )}
             <button 
@@ -1093,6 +1113,7 @@ export default function NovelEditorPage() {
               volumes={volumes}
               onVolumesChange={setVolumes}
               workType="long"
+              readOnly={!canEdit}
             />
           </div>
         )}
@@ -1151,12 +1172,14 @@ export default function NovelEditorPage() {
             <WorkInfoManager 
               workId={workId} 
               workData={work ? { metadata: { ...(work.metadata || {}) } } as import('../components/editor/work-info/types').WorkData : undefined} 
+              readOnly={!canEdit}
             />
           )}
-          {activeNav === 'tags' && <TagsManager />}
+          {activeNav === 'tags' && <TagsManager readOnly={!canEdit} />}
           {activeNav === 'outline' && (
             <ChapterOutline 
               volumes={volumes}
+              readOnly={!canEdit}
               onEditVolume={(vol) => handleOpenVolumeModal('edit', vol.id)}
               onEditChapter={(chap, volId, volTitle) => {
                 const fullChapter = chaptersData[chap.id];
@@ -1169,6 +1192,7 @@ export default function NovelEditorPage() {
           {activeNav === 'map' && <MapView />}
           {activeNav === 'characters' && (
             <Characters 
+              readOnly={!canEdit}
               availableCharacters={
                 (() => {
                   type CharItem = { id: string; name: string; avatar?: string; gender?: string; description?: string; type?: string };
@@ -1180,7 +1204,7 @@ export default function NovelEditorPage() {
               }
             />
           )}
-          {activeNav === 'factions' && <Factions />}
+          {activeNav === 'factions' && <Factions readOnly={!canEdit} />}
           {activeNav === 'settings' && (
             <div className="placeholder-content">
               <h2>设置</h2>
@@ -1375,6 +1399,7 @@ export default function NovelEditorPage() {
               initialSelectionRef={initialSelectionRef}
               onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
               onUseContinueRecommendation={handleUseContinueRecommendation}
+              readOnly={!canEdit}
             />
           </div>
         )}
@@ -1395,6 +1420,7 @@ export default function NovelEditorPage() {
                   initialSelectionRef={initialSelectionRef}
                   onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
                   onUseContinueRecommendation={handleUseContinueRecommendation}
+                  readOnly={!canEdit}
                 />
               </div>
             </div>
@@ -1419,6 +1445,7 @@ export default function NovelEditorPage() {
         onClose={closeChapterModal}
         onSave={handleSaveChapter}
         onGenerateContent={handleGenerateContent}
+        readOnly={!canEdit}
       />
 
       {/* 卷设置弹窗 */}
@@ -1432,6 +1459,7 @@ export default function NovelEditorPage() {
         onClose={closeVolumePopup}
         onSave={handleSaveVolume}
         onDelete={handleDeleteVolume}
+        readOnly={!canEdit}
       />
 
       {/* 章节历史记录 */}

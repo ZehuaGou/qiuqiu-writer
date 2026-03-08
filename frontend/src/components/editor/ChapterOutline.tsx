@@ -21,9 +21,10 @@ interface ChapterOutlineProps {
   volumes: OutlineVolume[];
   onEditVolume?: (volume: OutlineVolume) => void;
   onEditChapter?: (chapter: OutlineChapter, volumeId: string, volumeTitle: string) => void;
+  readOnly?: boolean;
 }
 
-export default function ChapterOutline({ volumes, onEditVolume, onEditChapter }: ChapterOutlineProps) {
+export default function ChapterOutline({ volumes, onEditVolume, onEditChapter, readOnly }: ChapterOutlineProps) {
   const [selectedVolume, setSelectedVolume] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'outline' | 'detail'>('outline');
@@ -62,7 +63,7 @@ export default function ChapterOutline({ volumes, onEditVolume, onEditChapter }:
                 >
                   <FileText size={16} />
                   <span>{volume.title}</span>
-                  {onEditVolume && (
+                  {!readOnly && onEditVolume && (
                     <button 
                       className="item-action-btn" 
                       title="编辑卷"
@@ -85,7 +86,7 @@ export default function ChapterOutline({ volumes, onEditVolume, onEditChapter }:
                     }}
                   >
                     <span>{chapter.title}</span>
-                    {onEditChapter && (
+                    {!readOnly && onEditChapter && (
                       <button 
                         className="item-action-btn" 
                         title="编辑章节"
