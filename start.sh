@@ -190,11 +190,11 @@ export ENABLE_PREFERENCE_MEMORY=false
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 
 echo "启动 MemOS API 服务器..."
-echo "后端将在 http://localhost:8001 运行"
+echo "后端将在 http://localhost:8000 运行"
 echo ""
 
 # 在后台启动后端
-uvicorn memos.api.server_api:app --host 0.0.0.0 --port 8001 --workers 1 &
+uvicorn memos.api.ai_api:app --host 0.0.0.0 --port 8000 --workers 1 &
 BACKEND_PID=$!
 
 echo "后端进程 ID: $BACKEND_PID"
@@ -220,8 +220,8 @@ echo "=========================================="
 echo "服务已启动！"
 echo "=========================================="
 echo "前端: http://localhost:5173"
-echo "后端: http://localhost:8001"
-echo "API 文档: http://localhost:8001/docs"
+echo "后端: http://localhost:8000"
+echo "API 文档: http://localhost:8000/docs"
 echo ""
 echo "按 Ctrl+C 停止所有服务"
 echo ""

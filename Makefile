@@ -77,15 +77,15 @@ build-all: build-frontend build-admin
 	@echo "✅ 所有前端项目构建完成"
 
 # 构建后端 Docker 镜像
-.PHONY: build-image-backend
-build-image-backend:
+.PHONY: build-backend
+build-backend:
 	@echo "📦 构建 Backend Docker 镜像..."
 	docker build -t qiuqiuwriter-backend:latest -f backend/docker/Dockerfile backend
 	@echo "✅ Backend 镜像构建完成"
 
 # 重新构建应用并重启 (不影响 infra)
 .PHONY: rebuild
-rebuild: down-app build-all build-image-backend app
+rebuild: down-app build-all build-backend app
 	@echo "✅ 应用已重新构建并重启"
 
 # 启动所有
