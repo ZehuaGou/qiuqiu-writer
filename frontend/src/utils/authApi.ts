@@ -39,6 +39,10 @@ export interface UserInfo {
   created_at?: string;
   updated_at?: string;
   is_superuser?: boolean;
+  plan?: string;
+  token_remaining?: number;
+  token_reset_at?: string;
+  plan_expires_at?: string;
 }
 
 export interface AuthError {

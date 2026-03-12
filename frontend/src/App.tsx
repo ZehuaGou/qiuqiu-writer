@@ -5,7 +5,9 @@ import MainLayout from './components/layout/MainLayout';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import RequireAuth from './components/auth/RequireAuth';
 import LoginModal from './components/auth/LoginModal';
+import QuotaExceededModal from './components/common/QuotaExceededModal';
 import { authApi } from './utils/authApi';
+import { tokenApi } from './utils/tokenApi';
 
 // 路由懒加载 - 提升首屏加载性能
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -70,6 +72,16 @@ function AppContent() {
 
 function App() {
   const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
+  const [quotaExceededOpen, setQuotaExceededOpen] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<string>('free');
+
+  // 拉取当前用户套餐（已登录时）
+  useEffect(() => {
+    if (!authApi.isAuthenticated()) return;
+    tokenApi.getTokenInfo()
+      .then((info) => setCurrentPlan(info.plan))
+      .catch(() => {/* 静默失败，保持默认 free */});
+  }, []);
 
   useEffect(() => {
     const handler = () => {
@@ -83,6 +95,20 @@ function App() {
     return () => window.removeEventListener('auth:session-expired', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = () => {
+      // 弹出前刷新一次套餐信息，确保展示最新状态
+      if (authApi.isAuthenticated()) {
+        tokenApi.getTokenInfo()
+          .then((info) => setCurrentPlan(info.plan))
+          .catch(() => {});
+      }
+      setQuotaExceededOpen(true);
+    };
+    window.addEventListener('token:quota-exceeded', handler);
+    return () => window.removeEventListener('token:quota-exceeded', handler);
+  }, []);
+
   return (
     <Router>
       <AppContent />
@@ -90,6 +116,11 @@ function App() {
         isOpen={sessionExpiredOpen}
         onClose={() => setSessionExpiredOpen(false)}
         onLoginSuccess={() => setSessionExpiredOpen(false)}
+      />
+      <QuotaExceededModal
+        isOpen={quotaExceededOpen}
+        onClose={() => setQuotaExceededOpen(false)}
+        currentPlan={currentPlan}
       />
     </Router>
   );

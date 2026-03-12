@@ -28,6 +28,14 @@ export function isAuthError(error: unknown): boolean {
   return false;
 }
 
+/** 判断是否是 Token 配额不足错误 */
+export function isQuotaError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.status === 402;
+  }
+  return false;
+}
+
 /** 将 Error 转为用户友好的中文提示 */
 export function parseError(error: unknown, fallback = '操作失败，请稍后重试'): string {
   if (!(error instanceof Error)) return fallback;

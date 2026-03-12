@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "diff": "^8.0.0",
     "@antv/g6": "^5.0.50",
     "@antv/g6-extension-react": "^0.2.6",
     "@tiptap/extension-collaboration": "^2.11.5",
@@ -19,10 +18,12 @@
     "@tiptap/extension-underline": "^2.11.5",
     "@tiptap/react": "^2.11.5",
     "@tiptap/starter-kit": "^2.11.5",
+    "diff": "^8.0.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.555.0",
     "markdown-it": "^14.1.0",
     "prosemirror-markdown": "^1.13.2",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",

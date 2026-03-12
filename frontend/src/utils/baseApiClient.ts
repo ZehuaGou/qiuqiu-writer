@@ -63,6 +63,11 @@ export class BaseApiClient {
           window.dispatchEvent(new CustomEvent('auth:session-expired'));
         }
 
+        // Token 配额不足：广播事件，让全局升级弹窗响应
+        if (response.status === 402) {
+          window.dispatchEvent(new CustomEvent('token:quota-exceeded'));
+        }
+
         throw error;
       }
 

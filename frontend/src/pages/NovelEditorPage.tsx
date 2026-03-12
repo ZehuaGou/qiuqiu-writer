@@ -29,6 +29,7 @@ import HeaderSettingsMenu from '../components/editor/HeaderSettingsMenu';
 import FeedbackModal from '../components/common/FeedbackModal';
 import ExportModal from '../components/editor/ExportModal';
 import ShareWorkModal from '../components/ShareWorkModal';
+import TokenBalance from '../components/common/TokenBalance';
 
 // HooksExportModal from '../components/editor/ExportModal';
 
@@ -1090,8 +1091,9 @@ export default function NovelEditorPage() {
                   {rightSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
                 </button>
               </div>
-                
-                
+
+
+                <TokenBalance compact />
                 <HeaderSettingsMenu
                   onFindReplace={() => {
                     handleReplace();
