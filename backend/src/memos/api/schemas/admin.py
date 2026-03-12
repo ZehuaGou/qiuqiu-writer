@@ -24,6 +24,27 @@ class AdminUserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class PlanPricePoint(BaseModel):
+    original: float = 0
+    current: float = 0
+
+class PlanPricing(BaseModel):
+    monthly: PlanPricePoint = PlanPricePoint()
+    quarterly: PlanPricePoint = PlanPricePoint()
+    yearly: PlanPricePoint = PlanPricePoint()
+
+class PlanConfig(BaseModel):
+    key: str
+    label: str
+    tokens: int
+    desc: str
+    highlight: bool = False
+    badge: str | None = None
+    pricing: PlanPricing = PlanPricing()
+
+class PlanConfigUpdateRequest(BaseModel):
+    plans: List[PlanConfig]
+
 class SystemMonitorResponse(BaseModel):
     cpu_percent: float
     cpu_cores: int
@@ -52,6 +73,10 @@ class UserResponse(BaseModel):
     created_at: str | None = None
     last_login_at: str | None = None
     role: str = "user"
+    plan: str = "free"
+    token_remaining: int = 0
+    token_reset_at: str | None = None
+    plan_expires_at: str | None = None
 
 class UserUpdateRequest(BaseModel):
     email: str | None = None

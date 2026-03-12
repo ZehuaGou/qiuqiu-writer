@@ -18,6 +18,7 @@ from memos.api.services.chapter_service import ChapterService
 from memos.api.services.work_service import WorkService
 from memos.api.ai_models import AnalysisSettings
 from memos.api.services.ai_service import get_ai_service
+from memos.api.services.token_service import TokenService
 
 
 # 辅助函数：确保返回的是 AsyncSession 对象，而不是生成器
@@ -96,9 +97,7 @@ def get_mos_product_instance():
 
 
 def _parse_work_id_from_user_id(user_id: str) -> str | None:
-    """
-    解析形如 user_{uid}_work_{workId} 的 user_id，提取 workId（支持 40 位字符串或数字）。
-    """
+    """解析形如 user_{uid}_work_{workId} 的 user_id，提取 workId。"""
     if not user_id or "_work_" not in user_id:
         return None
     parts = user_id.split("_work_")
@@ -112,6 +111,13 @@ def _parse_work_id_from_user_id(user_id: str) -> str | None:
     if len(work_part) <= 50 and all(c.isalnum() or c in "-_" for c in work_part):
         return work_part
     return None
+
+
+def _parse_real_user_id(memos_user_id: str) -> str | None:
+    """从 user_{uid}_work_{workId} 格式中解析真实用户 ID"""
+    if not memos_user_id or not memos_user_id.startswith("user_") or "_work_" not in memos_user_id:
+        return None
+    return memos_user_id[len("user_"):memos_user_id.index("_work_")] or None
 
 
 def _parse_chapter_ids_from_command(query: str) -> list[int]:
@@ -504,6 +510,13 @@ async def chat(chat_req: ChatRequest):
     """Chat with MemOS for a specific user. Returns SSE stream.
     使用短生命周期 session 仅做提及替换后即释放，避免流式响应期间占用连接池影响其他接口。
     """
+    # ── Token 配额检查 ────────────────────────────────────────────────────────
+    _real_user_id = _parse_real_user_id(chat_req.user_id)
+    _token_service = TokenService()
+    if _real_user_id:
+        if not await _token_service.check_token_quota(_real_user_id):
+            raise HTTPException(status_code=402, detail="Token 配额不足，请升级套餐")
+
     try:
         # 内部流式函数定义 (保持原样，通过参数传递必要数据)
 
@@ -1214,8 +1227,38 @@ async def chat(chat_req: ChatRequest):
                 error_data = f"data: {json.dumps({'type': 'error', 'content': str(traceback.format_exc())})}\n\n"
                 yield error_data
 
+        async def tracked_generator():
+            """包装 main_response_generator，流结束后记录 token 用量。"""
+            output_chars = 0
+            try:
+                async for chunk in main_response_generator():
+                    yield chunk
+                    try:
+                        if "data:" in chunk:
+                            d = json.loads(chunk.split("data:", 1)[1].strip())
+                            if d.get("type") == "text":
+                                output_chars += len(str(d.get("data", "")))
+                    except Exception:
+                        pass
+            finally:
+                if _real_user_id:
+                    input_tok = max(1, int(len(chat_req.query) * 1.5))
+                    output_tok = max(0, int(output_chars * 1.5))
+                    total_tok = input_tok + output_tok
+                    try:
+                        await _token_service.record_token_usage(
+                            user_id=_real_user_id,
+                            input_tokens=input_tok,
+                            output_tokens=output_tok,
+                            total_tokens=total_tok,
+                            feature="chat",
+                            work_id=_parse_work_id_from_user_id(chat_req.user_id),
+                        )
+                    except Exception:
+                        pass
+
         return StreamingResponse(
-            main_response_generator(),
+            tracked_generator(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -1239,6 +1282,13 @@ async def chat_complete(chat_req: ChatCompleteRequest):
     """Chat with MemOS for a specific user. Returns complete response (non-streaming).
     使用短生命周期 session 做提及替换；各命令分支内再按需创建 session，避免 LLM 调用期间占用连接池。
     """
+    # ── Token 配额检查 ────────────────────────────────────────────────────────
+    _real_user_id = _parse_real_user_id(chat_req.user_id)
+    _token_service = TokenService()
+    if _real_user_id:
+        if not await _token_service.check_token_quota(_real_user_id):
+            raise HTTPException(status_code=402, detail="Token 配额不足，请升级套餐")
+
     try:
         mos_product = get_mos_product_instance()
         ensure_memos_user_exists(chat_req.user_id)
@@ -1708,6 +1758,22 @@ async def chat_complete(chat_req: ChatCompleteRequest):
             content, references = await loop.run_in_executor(None, _run_chat)
 
         # Return the complete response
+        # ── Token 用量记录 ────────────────────────────────────────────────────
+        if _real_user_id:
+            try:
+                content_str = content if isinstance(content, str) else str(content)
+                input_tok = max(1, int(len(chat_req.query) * 1.5))
+                output_tok = max(0, int(len(content_str) * 1.5))
+                await _token_service.record_token_usage(
+                    user_id=_real_user_id,
+                    input_tokens=input_tok,
+                    output_tokens=output_tok,
+                    total_tokens=input_tok + output_tok,
+                    feature="chat",
+                    work_id=_parse_work_id_from_user_id(chat_req.user_id),
+                )
+            except Exception:
+                pass
         return {
             "code": 200,
             "status": "success",

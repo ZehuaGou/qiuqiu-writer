@@ -12,9 +12,11 @@ from memos.api.schemas.admin import (
     SystemMonitorResponse, CubeListResponse, CubeResponse,
     InvitationCodeListResponse, InvitationCodeResponse, GenerateInvitationCodesResponse,
     WorkTemplateAdminCreate, WorkTemplateAdminUpdate,
+    PlanConfig, PlanConfigUpdateRequest,
 )
 from memos.api.services.admin_service import AdminService
 from memos.api.services.invitation_code_service import InvitationCodeService
+from memos.api.core.token_plans import get_plan_configs, save_plan_configs
 from memos.mem_user.mysql_user_manager import MySQLUserManager
 from memos.mem_user.persistent_factory import PersistentUserManagerFactory
 from memos.configs.mem_user import UserManagerConfigFactory
@@ -430,3 +432,63 @@ async def reload_config(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reload config: {str(e)}")
 
+
+# ─── Token / 套餐管理 ────────────────────────────────────────────────────────
+
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class UserPlanUpdateRequest(BaseModel):
+    plan: str
+    plan_expires_at: Optional[str] = None  # ISO 格式日期字符串，可选
+    override_remaining: Optional[int] = None
+
+
+
+
+@router.put("/users/{user_id}/plan")
+async def update_user_plan(
+    user_id: str,
+    data: UserPlanUpdateRequest,
+    admin_id: str = Depends(get_current_admin),
+):
+    """管理员设置用户套餐及 Token 余额"""
+    from memos.api.services.token_service import TokenService
+    from datetime import datetime, timezone
+
+    expires_at = None
+    if data.plan_expires_at:
+        try:
+            expires_at = datetime.fromisoformat(data.plan_expires_at)
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="plan_expires_at 格式无效，请使用 ISO 格式")
+
+    token_service = TokenService()
+    success = await token_service.set_user_plan(
+        user_id=user_id,
+        plan=data.plan,
+        expires_at=expires_at,
+        override_remaining=data.override_remaining,
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail=f"用户 {user_id} 不存在")
+    return {"success": True, "user_id": user_id, "plan": data.plan}
+
+
+@router.get("/plans/config", response_model=list[PlanConfig])
+async def get_plans_config(
+    admin_id: str = Depends(get_current_admin)
+):
+    return await get_plan_configs()
+
+@router.put("/plans/config", response_model=list[PlanConfig])
+async def update_plans_config(
+    request: PlanConfigUpdateRequest,
+    admin_id: str = Depends(get_current_admin)
+):
+    # Convert Pydantic models to dicts
+    configs = [p.model_dump() for p in request.plans]
+    await save_plan_configs(configs)
+    return await get_plan_configs()

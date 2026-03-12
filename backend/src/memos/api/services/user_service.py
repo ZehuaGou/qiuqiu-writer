@@ -6,6 +6,16 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 import json
 
+
+def _next_month_first_day() -> datetime:
+    """返回下月 1 日 00:00:00 UTC"""
+    now = datetime.now(timezone.utc)
+    if now.month == 12:
+        return now.replace(year=now.year + 1, month=1, day=1,
+                           hour=0, minute=0, second=0, microsecond=0)
+    return now.replace(month=now.month + 1, day=1,
+                       hour=0, minute=0, second=0, microsecond=0)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, text
 from sqlalchemy.orm import selectinload
@@ -14,6 +24,7 @@ from memos.api.core.database import engine, AsyncSessionLocal
 from memos.api.core.security import get_password_hash, verify_password
 from memos.api.core.redis import get_redis
 from memos.api.core.id_utils import generate_id, normalize_legacy_id
+from memos.api.core.token_plans import PLAN_TOKEN_QUOTAS
 from memos.api.models.user import User, UserProfile
 from memos.api.models.system import AuditLog
 
@@ -65,7 +76,10 @@ class UserService:
                     email=email,
                     password_hash=get_password_hash(password),
                     display_name=display_name,
-                    status="active"
+                    status="active",
+                    plan="free",
+                    token_remaining=PLAN_TOKEN_QUOTAS["free"],
+                    token_reset_at=_next_month_first_day(),
                 )
 
                 session.add(user)

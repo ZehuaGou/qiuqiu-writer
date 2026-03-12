@@ -59,48 +59,40 @@ except Exception as e:
 
 # 注册WriterAI应用路由
 # 使用直接导入路由文件的方式，避免触发 memos.__init__.py 的导入
-try:
-    # 直接导入路由模块，避免通过 memos.api.routers 包导入
-    import importlib
-    
-    # 导入各个路由模块
-    auth_router_module = importlib.import_module('memos.api.routers.auth_router')
-    admin_router_module = importlib.import_module('memos.api.routers.admin_router')
-    chapters_router_module = importlib.import_module('memos.api.routers.chapters_router')
-    volumes_router_module = importlib.import_module('memos.api.routers.volumes_router')
-    templates_router_module = importlib.import_module('memos.api.routers.templates_router')
-    works_router_module = importlib.import_module('memos.api.routers.works_router')
-    prompt_template_router_module = importlib.import_module('memos.api.routers.prompt_template_router')
-    feedback_router_module = importlib.import_module('memos.api.routers.feedback_router')
+import importlib
 
-    # 获取路由对象
-    auth_router = auth_router_module.router
-    admin_router = admin_router_module.router
-    chapters_router = chapters_router_module.router
-    volumes_router = volumes_router_module.router
-    templates_router = templates_router_module.router
-    works_router = works_router_module.router
-    prompt_template_router = prompt_template_router_module.router
-    feedback_router = feedback_router_module.router
-    
-    logger.info(f"📋 Works router prefix: {works_router.prefix}")
-    logger.info(f"📋 Works router routes count: {len(works_router.routes)}")
-    for route in works_router.routes:
-        if hasattr(route, 'path') and hasattr(route, 'methods'):
-            methods = list(route.methods) if hasattr(route, 'methods') else []
-            logger.info(f"  {methods} {route.path}")
-    
-    app.include_router(auth_router)
-    app.include_router(admin_router)
-    app.include_router(chapters_router)
-    app.include_router(volumes_router)
-    app.include_router(templates_router)
-    app.include_router(works_router)
-    app.include_router(prompt_template_router)
-    app.include_router(feedback_router)
-    logger.info("✅ WriterAI application routers registered successfully")
-except Exception as e:
-    logger.error(f"❌ WriterAI application routers not available: {e}", exc_info=True)
+def register_router(module_name, router_attr='router'):
+    try:
+        module = importlib.import_module(module_name)
+        router = getattr(module, router_attr)
+        app.include_router(router)
+        logger.info(f"✅ Router registered: {module_name}")
+        
+        # 特殊处理：如果是 works_router，打印路由信息以便调试
+        if module_name == 'memos.api.routers.works_router':
+            logger.info(f"📋 Works router prefix: {router.prefix}")
+            logger.info(f"📋 Works router routes count: {len(router.routes)}")
+            for route in router.routes:
+                if hasattr(route, 'path') and hasattr(route, 'methods'):
+                    methods = list(route.methods) if hasattr(route, 'methods') else []
+                    logger.info(f"  {methods} {route.path}")
+                    
+        return router
+    except Exception as e:
+        logger.error(f"❌ Failed to register router {module_name}: {e}", exc_info=True)
+        return None
+
+# 依次注册路由
+register_router('memos.api.routers.auth_router')
+register_router('memos.api.routers.users_router')  # 新增：用户/Token相关接口
+register_router('memos.api.routers.admin_router')
+register_router('memos.api.routers.chapters_router')
+register_router('memos.api.routers.volumes_router')
+register_router('memos.api.routers.templates_router')
+register_router('memos.api.routers.works_router')
+register_router('memos.api.routers.prompt_template_router')
+register_router('memos.api.routers.feedback_router')
+register_router('memos.api.routers.payment_router')
 
 # 尝试注册产品路由
 try:

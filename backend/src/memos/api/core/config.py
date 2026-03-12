@@ -141,6 +141,25 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
 
+    # ── 支付配置 ─────────────────────────────────────────────────────────────
+    # 模拟支付模式（本地开发用，无需真实商户凭证）
+    PAYMENT_MOCK_MODE: bool = True
+    # 回调域名（需要公网可访问；本地开发可用 ngrok 暴露）
+    PAYMENT_NOTIFY_BASE_URL: str = "https://your-domain.com"
+
+    # 微信支付（Native 扫码支付，API v3）
+    WECHAT_PAY_APPID: str = ""
+    WECHAT_PAY_MCHID: str = ""
+    WECHAT_PAY_APIV3_KEY: str = ""        # 32 位 API v3 密钥
+    WECHAT_PAY_CERT_SERIAL: str = ""      # 商户证书序列号
+    WECHAT_PAY_PRIVATE_KEY: str = ""      # 商户私钥 PEM 内容（多行用 \\n 转义）
+
+    # 支付宝（当面付/预创建扫码）
+    ALIPAY_APPID: str = ""
+    ALIPAY_PRIVATE_KEY: str = ""          # 应用私钥（RSA2），PEM 内容
+    ALIPAY_PUBLIC_KEY: str = ""           # 支付宝公钥，PEM 内容
+    ALIPAY_SANDBOX: bool = True           # True = 沙箱环境
+
     class Config:
         env_file = ".env"
         case_sensitive = True

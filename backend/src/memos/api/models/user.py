@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    Column, Integer, BigInteger, String, Boolean, DateTime, Text, JSON,
     Index, ForeignKey
 )
 from sqlalchemy.orm import relationship
@@ -29,6 +29,10 @@ class User(Base):
     bio = Column(Text)
     status = Column(String(20), default="active", index=True)  # active/inactive/banned
     preferences = Column(JSON, default=dict)  # 用户偏好设置
+    plan = Column(String(20), default="free", nullable=False)
+    token_remaining = Column(BigInteger, default=100000, nullable=False)
+    token_reset_at = Column(DateTime(timezone=True), nullable=True)
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True)
     last_login_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -82,6 +86,10 @@ class User(Base):
             "bio": self.bio,
             "status": self.status,
             "preferences": self.preferences or {},
+            "plan": self.plan or "free",
+            "token_remaining": self.token_remaining if self.token_remaining is not None else 100000,
+            "token_reset_at": safe_isoformat(self.token_reset_at),
+            "plan_expires_at": safe_isoformat(self.plan_expires_at),
             "last_login_at": safe_isoformat(self.last_login_at),
             "created_at": safe_isoformat(self.created_at),
             "updated_at": safe_isoformat(self.updated_at),

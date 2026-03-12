@@ -217,7 +217,11 @@ class AdminService:
                 status=u.status,
                 created_at=str(u.created_at) if u.created_at else None,
                 last_login_at=str(u.last_login_at) if u.last_login_at else None,
-                role="user"
+                role="user",
+                plan=u.plan or "free",
+                token_remaining=u.token_remaining if u.token_remaining is not None else 0,
+                token_reset_at=str(u.token_reset_at) if u.token_reset_at else None,
+                plan_expires_at=str(u.plan_expires_at) if u.plan_expires_at else None,
             ))
             
         return UserListResponse(total=total, items=items, page=page, size=size)

@@ -41,6 +41,7 @@ from memos.api.services.ai_service import get_ai_service
 from memos.api.services.book_analysis_service import BookAnalysisService
 from memos.api.services.chapter_service import ChapterService
 from memos.api.services.sharedb_service import ShareDBService
+from memos.api.services.token_service import QuotaExceededError
 from memos.api.services.work_service import WorkService
 from memos.api.services.yjs_ws_handler import yjs_ws_manager
 from memos.log import get_logger
@@ -1373,13 +1374,14 @@ async def generate_chapter_outlines_internal(
 )
 async def generate_chapter_content(
     request: GenerateChapterContentRequest,
+    current_user_id: str = Depends(get_current_user_id),
 ):
     """
     根据大纲和细纲生成章节内容
-    
+
     Args:
         request: 生成请求，包含大纲、细纲等信息
-    
+
     Returns:
         StreamingResponse: 服务器发送事件流
     """
@@ -1441,20 +1443,22 @@ async def generate_chapter_content(
             f"detailed_outline_length={len(request.detailed_outline)}, "
             f"model={analysis_settings.get('model')}"
         )
-        
+
+        usage_ref: dict = {}
+
         # 执行流式生成
         async def generate_content():
             """生成章节内容响应"""
             try:
                 import json
-                
+
                 # 发送开始消息
                 start_msg = json.dumps({
                     "type": "start",
                     "message": "开始生成章节内容..."
                 })
                 yield f"data: {start_msg}\n\n"
-                
+
                 # 流式生成内容（真正的流式响应）
                 full_content = ""
                 async for content_chunk in ai_service.generate_content_stream(
@@ -1463,14 +1467,18 @@ async def generate_chapter_content(
                     model=analysis_settings.get("model"),
                     temperature=analysis_settings.get("temperature", 0.7),
                     max_tokens=analysis_settings.get("max_tokens", 8000),
+                    usage_ref=usage_ref,
+                    user_id=str(current_user_id),
+                    feature="generate",
+                    work_id=str(request.work_id) if hasattr(request, 'work_id') and request.work_id else None,
                 ):
                     # 累积内容
                     full_content += content_chunk
-                    
+
                     # 实时发送内容块
                     chunk_msg = json.dumps({"type": "chunk", "content": content_chunk})
                     yield f"data: {chunk_msg}\n\n"
-                
+
                 # 发送完成消息
                 done_msg = json.dumps({
                     "type": "done",
@@ -1478,7 +1486,7 @@ async def generate_chapter_content(
                     "content_length": len(full_content)
                 })
                 yield f"data: {done_msg}\n\n"
-                
+
             except Exception as e:
                 logger.error(f"生成章节内容过程出错: {traceback.format_exc()}")
                 error_msg = json.dumps({
@@ -1502,6 +1510,8 @@ async def generate_chapter_content(
     
     except HTTPException:
         raise
+    except QuotaExceededError:
+        raise HTTPException(status_code=402, detail="Token配额不足，请升级套餐")
     except Exception as e:
         logger.error(f"Failed to generate chapter content: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
@@ -1756,7 +1766,7 @@ async def generate_component_data(
         # 检查用户是否有权限访问该作品
         if not await work_service.can_access_work(current_user_id, request.work_id):
             raise HTTPException(status_code=403, detail="无权访问该作品")
-        
+
         # 获取AI服务
         ai_service = get_ai_service()
         if not ai_service.is_healthy():
@@ -1889,6 +1899,7 @@ async def generate_component_data(
 
         # 调用AI生成内容（非流式，一次性返回）
         # 文本类组件强制不使用JSON格式；结构化组件也暂不强制，由prompt控制
+        usage_ref: dict = {}
         ai_response = await ai_service.get_ai_response(
             content="",
             prompt=formatted_prompt,
@@ -1897,19 +1908,25 @@ async def generate_component_data(
             temperature=temperature,
             max_tokens=max_tokens,
             use_json_format=False,
+            usage_ref=usage_ref,
+            user_id=str(current_user_id),
+            feature="generate",
+            work_id=str(request.work_id) if request.work_id else None,
         )
-        
+
         logger.info(f"✅ 组件数据生成完成: component_id={request.component_id}, data_key={request.data_key}, 响应长度={len(ai_response)}")
-        
+
         # 返回生成的数据
         return {
             "component_id": request.component_id,
             "data_key": request.data_key,
             "generated_data": ai_response,
         }
-        
+
     except HTTPException:
         raise
+    except QuotaExceededError:
+        raise HTTPException(status_code=402, detail="Token配额不足，请升级套餐")
     except Exception as e:
         logger.error(f"Failed to generate component data: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
@@ -1939,9 +1956,6 @@ async def generate_chapter_outline(
         ai_service = get_ai_service()
         if not ai_service.is_healthy():
             raise HTTPException(status_code=503, detail="AI服务不可用")
-
-        # 初始化Prompt上下文服务
-        from memos.api.services.prompt_context_service import PromptContextService
         prompt_service = PromptContextService(db)
         await prompt_service.initialize()
 
@@ -2018,6 +2032,7 @@ async def generate_chapter_outline(
         temperature = analysis_settings.temperature if analysis_settings.temperature != 0.7 else 0.85
         max_tokens = analysis_settings.max_tokens
 
+        usage_ref: dict = {}
         ai_response = await ai_service.get_ai_response(
             content="",
             prompt=formatted_prompt,
@@ -2026,6 +2041,10 @@ async def generate_chapter_outline(
             temperature=temperature,
             max_tokens=max_tokens,
             use_json_format=False,
+            usage_ref=usage_ref,
+            user_id=str(current_user_id),
+            feature="generate",
+            work_id=str(request.work_id) if request.work_id else None,
         )
 
         logger.info(f"✅ {'大纲' if request.outline_type == 'outline' else '细纲'}生成完成，响应长度={len(ai_response)}")
@@ -2037,6 +2056,8 @@ async def generate_chapter_outline(
 
     except HTTPException:
         raise
+    except QuotaExceededError:
+        raise HTTPException(status_code=402, detail="Token配额不足，请升级套餐")
     except Exception as e:
         logger.error(f"Failed to generate chapter outline: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
