@@ -10,7 +10,7 @@ import { EditorContent } from '@tiptap/react';
 
 // 组件
 import SideNav from '../components/editor/SideNav';
-import AIAssistant from '../components/editor/AIAssistant';
+import CollabAIPanel from '../components/editor/CollabAIPanel';
 import { formatOutlineForEditor, formatDetailedOutlineForEditor } from '../utils/outlineFormat';
 import TagsManager from '../components/editor/TagsManager';
 import ChapterOutline from '../components/editor/ChapterOutline';
@@ -159,7 +159,6 @@ export default function NovelEditorPage() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-
   useEffect(() => {
     const checkTipsEnabled = () => {
       const enabled = localStorage.getItem('wawawriter_guide_tips_enabled');
@@ -1450,12 +1449,12 @@ export default function NovelEditorPage() {
         {/* 右侧边栏 - 桌面端（AI对话窗口） */}
         {!isMobile && (
           <div className={`sidebar-wrapper right-sidebar-wrapper ${rightSidebarCollapsed ? 'collapsed' : ''}`}>
-            <AIAssistant 
-              workId={workId}
-              initialSelectionRef={initialSelectionRef}
-              onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
+            <CollabAIPanel
+              workId={workId ?? ''}
+              chapters={orderedChapters}
+              currentChapterId={selectedChapter ?? undefined}
               onUseContinueRecommendation={handleUseContinueRecommendation}
-              readOnly={!canEdit}
+              currentUserId={currentUser?.id}
             />
           </div>
         )}
@@ -1471,12 +1470,12 @@ export default function NovelEditorPage() {
                 </button>
               </div>
               <div className="mobile-chat-content">
-                <AIAssistant 
-                  workId={workId}
-                  initialSelectionRef={initialSelectionRef}
-                  onGenerateChapterFromOutline={handleGenerateChapterFromOutline}
+                <CollabAIPanel
+                  workId={workId ?? ''}
+                  chapters={orderedChapters}
+                  currentChapterId={selectedChapter ?? undefined}
                   onUseContinueRecommendation={handleUseContinueRecommendation}
-                  readOnly={!canEdit}
+                  currentUserId={currentUser?.id}
                 />
               </div>
             </div>

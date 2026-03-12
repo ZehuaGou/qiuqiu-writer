@@ -266,7 +266,7 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       },
     },
     onCreate: () => {
-      
+
     },
     onUpdate: ({ editor: ed }) => {
       if (onUpdate) {
@@ -275,6 +275,15 @@ export function useYjsEditor(options: UseYjsEditorOptions): UseYjsEditorReturn {
       }
     },
   }, [extensions]); // 当 extensions 改变时重新创建编辑器
+
+  // ===== 同步 editable 状态 =====
+  // useEditor 初始化后不会自动响应 editable 选项的变化（如 canEdit 从 false→true），
+  // 需要手动调用 setEditable 来保持同步。
+  useEffect(() => {
+    if (editor && editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   // ===== 初始内容应用逻辑 =====
   // 确保在 Yjs 状态完全同步（本地 IndexedDB + 远程 WebSocket）后再决定是否注入初始内容

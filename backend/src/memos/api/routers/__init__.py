@@ -48,3 +48,7 @@ def get_feedback_router():
     from memos.api.routers.feedback_router import router
     return router
 
+def get_collab_ai_router():
+    from memos.api.routers.collab_ai_router import router
+    return router
+

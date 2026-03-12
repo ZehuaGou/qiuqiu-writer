@@ -126,6 +126,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️  Yjs WebSocket router not available: {e}", exc_info=True)
 
+# 注册多人协作 AI WebSocket 路由
+try:
+    from memos.api.routers.collab_ai_router import router as collab_ai_router
+    app.include_router(collab_ai_router)
+    logger.info("✅ CollabAI WebSocket router registered successfully")
+except Exception as e:
+    logger.warning(f"⚠️  CollabAI WebSocket router not available: {e}", exc_info=True)
+
 # 数据库初始化：启动时确保所有表存在
 @app.on_event("startup")
 async def startup_db_tables():

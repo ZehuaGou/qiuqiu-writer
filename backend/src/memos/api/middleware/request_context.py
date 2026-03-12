@@ -47,6 +47,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.source = source or "api"
 
+    async def __call__(self, scope, receive, send):
+        # WebSocket 和 lifespan 连接在 ASGI 层直接透传，
+        # 不经过 BaseHTTPMiddleware 的 HTTP 管道，避免 403 拒绝连接的问题。
+        # 注意：某些 Starlette 版本的 BaseHTTPMiddleware 会对 WebSocket 连接
+        # 错误地走 HTTP 处理逻辑，导致连接被以 403 拒绝。
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Extract or generate trace_id
         trace_id = extract_trace_id_from_headers(request) or generate_trace_id()
