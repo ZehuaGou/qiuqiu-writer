@@ -36,8 +36,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # 5. 安装 Python 依赖（带镜像源和超时）
 RUN pip install --no-cache-dir \
-    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
-    --trusted-host pypi.tuna.tsinghua.edu.cn \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
     --default-timeout=600 \
     -r requirements.txt
 # 6. 拷贝应用源码

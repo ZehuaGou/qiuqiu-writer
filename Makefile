@@ -80,7 +80,7 @@ build-all: build-frontend build-admin
 .PHONY: build-backend
 build-backend:
 	@echo "📦 构建 Backend Docker 镜像..."
-	docker build -t qiuqiuwriter-backend:latest -f backend/docker/Dockerfile backend
+	docker buildx build --platform linux/amd64,linux/arm64  -t qiuqiuwriter-backend:latest -f backend/docker/Dockerfile backend
 	@echo "✅ Backend 镜像构建完成"
 
 # 重新构建应用并重启 (不影响 infra)
