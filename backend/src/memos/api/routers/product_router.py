@@ -538,7 +538,7 @@ async def chat(chat_req: ChatRequest):
             # Phase 1: 准备 Prompt（需要 DB）
             user_prompt = ""
             ctx = {}
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             # 使用独立的短 session
             async with AsyncSessionLocal() as db_session:
@@ -747,7 +747,7 @@ async def chat(chat_req: ChatRequest):
                  yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
                  return
 
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             total_chapters = len(chapter_info_list)
             success_count = 0
@@ -857,7 +857,7 @@ async def chat(chat_req: ChatRequest):
                 yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
                 return
 
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
 
@@ -989,7 +989,7 @@ async def chat(chat_req: ChatRequest):
                     yield f"data: {json.dumps({'type': 'error', 'content': 'AI服务不可用，请检查配置'})}\n\n"
                     return
 
-                analysis_settings = AnalysisSettings()
+                analysis_settings = AnalysisSettings(model=chat_req.model)
                 
                 yield f"data: {json.dumps({'type': 'status', 'data': '0'})}\n\n"
 
@@ -1344,7 +1344,7 @@ async def chat_complete(chat_req: ChatCompleteRequest):
             ai_service = get_ai_service()
             if not ai_service.is_healthy():
                 raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             try:
                 full_response = await ai_service.get_ai_response(
@@ -1411,7 +1411,7 @@ async def chat_complete(chat_req: ChatCompleteRequest):
             ai_service = get_ai_service()
             if not ai_service.is_healthy():
                 raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             all_summaries = []
             success_count = 0
@@ -1540,7 +1540,7 @@ async def chat_complete(chat_req: ChatCompleteRequest):
             ai_service = get_ai_service()
             if not ai_service.is_healthy():
                 raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             all_summaries = []
             success_count = 0
@@ -1666,7 +1666,7 @@ async def chat_complete(chat_req: ChatCompleteRequest):
             ai_service = get_ai_service()
             if not ai_service.is_healthy():
                 raise HTTPException(status_code=503, detail="AI服务不可用，请检查配置")
-            analysis_settings = AnalysisSettings()
+            analysis_settings = AnalysisSettings(model=chat_req.model)
             
             success_count = 0
             error_count = 0

@@ -8,7 +8,7 @@ from memos.api.schemas.admin import (
     AdminLoginRequest, TokenResponse, AdminCreateRequest, AdminUserResponse,
     UserListResponse, WorkListResponse, StatusUpdateRequest, UserUpdateRequest,
     PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate,
-    SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse,
+    SystemSettingResponse, SystemSettingUpdate, SystemSettingCreate, AuditLogResponse, AuditLogListResponse,
     SystemMonitorResponse, CubeListResponse, CubeResponse,
     InvitationCodeListResponse, InvitationCodeResponse, GenerateInvitationCodesResponse,
     WorkTemplateAdminCreate, WorkTemplateAdminUpdate,
@@ -133,6 +133,27 @@ async def update_system_setting(
     if not result:
         raise HTTPException(status_code=404, detail="System setting not found")
     return result
+
+@router.post("/system-settings", response_model=SystemSettingResponse)
+async def create_system_setting(
+    data: SystemSettingCreate,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    return await service.create_system_setting(data, admin_id=admin_id)
+
+@router.delete("/system-settings/{setting_id}")
+async def delete_system_setting(
+    setting_id: int,
+    db: AsyncSession = Depends(get_async_db),
+    admin_id: str = Depends(get_current_admin)
+):
+    service = AdminService(db)
+    ok = await service.delete_system_setting(setting_id, admin_id=admin_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="System setting not found")
+    return {"ok": True}
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)
 async def get_audit_logs(

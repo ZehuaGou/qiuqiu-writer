@@ -19,7 +19,7 @@ from memos.api.schemas.admin import (
     AdminCreateRequest, AdminLoginRequest, TokenResponse, AdminUserResponse,
     UserListResponse, UserResponse, WorkListResponse, WorkResponse,
     PromptTemplateListResponse, PromptTemplateResponse, PromptTemplateCreate, PromptTemplateUpdate,
-    SystemSettingResponse, SystemSettingUpdate, AuditLogResponse, AuditLogListResponse,
+    SystemSettingResponse, SystemSettingUpdate, SystemSettingCreate, AuditLogResponse, AuditLogListResponse,
     WorkTemplateAdminCreate, WorkTemplateAdminUpdate,
 )
 
@@ -58,6 +58,43 @@ class AdminService:
         await self.db.commit()
         await self.db.refresh(setting)
         return SystemSettingResponse.model_validate(setting)
+
+    async def create_system_setting(self, data: SystemSettingCreate, admin_id: str = "system") -> SystemSettingResponse:
+        setting = SystemSetting(
+            key=data.key,
+            value=data.value,
+            description=data.description,
+            category=data.category,
+            is_public=data.is_public,
+        )
+        self.db.add(setting)
+        audit_log = AuditLog(
+            user_id=admin_id,
+            action="create_setting",
+            target_type="system_setting",
+            target_id=data.key,
+            details={"key": data.key, "value": data.value},
+        )
+        self.db.add(audit_log)
+        await self.db.commit()
+        await self.db.refresh(setting)
+        return SystemSettingResponse.model_validate(setting)
+
+    async def delete_system_setting(self, setting_id: int, admin_id: str = "system") -> bool:
+        setting = await self.db.get(SystemSetting, setting_id)
+        if not setting:
+            return False
+        audit_log = AuditLog(
+            user_id=admin_id,
+            action="delete_setting",
+            target_type="system_setting",
+            target_id=str(setting_id),
+            details={"key": setting.key},
+        )
+        self.db.add(audit_log)
+        await self.db.delete(setting)
+        await self.db.commit()
+        return True
 
     async def get_audit_logs(self, page: int = 1, size: int = 20, user_id: Optional[str] = None, action: Optional[str] = None) -> AuditLogListResponse:
         query = select(AuditLog)

@@ -78,6 +78,7 @@ class ChatRequest(BaseRequest):
     moscube: bool = Field(False, description="Whether to use MemOSCube")
     session_id: str | None = Field(None, description="Session ID for soft-filtering memories")
     use_memory: bool = Field(True, description="Whether to use memory search; set False to bypass vector DB")
+    model: str | None = Field(None, description="AI model name; uses DEFAULT_AI_MODEL if not specified")
 
 
 class ChatCompleteRequest(BaseRequest):

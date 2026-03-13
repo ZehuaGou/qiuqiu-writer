@@ -19,6 +19,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/collab-ai", tags=["collab-ai"])
 
 
+@router.get("/models")
+async def get_available_models():
+    """
+    返回管理员配置的可用 AI 模型列表（公开端点，无需认证）。
+    从 system_settings 表中读取 key='llm_models' 的配置项。
+    """
+    try:
+        from memos.api.core.database import AsyncSessionLocal
+        from memos.api.models.system import SystemSetting
+        from sqlalchemy import select
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(SystemSetting).where(SystemSetting.key == "llm_models")
+            )
+            row = result.scalar_one_or_none()
+            if row and isinstance(row.value, list):
+                # 过滤已禁用模型，并去掉 api_key（敏感信息不下发前端）
+                models = []
+                for m in row.value:
+                    if not isinstance(m, dict) or not m.get("enabled", True):
+                        continue
+                    safe = {k: v for k, v in m.items() if k != "api_key"}
+                    safe["has_custom_key"] = bool(m.get("api_key"))
+                    models.append(safe)
+                return {"models": models}
+    except Exception as e:
+        logger.warning(f"[CollabAI] Failed to load llm_models: {e}")
+    return {"models": []}
+
+
 @router.websocket("/{work_id}")
 async def collab_ai_websocket(
     websocket: WebSocket,

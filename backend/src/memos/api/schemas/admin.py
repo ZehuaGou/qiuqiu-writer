@@ -165,6 +165,13 @@ class SystemSettingResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SystemSettingCreate(BaseModel):
+    key: str
+    value: Any
+    description: str | None = None
+    category: str | None = None
+    is_public: bool = False
+
 class SystemSettingUpdate(BaseModel):
     value: Any
     description: str | None = None

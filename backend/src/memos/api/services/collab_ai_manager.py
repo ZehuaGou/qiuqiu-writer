@@ -39,6 +39,7 @@ class CollabAITask:
     user_name: str
     query: str
     status: str = "queued"  # queued | running | done | cancelled | error
+    model: Optional[str] = None  # 用户选择的 AI 模型（None = 使用默认）
     asyncio_task: Optional[asyncio.Task] = field(default=None, repr=False)
     created_at: float = field(default_factory=time.time)
 
@@ -114,6 +115,94 @@ class CollabAIRoom:
 
     # ── Chat ──────────────────────────────────────────────────────────────────
 
+    async def _get_model_config(self, model_id: str) -> Optional[dict]:
+        """从 DB 读取指定 model_id 的完整配置（含 api_key）。"""
+        from memos.api.core.database import AsyncSessionLocal
+        from memos.api.models.system import SystemSetting
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(SystemSetting).where(SystemSetting.key == "llm_models")
+            )
+            row = result.scalar_one_or_none()
+            if row and isinstance(row.value, list):
+                for m in row.value:
+                    if isinstance(m, dict) and m.get("model_id") == model_id:
+                        return m
+        return None
+
+    async def _generate_stream(
+        self,
+        prompt: str,
+        system_prompt: str,
+        model_id: Optional[str],
+        user_id: str,
+        temperature: float = 0.7,
+        max_tokens: int = 8000,
+        work_id: Optional[str] = None,
+    ):
+        """
+        根据模型配置生成流式响应。
+        - 若模型配置了 api_base_url 或 api_key，则创建临时 OpenAI 客户端
+        - 否则使用全局 ai_service
+        模型配置中的 temperature / max_tokens 优先级高于调用方参数。
+        """
+        import os
+        from memos.api.services.ai_service import get_ai_service
+        from memos.api.services.token_service import QuotaExceededError
+
+        model_config: Optional[dict] = None
+        if model_id:
+            model_config = await self._get_model_config(model_id)
+
+        # 合并参数（模型配置 > 调用方默认值）
+        effective_temp = (model_config.get("temperature") if model_config else None) or temperature
+        effective_max = (model_config.get("max_tokens") if model_config else None) or max_tokens
+        custom_base = (model_config or {}).get("api_base_url") or None
+        custom_key = (model_config or {}).get("api_key") or None
+
+        if custom_base or custom_key:
+            # 使用自定义连接配置
+            from openai import AsyncOpenAI
+
+            ai_service = get_ai_service()
+            # 配额检查（仍走全局 token_service）
+            try:
+                await ai_service._check_and_raise(user_id)
+            except QuotaExceededError:
+                raise
+
+            client = AsyncOpenAI(
+                api_key=custom_key or os.getenv("OPENAI_API_KEY", ""),
+                base_url=custom_base or os.getenv("OPENAI_API_BASE", "https://api.deepseek.com"),
+            )
+            stream = await client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=effective_temp,
+                max_tokens=effective_max,
+                stream=True,
+            )
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        else:
+            # 使用全局 ai_service
+            ai_service = get_ai_service()
+            async for chunk in ai_service.generate_content_stream(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                model=model_id or None,
+                temperature=effective_temp,
+                max_tokens=effective_max,
+                user_id=user_id,
+                work_id=work_id,
+            ):
+                yield chunk
+
     async def _load_chat_history(self) -> List[dict]:
         """从 DB 加载最近 100 条聊天记录（按时间升序）。"""
         from memos.api.core.database import AsyncSessionLocal
@@ -158,7 +247,7 @@ class CollabAIRoom:
             await session.commit()
             return row.to_dict()
 
-    async def handle_chat_message(self, user_id: str, user_name: str, content: str):
+    async def handle_chat_message(self, user_id: str, user_name: str, content: str, model: Optional[str] = None):
         """
         处理用户聊天消息：
         1. 保存到 DB
@@ -175,68 +264,42 @@ class CollabAIRoom:
 
         # 触发 AI 回复
         if AI_TRIGGER in content:
-            asyncio.create_task(self._run_ai_chat(user_id, user_name, content))
+            asyncio.create_task(self._run_ai_chat(user_id, user_name, content, model=model))
 
-    async def _run_ai_chat(self, user_id: str, user_name: str, content: str):
+    async def _run_ai_chat(self, user_id: str, user_name: str, content: str, model: Optional[str] = None):
         """
         AI 聊天回复：流式广播 + 完成后保存 DB。
+        直接调用 _generate_stream，支持模型自定义 api_base/api_key。
         """
+        from memos.api.services.token_service import QuotaExceededError
+
         # 去掉 @球球 后作为 query
         query = content.replace(AI_TRIGGER, "").strip()
         if not query:
             query = "请介绍一下你自己"
 
-        port = int(os.getenv("PORT", "8001"))
-        base_url = f"http://127.0.0.1:{port}"
-        memos_user_id = f"user_{user_id}_work_{self.work_id}"
         message_id = str(uuid.uuid4())
-
-        payload = {
-            "user_id": memos_user_id,
-            "query": query,
-            "history": [],
-            "internet_search": False,
-            "moscube": True,
-            "session_id": f"chat_{self.work_id}",
-        }
-
+        system_prompt = (
+            "你是一位专注于小说创作领域的 AI 助手，名叫球球。"
+            "你熟悉各类写作技巧，擅长分析故事结构、人物塑造和情节发展。"
+            "回答简洁明了，结合小说创作的实际需求给出建议。"
+        )
         accumulated = ""
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
-                async with client.stream(
-                    "POST",
-                    f"{base_url}/api/v1/product/chat",
-                    json=payload,
-                    headers={"Accept": "text/event-stream"},
-                ) as resp:
-                    if resp.status_code == 402:
-                        err_msg = await self._save_chat_message(
-                            AI_USER_ID, AI_NAME,
-                            "⚠️ Token 配额不足，无法回复。", is_ai=True,
-                        )
-                        await self.broadcast({"type": "chat_message", "message": err_msg})
-                        return
+            async for delta in self._generate_stream(
+                prompt=query,
+                system_prompt=system_prompt,
+                model_id=model,
+                user_id=str(user_id),
+                work_id=str(self.work_id),
+            ):
+                accumulated += delta
+                await self.broadcast({
+                    "type": "chat_stream",
+                    "message_id": message_id,
+                    "delta": delta,
+                })
 
-                    async for line in resp.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        data_str = line[6:].strip()
-                        if not data_str:
-                            continue
-                        try:
-                            event = json.loads(data_str)
-                            if event.get("type") == "text" and isinstance(event.get("data"), str):
-                                delta = event["data"]
-                                accumulated += delta
-                                await self.broadcast({
-                                    "type": "chat_stream",
-                                    "message_id": message_id,
-                                    "delta": delta,
-                                })
-                        except json.JSONDecodeError:
-                            pass
-
-            # 流完成
             await self.broadcast({"type": "chat_stream_done", "message_id": message_id})
 
             if accumulated:
@@ -246,6 +309,14 @@ class CollabAIRoom:
                 await self.broadcast({"type": "chat_message", "message": ai_msg})
 
             logger.info(f"[CollabAI:{self.work_id}] AI chat replied ({len(accumulated)} chars)")
+
+        except QuotaExceededError:
+            logger.warning(f"[CollabAI:{self.work_id}] AI chat quota exceeded for user {user_id}")
+            await self.broadcast({"type": "chat_stream_done", "message_id": message_id})
+            err_msg = await self._save_chat_message(
+                AI_USER_ID, AI_NAME, "⚠️ Token 配额不足，无法回复。", is_ai=True,
+            )
+            await self.broadcast({"type": "chat_message", "message": err_msg})
 
         except Exception as e:
             logger.error(f"[CollabAI:{self.work_id}] AI chat error: {e}")
@@ -260,6 +331,7 @@ class CollabAIRoom:
         chapter_id: int,
         chapter_title: str,
         query: str,
+        model: Optional[str] = None,
     ) -> str:
         """将 AI 请求加入章节队列，返回 request_id。"""
         request_id = str(uuid.uuid4())
@@ -270,6 +342,7 @@ class CollabAIRoom:
             user_id=user_id,
             user_name=user_name,
             query=query,
+            model=model,
         )
         self.all_tasks[request_id] = task
 
@@ -387,7 +460,6 @@ class CollabAIRoom:
         from memos.api.core.database import AsyncSessionLocal
         from memos.api.models.chapter import Chapter
         from memos.api.models.work import Work
-        from memos.api.services.ai_service import get_ai_service
 
         try:
             # 1. 从 DB 读取章节元数据和作品角色信息
@@ -415,11 +487,6 @@ class CollabAIRoom:
             chars_raw = work_meta.get("characters") or work_meta.get("component_data", {}).get("characters", [])
             character_names = [c.get("name", "") for c in chars_raw if isinstance(c, dict) and c.get("name")]
 
-            # 2. 调用 generate_content_stream
-            ai_service = get_ai_service()
-            if not ai_service.is_healthy():
-                raise ValueError("AI 服务不可用")
-
             system_prompt = (
                 "你是一位经验丰富的小说创作专家，擅长根据大纲和细纲创作引人入胜的章节内容。"
                 "直接输出章节正文内容，不要添加标题、说明等额外文字。"
@@ -435,15 +502,11 @@ class CollabAIRoom:
             parts.append("\n请根据以上大纲和细纲，创作完整的章节内容。")
             user_prompt = "\n".join(parts)
 
-            usage_ref: dict = {}
-            async for chunk in ai_service.generate_content_stream(
+            async for chunk in self._generate_stream(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                temperature=0.7,
-                max_tokens=8000,
-                usage_ref=usage_ref,
+                model_id=task.model or None,
                 user_id=str(task.user_id),
-                feature="generate",
                 work_id=str(self.work_id),
             ):
                 if task.status == "cancelled":
@@ -499,6 +562,8 @@ class CollabAIRoom:
             "moscube": True,
             "session_id": f"collab_{task.chapter_id}",
         }
+        if task.model:
+            payload["model"] = task.model
 
         try:
             async with httpx.AsyncClient(timeout=300.0) as client:
@@ -600,11 +665,12 @@ class CollabAIManager:
                         chapter_id=int(msg["chapter_id"]),
                         chapter_title=msg.get("chapter_title", ""),
                         query=msg["query"],
+                        model=msg.get("model") or None,
                     )
                 elif msg_type == "cancel_task":
                     await room.cancel_task(msg["request_id"], user_id)
                 elif msg_type == "chat_message":
-                    await room.handle_chat_message(user_id, user_name, msg.get("content", ""))
+                    await room.handle_chat_message(user_id, user_name, msg.get("content", ""), model=msg.get("model") or None)
                 elif msg_type == "ping":
                     await ws.send_text(json.dumps({"type": "pong"}))
 

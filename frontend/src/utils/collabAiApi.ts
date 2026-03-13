@@ -7,6 +7,28 @@
 
 import type { ContinueChapterResult } from './chatApi';
 
+// ── 模型配置 ─────────────────────────────────────────────────────────────────
+
+export interface LLMModelConfig {
+  id: string;
+  name: string;
+  model_id: string;
+  description: string;
+  enabled: boolean;
+}
+
+/** 拉取 admin 配置的可用模型列表 */
+export async function fetchAvailableModels(): Promise<LLMModelConfig[]> {
+  try {
+    const res = await fetch('/api/v1/collab-ai/models');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.models ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ── 类型定义 ────────────────────────────────────────────────────────────────
 
 export interface CollabAITask {
@@ -26,6 +48,8 @@ export interface CollabAITask {
   queue_position?: number;
   /** 该任务的输出需要直接写入编辑器（如 /gen_chapter） */
   write_to_editor?: boolean;
+  /** 用户选择的模型 model_id */
+  model?: string;
 }
 
 export interface CollabAIRoomState {
@@ -168,7 +192,7 @@ export class CollabAIClient {
    * 发送 AI 请求
    * @returns request_id（用于后续取消）
    */
-  sendAIRequest(chapterId: number, chapterTitle: string, query: string): string {
+  sendAIRequest(chapterId: number, chapterTitle: string, query: string, model?: string): string {
     const requestId = crypto.randomUUID();
     this.send({
       type: 'ai_request',
@@ -176,6 +200,7 @@ export class CollabAIClient {
       chapter_title: chapterTitle,
       query,
       request_id: requestId,
+      ...(model ? { model } : {}),
     });
     return requestId;
   }
@@ -190,8 +215,8 @@ export class CollabAIClient {
   /**
    * 发送聊天消息
    */
-  sendChatMessage(content: string): void {
-    this.send({ type: 'chat_message', content });
+  sendChatMessage(content: string, model?: string): void {
+    this.send({ type: 'chat_message', content, ...(model ? { model } : {}) });
   }
 
   /**

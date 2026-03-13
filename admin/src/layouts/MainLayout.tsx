@@ -16,6 +16,7 @@ import {
   GiftOutlined,
   MessageOutlined,
   CrownOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -110,6 +111,11 @@ const MainLayout: React.FC = () => {
       key: '/feedback',
       icon: <MessageOutlined />,
       label: '问题反馈',
+    },
+    {
+      key: '/llm-configs',
+      icon: <RobotOutlined />,
+      label: 'AI 模型配置',
     },
     {
       key: '/settings',
