@@ -1,46 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Card, Input, Button, Tag, Space, Modal, message } from 'antd';
-import { SearchOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import React, { useRef } from 'react';
+import { Button, Tag, Space, Modal, message } from 'antd';
+import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
+import { ExclamationCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import request from '@/utils/request';
 
 const { confirm } = Modal;
 
 const Works: React.FC = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
-  const [keyword, setKeyword] = useState('');
-
-  const fetchWorks = async (page = 1, size = 20, search = '') => {
-    setLoading(true);
-    try {
-      const res: any = await request.get('/admin/works', {
-        params: { page, size, keyword: search },
-      });
-      setData(res.items);
-      setPagination({
-        current: res.page,
-        pageSize: res.size,
-        total: res.total,
-      });
-    } catch (error) {
-      
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchWorks();
-  }, []);
-
-  const handleTableChange = (pag: any) => {
-    fetchWorks(pag.current, pag.pageSize, keyword);
-  };
-
-  const handleSearch = () => {
-    fetchWorks(1, pagination.pageSize, keyword);
-  };
+  const actionRef = useRef<ActionType>();
 
   const handleStatusChange = (record: any, newStatus: string) => {
     confirm({
@@ -50,54 +17,89 @@ const Works: React.FC = () => {
         try {
           await request.put(`/admin/works/${record.id}/status`, { status: newStatus });
           message.success('Status updated successfully');
-          fetchWorks(pagination.current, pagination.pageSize, keyword);
+          actionRef.current?.reload();
         } catch (error) {
-          
+          /* handled by interceptor */
         }
       },
     });
   };
 
-  const columns = [
+  const columns: ProColumns<any>[] = [
+    {
+      title: 'Search',
+      dataIndex: 'keyword',
+      hideInTable: true,
+      tooltip: 'Search title/desc',
+      fieldProps: {
+        prefix: <SearchOutlined />,
+        placeholder: 'Search title/desc',
+      },
+    },
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      width: 80,
+      search: false,
+      sorter: (a, b) => a.id - b.id,
+    },
     {
       title: 'Title',
       dataIndex: 'title',
-      key: 'title',
+      copyable: true,
+      search: false,
+      sorter: (a, b) => a.title.localeCompare(b.title),
     },
     {
       title: 'Type',
       dataIndex: 'work_type',
-      key: 'work_type',
-      render: (type: string) => <Tag color="blue">{type}</Tag>,
+      width: 100,
+      search: false,
+      sorter: (a, b) => a.work_type.localeCompare(b.work_type),
+      render: (_, record) => <Tag color="blue">{record.work_type}</Tag>,
     },
     {
       title: 'Status',
       dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
+      width: 100,
+      search: false,
+      valueEnum: {
+        published: { text: 'Published', status: 'Success' },
+        draft: { text: 'Draft', status: 'Warning' },
+        hidden: { text: 'Hidden', status: 'Error' },
+      },
+      sorter: (a, b) => a.status.localeCompare(b.status),
+      render: (_, record) => {
         let color = 'default';
-        if (status === 'published') color = 'green';
-        if (status === 'draft') color = 'orange';
-        if (status === 'hidden') color = 'red';
-        return <Tag color={color}>{status.toUpperCase()}</Tag>;
+        if (record.status === 'published') color = 'green';
+        if (record.status === 'draft') color = 'orange';
+        if (record.status === 'hidden') color = 'red';
+        return <Tag color={color}>{record.status.toUpperCase()}</Tag>;
       },
     },
     {
       title: 'Public',
       dataIndex: 'is_public',
-      key: 'is_public',
-      render: (isPublic: boolean) => (isPublic ? 'Yes' : 'No'),
+      width: 80,
+      search: false,
+      sorter: (a, b) => (a.is_public === b.is_public ? 0 : a.is_public ? -1 : 1),
+      render: (_, record) => (record.is_public ? 'Yes' : 'No'),
     },
     {
       title: 'Created At',
       dataIndex: 'created_at',
-      key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleString(),
+      valueType: 'dateTime',
+      width: 160,
+      search: false,
+      sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
       title: 'Action',
       key: 'action',
-      render: (_: any, record: any) => (
+      width: 120,
+      search: false,
+      fixed: 'right',
+      render: (_, record) => (
         <Space size="middle">
           {record.status !== 'hidden' ? (
              <Button danger size="small" onClick={() => handleStatusChange(record, 'hidden')}>
@@ -114,27 +116,34 @@ const Works: React.FC = () => {
   ];
 
   return (
-    <Card title="Works Management" extra={
-      <Space>
-        <Input 
-          placeholder="Search title/desc" 
-          value={keyword} 
-          onChange={(e) => setKeyword(e.target.value)} 
-          onPressEnter={handleSearch}
-          style={{ width: 200 }} 
-        />
-        <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>Search</Button>
-      </Space>
-    }>
-      <Table
-        columns={columns}
-        dataSource={data}
-        rowKey="id"
-        pagination={pagination}
-        loading={loading}
-        onChange={handleTableChange}
-      />
-    </Card>
+    <ProTable<any>
+      headerTitle="Works Management"
+      actionRef={actionRef}
+      rowKey="id"
+      search={{
+        labelWidth: 'auto',
+      }}
+      request={async (params) => {
+        const { current, pageSize, keyword } = params;
+        const res: any = await request.get('/admin/works', {
+          params: {
+            page: current,
+            size: pageSize,
+            keyword: keyword,
+          },
+        });
+        return {
+          data: res.items,
+          success: true,
+          total: res.total,
+        };
+      }}
+      columns={columns}
+      pagination={{
+        pageSize: 20,
+        showSizeChanger: true,
+      }}
+    />
   );
 };
 

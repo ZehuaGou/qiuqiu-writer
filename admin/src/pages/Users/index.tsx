@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  Table, Card, Input, Button, Tag, Space, Modal, message, Form, Select,
-  InputNumber, Tooltip, Progress,
+  Button, Tag, Space, Modal, message, Form, Select,
+  Input, InputNumber, Tooltip, Progress
 } from 'antd';
+import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
 import {
-  SearchOutlined, ExclamationCircleOutlined, EditOutlined,
+  ExclamationCircleOutlined, EditOutlined,
   ThunderboltOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import request from '@/utils/request';
 
@@ -35,11 +37,8 @@ function tokensToWanZi(tokens: number): string {
 }
 
 const Users: React.FC = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
-  const [keyword, setKeyword] = useState('');
-
+  const actionRef = useRef<ActionType>();
+  
   // Edit user modal
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -50,27 +49,6 @@ const Users: React.FC = () => {
   const [planUser, setPlanUser] = useState<any>(null);
   const [planForm] = Form.useForm();
   const [planLoading, setPlanLoading] = useState(false);
-
-  const fetchUsers = async (page = 1, size = 20, search = '') => {
-    setLoading(true);
-    try {
-      const res: any = await request.get('/admin/users', {
-        params: { page, size, keyword: search },
-      });
-      setData(res.items);
-      setPagination({ current: res.page, pageSize: res.size, total: res.total });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchUsers(); }, []);
-
-  const handleTableChange = (pag: any) => {
-    fetchUsers(pag.current, pag.pageSize, keyword);
-  };
-
-  const handleSearch = () => fetchUsers(1, pagination.pageSize, keyword);
 
   // ── Edit user ─────────────────────────────────────────────────────────────
   const handleEdit = (record: any) => {
@@ -90,7 +68,7 @@ const Users: React.FC = () => {
       await request.put(`/admin/users/${editingUser.id}`, values);
       message.success('用户信息已更新');
       setIsEditModalVisible(false);
-      fetchUsers(pagination.current, pagination.pageSize, keyword);
+      actionRef.current?.reload();
     } catch {
       message.error('更新失败');
     }
@@ -105,7 +83,7 @@ const Users: React.FC = () => {
         try {
           await request.put(`/admin/users/${record.id}/status`, { status: newStatus });
           message.success('状态已更新');
-          fetchUsers(pagination.current, pagination.pageSize, keyword);
+          actionRef.current?.reload();
         } catch {
           /* handled by interceptor */
         }
@@ -138,7 +116,7 @@ const Users: React.FC = () => {
       await request.put(`/admin/users/${planUser.id}/plan`, body);
       message.success(`套餐已更新为 ${PLAN_LABELS[values.plan]}`);
       setIsPlanModalVisible(false);
-      fetchUsers(pagination.current, pagination.pageSize, keyword);
+      actionRef.current?.reload();
     } catch {
       /* handled by interceptor */
     } finally {
@@ -147,16 +125,28 @@ const Users: React.FC = () => {
   };
 
   // ── Columns ────────────────────────────────────────────────────────────────
-  const columns = [
+  const columns: ProColumns<any>[] = [
+    {
+      title: '搜索',
+      dataIndex: 'keyword',
+      hideInTable: true,
+      tooltip: '搜索用户名/邮箱',
+      fieldProps: {
+        prefix: <SearchOutlined />,
+        placeholder: '输入用户名/邮箱搜索',
+      },
+    },
     {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 100,
       ellipsis: true,
-      render: (id: string) => (
-        <Tooltip title={id}>
-          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{id.slice(0, 8)}…</span>
+      search: false,
+      sorter: (a, b) => a.id.localeCompare(b.id),
+      render: (_, entity) => (
+        <Tooltip title={entity.id}>
+          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{entity.id.slice(0, 8)}…</span>
         </Tooltip>
       ),
     },
@@ -165,34 +155,46 @@ const Users: React.FC = () => {
       dataIndex: 'username',
       key: 'username',
       width: 120,
+      search: false,
+      copyable: true,
+      sorter: (a, b) => a.username.localeCompare(b.username),
     },
     {
       title: '邮箱',
       dataIndex: 'email',
       key: 'email',
       ellipsis: true,
+      search: false,
+      copyable: true,
+      sorter: (a, b) => a.email.localeCompare(b.email),
     },
     {
       title: '昵称',
       dataIndex: 'display_name',
       key: 'display_name',
       width: 120,
-      render: (v: string) => v || '-',
+      search: false,
+      sorter: (a, b) => (a.display_name || '').localeCompare(b.display_name || ''),
+      render: (v: any) => v || '-',
     },
     {
       title: '套餐',
       dataIndex: 'plan',
       key: 'plan',
-      width: 90,
-      render: (plan: string) => (
-        <Tag color={PLAN_COLORS[plan] || 'default'}>{PLAN_LABELS[plan] || plan}</Tag>
+      width: 100,
+      search: false,
+      sorter: (a, b) => (a.plan || '').localeCompare(b.plan || ''),
+      render: (_, record) => (
+        <Tag color={PLAN_COLORS[record.plan] || 'default'}>{PLAN_LABELS[record.plan] || record.plan}</Tag>
       ),
     },
     {
       title: 'Token 余量',
       key: 'token',
       width: 180,
-      render: (_: any, record: any) => {
+      search: false,
+      sorter: (a, b) => (a.token_remaining || 0) - (b.token_remaining || 0),
+      render: (_, record) => {
         const total = PLAN_TOTALS[record.plan] ?? record.token_remaining ?? 0;
         const remaining = record.token_remaining ?? 0;
         const pct = total > 0 ? Math.round((remaining / total) * 100) : 0;
@@ -213,31 +215,39 @@ const Users: React.FC = () => {
       dataIndex: 'plan_expires_at',
       key: 'plan_expires_at',
       width: 130,
-      render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '永久',
+      search: false,
+      sorter: (a, b) => new Date(a.plan_expires_at || 0).getTime() - new Date(b.plan_expires_at || 0).getTime(),
+      render: (_, record) => record.plan_expires_at ? new Date(record.plan_expires_at).toLocaleDateString('zh-CN') : '永久',
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       width: 80,
-      render: (status: string) => {
-        const colorMap: Record<string, string> = { active: 'green', banned: 'red', inactive: 'orange' };
-        const labelMap: Record<string, string> = { active: '正常', banned: '封禁', inactive: '停用' };
-        return <Tag color={colorMap[status] || 'default'}>{labelMap[status] || status}</Tag>;
+      search: false,
+      valueEnum: {
+        active: { text: '正常', status: 'Success' },
+        banned: { text: '封禁', status: 'Error' },
+        inactive: { text: '停用', status: 'Warning' },
       },
+      sorter: (a, b) => a.status.localeCompare(b.status),
     },
     {
       title: '注册时间',
       dataIndex: 'created_at',
       key: 'created_at',
       width: 150,
-      render: (date: string) => date ? new Date(date).toLocaleString('zh-CN') : '-',
+      search: false,
+      valueType: 'dateTime',
+      sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
       title: '操作',
       key: 'action',
       width: 200,
-      render: (_: any, record: any) => (
+      search: false,
+      fixed: 'right',
+      render: (_, record) => (
         <Space size="small">
           <Button
             type="primary" ghost size="small"
@@ -265,31 +275,36 @@ const Users: React.FC = () => {
 
   return (
     <>
-      <Card
-        title="用户管理"
-        extra={
-          <Space>
-            <Input
-              placeholder="搜索用户名/邮箱"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onPressEnter={handleSearch}
-              style={{ width: 200 }}
-            />
-            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>搜索</Button>
-          </Space>
-        }
-      >
-        <Table
-          columns={columns}
-          dataSource={data}
-          rowKey="id"
-          pagination={pagination}
-          loading={loading}
-          onChange={handleTableChange}
-          scroll={{ x: 1100 }}
-        />
-      </Card>
+      <ProTable<any>
+        headerTitle="用户管理"
+        actionRef={actionRef}
+        rowKey="id"
+        search={{
+          labelWidth: 'auto',
+          defaultCollapsed: false,
+        }}
+        request={async (params) => {
+          const { current, pageSize, keyword } = params;
+          const res: any = await request.get('/admin/users', {
+            params: {
+              page: current,
+              size: pageSize,
+              keyword: keyword,
+            },
+          });
+          return {
+            data: res.items,
+            success: true,
+            total: res.total,
+          };
+        }}
+        columns={columns}
+        pagination={{
+          pageSize: 20,
+          showSizeChanger: true,
+        }}
+        scroll={{ x: 1300 }}
+      />
 
       {/* Edit user info modal */}
       <Modal

@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  Table, Button, Modal, Form, Input, InputNumber, Switch, message, Space, Tag, Tooltip, Divider,
+  Button, Modal, Form, Input, InputNumber, Switch, message, Space, Tag, Tooltip, Divider,
 } from 'antd';
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, RobotOutlined,
+  PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined,
   KeyOutlined, LinkOutlined,
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
-import axios from 'axios';
+import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
+import request from '@/utils/request';
 
 /**
  * LLM 模型配置项（存储在 system_settings 表，key='llm_models'，value=数组）
@@ -36,60 +36,34 @@ const API_KEY = 'llm_models';
 const PLACEHOLDER_KEY = '__UNCHANGED__';  // 编辑时占位符，表示不修改 key
 
 const LLMConfigs: React.FC = () => {
-  const [loading, setLoading] = useState(false);
+  const actionRef = useRef<ActionType>();
   const [models, setModels] = useState<LLMModel[]>([]);
   const [settingId, setSettingId] = useState<number | null>(null);
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<LLMModel | null>(null);
   const [form] = Form.useForm();
 
-  const authHeader = () => ({
-    Authorization: `Bearer ${localStorage.getItem('admin_token')}`,
-  });
-
-  const fetchModels = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get<SystemSetting[]>('/api/v1/admin/system-settings', {
-        headers: authHeader(),
-      });
-      const row = res.data.find(s => s.key === API_KEY);
-      if (row) {
-        setSettingId(row.id);
-        setModels(Array.isArray(row.value) ? row.value : []);
-      } else {
-        setSettingId(null);
-        setModels([]);
-      }
-    } catch {
-      message.error('加载模型配置失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchModels(); }, []);
-
+  // Helper to save models array to backend
   const saveModels = async (newModels: LLMModel[]) => {
     try {
       if (settingId !== null) {
-        await axios.put(
-          `/api/v1/admin/system-settings/${settingId}`,
-          { value: newModels },
-          { headers: authHeader() },
-        );
+        await request.put(`/admin/system-settings/${settingId}`, { value: newModels });
       } else {
-        const res = await axios.post(
-          '/api/v1/admin/system-settings',
-          { key: API_KEY, value: newModels, description: '协作 AI 可用模型列表', category: 'ai', is_public: true },
-          { headers: authHeader() },
-        );
-        setSettingId(res.data.id);
+        const res: any = await request.post('/admin/system-settings', {
+          key: API_KEY,
+          value: newModels,
+          description: '协作 AI 可用模型列表',
+          category: 'ai',
+          is_public: true
+        });
+        setSettingId(res.id);
       }
       setModels(newModels);
       message.success('保存成功');
+      actionRef.current?.reload(); // Refresh table
     } catch {
-      message.error('保存失败');
+      // message.error('保存失败'); // handled by interceptor
     }
   };
 
@@ -122,55 +96,85 @@ const LLMConfigs: React.FC = () => {
   };
 
   const handleModalOk = async () => {
-    const values = await form.validateFields();
+    try {
+      const values = await form.validateFields();
 
-    // 处理 api_key：占位符 = 保留原值
-    let finalApiKey = values.api_key?.trim() || undefined;
-    if (finalApiKey === PLACEHOLDER_KEY && editing) {
-      finalApiKey = editing.api_key;
+      // 处理 api_key：占位符 = 保留原值
+      let finalApiKey = values.api_key?.trim() || undefined;
+      if (finalApiKey === PLACEHOLDER_KEY && editing) {
+        finalApiKey = editing.api_key;
+      }
+      if (!finalApiKey) finalApiKey = undefined;
+
+      const merged: LLMModel = {
+        id: editing?.id ?? crypto.randomUUID(),
+        name: values.name,
+        model_id: values.model_id,
+        api_base_url: values.api_base_url?.trim() || undefined,
+        api_key: finalApiKey,
+        description: values.description || '',
+        enabled: values.enabled ?? true,
+        temperature: values.temperature ?? undefined,
+        max_tokens: values.max_tokens ?? undefined,
+      };
+
+      if (editing) {
+        await saveModels(models.map(m => m.id === editing.id ? merged : m));
+      } else {
+        await saveModels([...models, merged]);
+      }
+      setModalOpen(false);
+    } catch (error) {
+      // form validation failed
     }
-    if (!finalApiKey) finalApiKey = undefined;
-
-    const merged: LLMModel = {
-      id: editing?.id ?? crypto.randomUUID(),
-      name: values.name,
-      model_id: values.model_id,
-      api_base_url: values.api_base_url?.trim() || undefined,
-      api_key: finalApiKey,
-      description: values.description || '',
-      enabled: values.enabled ?? true,
-      temperature: values.temperature ?? undefined,
-      max_tokens: values.max_tokens ?? undefined,
-    };
-
-    if (editing) {
-      await saveModels(models.map(m => m.id === editing.id ? merged : m));
-    } else {
-      await saveModels([...models, merged]);
-    }
-    setModalOpen(false);
   };
 
-  const columns: ColumnsType<LLMModel> = [
+  const columns: ProColumns<LLMModel>[] = [
     {
       title: '显示名称',
       dataIndex: 'name',
-      render: (name: string, record) => (
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (_, record) => (
         <Space>
           <RobotOutlined style={{ color: '#1677ff' }} />
-          <strong>{name}</strong>
-          {record.api_base_url && <Tooltip title={record.api_base_url}><Tag icon={<LinkOutlined />} color="geekblue">自定义 URL</Tag></Tooltip>}
-          {record.api_key && <Tag icon={<KeyOutlined />} color="purple">自定义 Key</Tag>}
+          <strong>{record.name}</strong>
+        </Space>
+      ),
+    },
+    {
+      title: '连接配置',
+      key: 'connection',
+      search: false,
+      render: (_, record) => (
+        <Space size={4}>
+          {record.api_base_url ? (
+            <Tooltip title={`自定义 URL: ${record.api_base_url}`}>
+              <Tag icon={<LinkOutlined />} color="geekblue">自定义 URL</Tag>
+            </Tooltip>
+          ) : (
+            <Tag>默认 URL</Tag>
+          )}
+          {record.api_key ? (
+            <Tooltip title="已配置自定义 API Key">
+              <Tag icon={<KeyOutlined />} color="purple">自定义 Key</Tag>
+            </Tooltip>
+          ) : (
+            <Tag>默认 Key</Tag>
+          )}
         </Space>
       ),
     },
     {
       title: '模型 ID',
       dataIndex: 'model_id',
-      render: (id: string) => <Tag style={{ fontFamily: 'monospace' }}>{id}</Tag>,
+      copyable: true,
+      sorter: (a, b) => a.model_id.localeCompare(b.model_id),
+      render: (_, record) => <Tag style={{ fontFamily: 'monospace' }}>{record.model_id}</Tag>,
     },
     {
       title: '参数',
+      key: 'params',
+      search: false,
       render: (_, record) => (
         <Space size={4}>
           {record.temperature != null && <Tag>temp={record.temperature}</Tag>}
@@ -182,52 +186,70 @@ const LLMConfigs: React.FC = () => {
       title: '描述',
       dataIndex: 'description',
       ellipsis: true,
+      search: false,
     },
     {
       title: '启用',
       dataIndex: 'enabled',
-      width: 80,
-      render: (enabled: boolean, record) => (
-        <Switch checked={enabled} onChange={v => handleToggle(record, v)} size="small" />
+      width: 100,
+      sorter: (a, b) => (a.enabled === b.enabled ? 0 : a.enabled ? -1 : 1),
+      render: (_, record) => (
+        <Switch checked={record.enabled} onChange={v => handleToggle(record, v)} size="small" />
       ),
     },
     {
       title: '操作',
+      valueType: 'option',
       width: 120,
-      render: (_, record) => (
-        <Space>
-          <Tooltip title="编辑">
-            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          </Tooltip>
-          <Tooltip title="删除">
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
-          </Tooltip>
-        </Space>
-      ),
+      render: (_, record) => [
+        <Tooltip key="edit" title="编辑">
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+        </Tooltip>,
+        <Tooltip key="delete" title="删除">
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
+        </Tooltip>,
+      ],
     },
   ];
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-        <h2 style={{ margin: 0 }}>AI 模型配置</h2>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchModels}>刷新</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>添加模型</Button>
-        </Space>
-      </div>
-      <p style={{ color: '#888', marginBottom: 16 }}>
-        配置协作 AI 面板中用户可选择的模型。可为每个模型指定独立的 API Base URL 和 Key（不填则使用服务器全局配置）。
-        API Key 仅存储于服务端，不会下发给前端用户。
-      </p>
-
-      <Table
+    <>
+      <ProTable<LLMModel>
+        headerTitle="AI 模型配置"
+        tooltip="配置协作 AI 面板中用户可选择的模型。可为每个模型指定独立的 API Base URL 和 Key。"
+        actionRef={actionRef}
         rowKey="id"
-        loading={loading}
-        dataSource={models}
+        search={false}
+        toolBarRender={() => [
+          <Button key="add" type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            添加模型
+          </Button>,
+        ]}
+        request={async () => {
+          try {
+            const res: any = await request.get('/admin/system-settings');
+            const row = (res || []).find((s: SystemSetting) => s.key === API_KEY);
+            let currentModels: LLMModel[] = [];
+            
+            if (row) {
+              setSettingId(row.id);
+              currentModels = Array.isArray(row.value) ? row.value : [];
+            } else {
+              setSettingId(null);
+            }
+            
+            setModels(currentModels);
+            return {
+              data: currentModels,
+              success: true,
+              total: currentModels.length,
+            };
+          } catch (e) {
+            return { data: [], success: false };
+          }
+        }}
         columns={columns}
         pagination={false}
-        locale={{ emptyText: '暂无模型，点击「添加模型」创建' }}
       />
 
       <Modal
@@ -242,7 +264,7 @@ const LLMConfigs: React.FC = () => {
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="显示名称" rules={[{ required: true, message: '请输入' }]}>
-            <Input placeholder="如：DeepSeek Chat" />
+            <Input placeholder="如：DeepSeek Chat（请勿在此包含 Key/URL 等敏感信息）" />
           </Form.Item>
           <Form.Item
             name="model_id"
@@ -294,7 +316,7 @@ const LLMConfigs: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </>
   );
 };
 

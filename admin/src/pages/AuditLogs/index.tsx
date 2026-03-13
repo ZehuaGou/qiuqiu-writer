@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Card, Tag, Input, Space, Button } from 'antd';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
-import axios from 'axios';
+import React, { useRef } from 'react';
+import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
+import { Tag } from 'antd';
+import request from '@/utils/request';
 import dayjs from 'dayjs';
 
 interface AuditLog {
@@ -18,133 +17,114 @@ interface AuditLog {
 }
 
 const AuditLogs: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<AuditLog[]>([]);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
-  const [filters, setFilters] = useState({
-    user_id: '',
-    action: '',
-  });
+  const actionRef = useRef<ActionType>();
 
-  const fetchData = async (page = 1, size = pagination.pageSize) => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('admin_token');
-      const res = await axios.get('/api/v1/admin/audit-logs', {
-        params: { 
-          page, 
-          size,
-          user_id: filters.user_id || undefined,
-          action: filters.action || undefined,
-        },
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setData(res.data.items);
-      setPagination(prev => ({ ...prev, current: page, pageSize: size, total: res.data.total }));
-    } catch (error) {
-      // message.error('Failed to load audit logs');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData(pagination.current, pagination.pageSize);
-  }, []);
-
-  const handleSearch = () => {
-    setPagination({ ...pagination, current: 1 });
-    fetchData(1, pagination.pageSize);
-  };
-
-  const columns: ColumnsType<AuditLog> = [
+  const columns: ProColumns<AuditLog>[] = [
     {
-      title: 'Time',
-      dataIndex: 'created_at',
-      width: 180,
-      render: (date) => dayjs(date).format('YYYY-MM-DD HH:mm:ss'),
+      title: 'ID',
+      dataIndex: 'id',
+      width: 80,
+      search: false,
+      sorter: (a, b) => a.id - b.id,
     },
     {
       title: 'User ID',
       dataIndex: 'user_id',
       width: 150,
-      render: (id) => id ? <Tag>{id.substring(0, 8)}...</Tag> : '-',
+      copyable: true,
+      sorter: (a, b) => (a.user_id || '').localeCompare(b.user_id || ''),
+      render: (_, record) => record.user_id ? <Tag>{record.user_id.substring(0, 8)}...</Tag> : '-',
     },
     {
       title: 'Action',
       dataIndex: 'action',
       width: 120,
-      render: (action) => {
+      sorter: (a, b) => a.action.localeCompare(b.action),
+      render: (_, record) => {
         let color = 'blue';
-        if (action === 'delete') color = 'red';
-        if (action === 'create') color = 'green';
-        if (action === 'login') color = 'cyan';
-        return <Tag color={color}>{action.toUpperCase()}</Tag>;
+        if (record.action === 'delete') color = 'red';
+        if (record.action === 'create') color = 'green';
+        if (record.action === 'login') color = 'cyan';
+        return <Tag color={color}>{record.action.toUpperCase()}</Tag>;
       },
     },
     {
-      title: 'Target',
-      key: 'target',
-      width: 200,
-      render: (_, record) => (
-        record.target_type ? (
-          <Space size="small">
-            <Tag color="purple">{record.target_type}</Tag>
-            <span>{record.target_id}</span>
-          </Space>
-        ) : '-'
-      ),
+      title: 'Target Type',
+      dataIndex: 'target_type',
+      width: 120,
+      search: false,
+      sorter: (a, b) => (a.target_type || '').localeCompare(b.target_type || ''),
+      render: (text) => text ? <Tag color="purple">{text}</Tag> : '-',
+    },
+    {
+      title: 'Target ID',
+      dataIndex: 'target_id',
+      width: 120,
+      search: false,
+      ellipsis: true,
+      sorter: (a, b) => (a.target_id || '').localeCompare(b.target_id || ''),
     },
     {
       title: 'Details',
       dataIndex: 'details',
-      render: (details) => (
+      search: false,
+      ellipsis: true,
+      width: 300,
+      render: (_, record) => (
         <pre style={{ margin: 0, maxHeight: 60, overflow: 'auto', fontSize: 11, color: '#666' }}>
-          {JSON.stringify(details, null, 0)}
+          {JSON.stringify(record.details, null, 0)}
         </pre>
       ),
     },
     {
       title: 'IP Address',
       dataIndex: 'ip_address',
-      width: 120,
+      width: 130,
+      search: false,
+      sorter: (a, b) => (a.ip_address || '').localeCompare(b.ip_address || ''),
+    },
+    {
+      title: 'Time',
+      dataIndex: 'created_at',
+      valueType: 'dateTime',
+      width: 160,
+      search: false,
+      sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      render: (_, record) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
     },
   ];
 
   return (
-    <Card 
-      title="Audit Logs" 
-      extra={
-        <Space>
-          <Input 
-            placeholder="User ID" 
-            value={filters.user_id}
-            onChange={e => setFilters({...filters, user_id: e.target.value})}
-            style={{ width: 150 }}
-          />
-          <Input 
-            placeholder="Action (e.g. login)" 
-            value={filters.action}
-            onChange={e => setFilters({...filters, action: e.target.value})}
-            style={{ width: 150 }}
-          />
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>Search</Button>
-          <Button icon={<ReloadOutlined />} onClick={() => fetchData(pagination.current)}>Refresh</Button>
-        </Space>
-      }
-    >
-      <Table 
-        columns={columns} 
-        dataSource={data} 
-        rowKey="id"
-        loading={loading}
-        pagination={{
-          ...pagination,
-          onChange: (page, size) => fetchData(page, size),
-          showSizeChanger: true,
-        }}
-      />
-    </Card>
+    <ProTable<AuditLog>
+      headerTitle="Audit Logs"
+      actionRef={actionRef}
+      rowKey="id"
+      search={{
+        labelWidth: 'auto',
+      }}
+      request={async (params) => {
+        const { current, pageSize, user_id, action } = params;
+        const res: any = await request.get('/admin/audit-logs', {
+          params: {
+            page: current,
+            size: pageSize,
+            user_id: user_id,
+            action: action,
+          },
+        });
+        return {
+          data: res.items,
+          success: true,
+          total: res.total,
+        };
+      }}
+      columns={columns}
+      pagination={{
+        pageSize: 20,
+        showSizeChanger: true,
+      }}
+      scroll={{ x: 1200 }}
+    />
   );
 };
 

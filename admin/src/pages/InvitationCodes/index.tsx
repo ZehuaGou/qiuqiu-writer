@@ -1,173 +1,130 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Card, message, Tag, Space } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
-import axios from 'axios';
+import React, { useRef } from 'react';
+import { Button, Tag, message } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
+import request from '@/utils/request';
 
 interface InvitationCodeItem {
   id: number;
   code: string;
-  used: number;
+  used: number; // 0 or 1
   used_by_user_id: string | null;
   used_at: string | null;
   created_at: string | null;
 }
 
 const InvitationCodes: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [generateLoading, setGenerateLoading] = useState(false);
-  const [data, setData] = useState<InvitationCodeItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [size] = useState(50);
-  const [usedFilter, setUsedFilter] = useState<boolean | undefined>(undefined);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('admin_token');
-      const params: Record<string, any> = { page, size };
-      if (usedFilter !== undefined) {
-        params.used = usedFilter;
-      }
-      const res = await axios.get('/api/v1/admin/invitation-codes', {
-        headers: { Authorization: `Bearer ${token}` },
-        params,
-      });
-      setData(res.data.items);
-      setTotal(res.data.total);
-    } catch (error) {
-      message.error('加载邀请码列表失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [page, usedFilter]);
+  const actionRef = useRef<ActionType>();
 
   const handleGenerate = async () => {
-    setGenerateLoading(true);
     try {
-      const token = localStorage.getItem('admin_token');
-      const res = await axios.post(
-        '/api/v1/admin/invitation-codes/generate',
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { count: 100 },
-        }
-      );
-      message.success(res.data.message || `已生成 ${res.data.count} 个邀请码`);
-      fetchData();
+      const res: any = await request.post('/admin/invitation-codes/generate', {}, {
+        params: { count: 100 },
+      });
+      message.success(res.message || `Generated ${res.count} codes`);
+      actionRef.current?.reload();
     } catch (error) {
-      message.error('生成邀请码失败');
-    } finally {
-      setGenerateLoading(false);
+      /* handled */
     }
   };
 
-  const columns: ColumnsType<InvitationCodeItem> = [
+  const columns: ProColumns<InvitationCodeItem>[] = [
     {
       title: 'ID',
       dataIndex: 'id',
       width: 80,
+      search: false,
+      sorter: (a, b) => a.id - b.id,
     },
     {
-      title: '邀请码',
+      title: 'Code',
       dataIndex: 'code',
-      width: 140,
-      render: (code) => <code style={{ fontFamily: 'monospace' }}>{code}</code>,
+      copyable: true,
+      render: (_, record) => <code style={{ fontFamily: 'monospace' }}>{record.code}</code>,
+      search: false, 
+      sorter: (a, b) => a.code.localeCompare(b.code),
     },
     {
-      title: '状态',
+      title: 'Status',
       dataIndex: 'used',
+      valueType: 'select',
+      valueEnum: {
+        0: { text: 'Unused', status: 'Success' },
+        1: { text: 'Used', status: 'Warning' },
+      },
       width: 100,
-      render: (used) =>
-        used === 1 ? (
-          <Tag color="orange">已使用</Tag>
-        ) : (
-          <Tag color="green">未使用</Tag>
-        ),
+      sorter: (a, b) => a.used - b.used,
+      render: (_, record) => (
+        <Tag color={record.used ? 'orange' : 'green'}>
+          {record.used ? 'Used' : 'Unused'}
+        </Tag>
+      ),
     },
     {
-      title: '使用用户 ID',
+      title: 'Used By User ID',
       dataIndex: 'used_by_user_id',
+      copyable: true,
+      search: false,
       width: 200,
       render: (v) => v || '-',
     },
     {
-      title: '使用时间',
+      title: 'Used At',
       dataIndex: 'used_at',
-      width: 180,
-      render: (v) => (v ? new Date(v).toLocaleString() : '-'),
+      valueType: 'dateTime',
+      search: false,
+      width: 160,
+      sorter: (a, b) => new Date(a.used_at || 0).getTime() - new Date(b.used_at || 0).getTime(),
     },
     {
-      title: '创建时间',
+      title: 'Created At',
       dataIndex: 'created_at',
-      width: 180,
-      render: (v) => (v ? new Date(v).toLocaleString() : '-'),
+      valueType: 'dateTime',
+      search: false,
+      width: 160,
+      sorter: (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
     },
   ];
 
   return (
-    <div>
-      <Card
-        title="邀请码管理"
-        extra={
-          <Space>
-            <Button
-              type={usedFilter === undefined ? 'primary' : 'default'}
-              size="small"
-              onClick={() => setUsedFilter(undefined)}
-            >
-              全部
-            </Button>
-            <Button
-              type={usedFilter === false ? 'primary' : 'default'}
-              size="small"
-              onClick={() => setUsedFilter(false)}
-            >
-              未使用
-            </Button>
-            <Button
-              type={usedFilter === true ? 'primary' : 'default'}
-              size="small"
-              onClick={() => setUsedFilter(true)}
-            >
-              已使用
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={fetchData}>
-              刷新
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              loading={generateLoading}
-              onClick={handleGenerate}
-            >
-              一键生成 100 个邀请码
-            </Button>
-          </Space>
+    <ProTable<InvitationCodeItem>
+      headerTitle="Invitation Codes"
+      actionRef={actionRef}
+      rowKey="id"
+      search={{
+        labelWidth: 'auto',
+      }}
+      toolBarRender={() => [
+        <Button key="generate" type="primary" icon={<PlusOutlined />} onClick={handleGenerate}>
+          Generate 100 Codes
+        </Button>,
+      ]}
+      request={async (params) => {
+        const { current, pageSize, used } = params;
+        const queryParams: any = {
+          page: current,
+          size: pageSize,
+        };
+        
+        if (used !== undefined) {
+          queryParams.used = used;
         }
-      >
-        <Table
-          columns={columns}
-          dataSource={data}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            current: page,
-            pageSize: size,
-            total,
-            showSizeChanger: false,
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: setPage,
-          }}
-        />
-      </Card>
-    </div>
+        
+        const res: any = await request.get('/admin/invitation-codes', {
+          params: queryParams,
+        });
+        
+        return {
+          data: res.items,
+          success: true,
+          total: res.total,
+        };
+      }}
+      columns={columns}
+      pagination={{
+        pageSize: 50,
+      }}
+    />
   );
 };
 

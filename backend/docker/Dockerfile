@@ -31,8 +31,15 @@ WORKDIR /app
 # 5. 安装 Python 依赖
 # 先拷贝 requirements.txt 以利用 Docker 缓存
 COPY docker/requirements.txt .
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# 5. 安装 Python 依赖（带镜像源和超时）
+RUN pip install --no-cache-dir \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --trusted-host pypi.tuna.tsinghua.edu.cn \
+    --default-timeout=600 \
+    -r requirements.txt
 # 6. 拷贝应用源码
 # .dockerignore 会过滤掉不需要的文件
 COPY . .

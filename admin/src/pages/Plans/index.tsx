@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Card, Row, Col, Statistic, Table, Tag, Typography, Space, Button,
-  Modal, Form, Select, InputNumber, Input, message, Progress,
-  Switch, Popconfirm,
+  Card, Row, Col, Tag, Typography, Space, Button,
+  Modal, Form, Select, InputNumber, message, Progress,
+  DatePicker
 } from 'antd';
 import {
-  UserOutlined, ThunderboltOutlined, EditOutlined, SaveOutlined,
-  SearchOutlined, PlusOutlined, DeleteOutlined,
+  EditOutlined, SaveOutlined,
+  ThunderboltOutlined, SearchOutlined
 } from '@ant-design/icons';
+import { ProTable, EditableProTable, ProColumns, ActionType } from '@ant-design/pro-components';
 import request from '@/utils/request';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 interface PlanPricePoint {
   original: number;
   current: number;
@@ -41,11 +41,14 @@ const DEFAULT_PRICING: PlanPricing = {
   yearly:    { original: 0, current: 0 },
 };
 
-const BILLING_CYCLES: Array<{ key: keyof PlanPricing; label: string }> = [
-  { key: 'monthly',   label: '月付' },
-  { key: 'quarterly', label: '季付' },
-  { key: 'yearly',    label: '年付' },
-];
+const DEFAULT_PLAN: Partial<PlanConfig> = {
+  label: '',
+  tokens: 100000,
+  desc: '',
+  highlight: false,
+  badge: null,
+  pricing: DEFAULT_PRICING,
+};
 
 function tokensToWanZi(tokens: number): string {
   const chars = Math.floor(tokens / 1.5);
@@ -53,191 +56,79 @@ function tokensToWanZi(tokens: number): string {
   return `${chars}字`;
 }
 
-// ── Plan Config Row Editor ─────────────────────────────────────────────────────
-interface PlanConfigRowProps {
-  value: PlanConfig;
-  onChange: (v: PlanConfig) => void;
-  onDelete: () => void;
-}
-
-function PlanConfigRow({ value, onChange, onDelete }: PlanConfigRowProps) {
-  const set = <K extends keyof PlanConfig>(k: K, v: PlanConfig[K]) =>
-    onChange({ ...value, [k]: v });
-
-  const setPrice = (cycle: keyof PlanPricing, field: keyof PlanPricePoint, v: number) =>
-    onChange({
-      ...value,
-      pricing: {
-        ...value.pricing,
-        [cycle]: { ...value.pricing[cycle], [field]: v },
-      },
-    });
-
-  const cellStyle: React.CSSProperties = { padding: '6px 8px', verticalAlign: 'top' };
-  const numStyle: React.CSSProperties = { width: 80 };
-
-  return (
-    <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
-      {/* 标识符 */}
-      <td style={{ ...cellStyle, minWidth: 110 }}>
-        <Input size="small" value={value.key} onChange={(e) => set('key', e.target.value.trim())} placeholder="唯一标识符" />
-      </td>
-      {/* 名称 */}
-      <td style={{ ...cellStyle, minWidth: 90 }}>
-        <Input size="small" value={value.label} onChange={(e) => set('label', e.target.value)} placeholder="显示名称" />
-      </td>
-      {/* Token 额度 */}
-      <td style={{ ...cellStyle, minWidth: 160 }}>
-        <InputNumber
-          size="small" min={0} max={100_000_000} step={100_000}
-          style={{ width: '100%' }} value={value.tokens}
-          formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-          parser={(v) => Number(v?.replace(/,/g, '') ?? 0)}
-          onChange={(v) => set('tokens', v ?? 0)}
-          addonAfter={<span style={{ fontSize: 11, color: '#999' }}>{tokensToWanZi(value.tokens)}</span>}
-        />
-      </td>
-      {/* 描述 */}
-      <td style={{ ...cellStyle, minWidth: 140 }}>
-        <Input size="small" value={value.desc} onChange={(e) => set('desc', e.target.value)} placeholder="套餐描述" />
-      </td>
-      {/* 高亮 */}
-      <td style={{ ...cellStyle, textAlign: 'center', minWidth: 52 }}>
-        <Switch size="small" checked={value.highlight} onChange={(v) => set('highlight', v)} />
-      </td>
-      {/* 徽章 */}
-      <td style={{ ...cellStyle, minWidth: 90 }}>
-        <Input size="small" value={value.badge ?? ''} onChange={(e) => set('badge', e.target.value || null)} placeholder="如：推荐" />
-      </td>
-      {/* 月付 原价/现价 */}
-      {BILLING_CYCLES.map(({ key }) => (
-        <React.Fragment key={key}>
-          <td style={{ ...cellStyle, minWidth: 80 }}>
-            <InputNumber
-              size="small" min={0} step={1} style={numStyle}
-              value={value.pricing[key].original}
-              onChange={(v) => setPrice(key, 'original', v ?? 0)}
-              prefix="¥"
-            />
-          </td>
-          <td style={{ ...cellStyle, minWidth: 80 }}>
-            <InputNumber
-              size="small" min={0} step={1} style={numStyle}
-              value={value.pricing[key].current}
-              onChange={(v) => setPrice(key, 'current', v ?? 0)}
-              prefix="¥"
-            />
-          </td>
-        </React.Fragment>
-      ))}
-      {/* 删除 */}
-      <td style={{ ...cellStyle, textAlign: 'center' }}>
-        <Popconfirm title="确认删除此套餐？" onConfirm={onDelete} okText="删除" cancelText="取消" okButtonProps={{ danger: true }}>
-          <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-        </Popconfirm>
-      </td>
-    </tr>
-  );
-}
-
-// ── Plans Page ─────────────────────────────────────────────────────────────────
 const Plans: React.FC = () => {
-  // ── Plan configs ─────────────────────────────────────────────────────────
+  // ── Plan Config State ────────────────────────────────────────────────
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
   const [configLoading, setConfigLoading] = useState(false);
-  const [editingConfigs, setEditingConfigs] = useState<PlanConfig[] | null>(null);
+  
+  // Edit mode
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableKeys, setEditableRowKeys] = useState<React.Key[]>([]);
+  const [dataSource, setDataSource] = useState<PlanConfig[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
 
-  const isEditing = editingConfigs !== null;
-
-  const fetchPlanConfigs = async () => {
-    setConfigLoading(true);
-    try {
-      const res = await request.get<PlanConfig[]>('/admin/plans/config');
-      setPlanConfigs(res as unknown as PlanConfig[]);
-    } finally {
-      setConfigLoading(false);
-    }
-  };
-
-  const handleStartEdit = () => setEditingConfigs(planConfigs.map((p) => ({
-    ...p,
-    pricing: p.pricing ?? { ...DEFAULT_PRICING },
-  })));
-  const handleCancelEdit = () => setEditingConfigs(null);
-
-  const handleSaveConfig = async () => {
-    if (!editingConfigs) return;
-    const keys = editingConfigs.map((p) => p.key.trim()).filter(Boolean);
-    if (new Set(keys).size !== keys.length || keys.some((k) => !k)) {
-      message.error('套餐标识符不能为空或重复');
-      return;
-    }
-    setSavingConfig(true);
-    try {
-      const body = { plans: editingConfigs.map((p) => ({ ...p, key: p.key.trim() })) };
-      const res = await request.put<PlanConfig[]>('/admin/plans/config', body);
-      setPlanConfigs(res as unknown as PlanConfig[]);
-      setEditingConfigs(null);
-      message.success('套餐配置已保存');
-      fetchUsers(pagination.current, pagination.pageSize, keyword, filterPlan);
-    } catch {
-      /* handled by interceptor */
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
-  const handleAddPlan = () => {
-    setEditingConfigs((prev) => [
-      ...(prev ?? []),
-      { key: '', label: '', tokens: 0, desc: '', highlight: false, badge: null, pricing: { ...DEFAULT_PRICING } },
-    ]);
-  };
-
-  const handleUpdateRow = (idx: number, val: PlanConfig) =>
-    setEditingConfigs((prev) => { if (!prev) return prev; const next = [...prev]; next[idx] = val; return next; });
-
-  const handleDeleteRow = (idx: number) =>
-    setEditingConfigs((prev) => prev ? prev.filter((_, i) => i !== idx) : prev);
-
-  // ── User list ─────────────────────────────────────────────────────────────
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
-  const [keyword, setKeyword] = useState('');
-  const [filterPlan, setFilterPlan] = useState<string | undefined>(undefined);
-
+  // ── User List State ──────────────────────────────────────────────────
+  const actionRef = useRef<ActionType>();
   const [isPlanModalVisible, setIsPlanModalVisible] = useState(false);
   const [planUser, setPlanUser] = useState<any>(null);
   const [planForm] = Form.useForm();
   const [planLoading, setPlanLoading] = useState(false);
 
-  const planStats = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    users.forEach((u) => { const p = u.plan || 'free'; counts[p] = (counts[p] || 0) + 1; });
-    return counts;
-  }, [users]);
-
-  const fetchUsers = async (page = 1, size = 20, search = '', plan?: string) => {
-    setLoading(true);
+  const fetchPlanConfigs = async () => {
+    setConfigLoading(true);
     try {
-      const res: any = await request.get('/admin/users', { params: { page, size, keyword: search } });
-      let items = res.items || [];
-      if (plan) items = items.filter((u: any) => (u.plan || 'free') === plan);
-      setUsers(items);
-      setPagination({ current: res.page, pageSize: res.size, total: plan ? items.length : res.total });
-    } finally { setLoading(false); }
+      const res = await request.get<PlanConfig[]>('/admin/plans/config');
+      const configs = res as unknown as PlanConfig[];
+      setPlanConfigs(configs);
+      setDataSource(configs);
+    } finally {
+      setConfigLoading(false);
+    }
   };
 
-  useEffect(() => { fetchPlanConfigs(); fetchUsers(); }, []);
+  useEffect(() => {
+    fetchPlanConfigs();
+  }, []);
 
-  const handleSearch = () => fetchUsers(1, pagination.pageSize, keyword, filterPlan);
-  const handleTableChange = (pag: any) => fetchUsers(pag.current, pag.pageSize, keyword, filterPlan);
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    // Deep copy to avoid mutating original state during edit
+    const data = JSON.parse(JSON.stringify(planConfigs));
+    setDataSource(data);
+    setEditableRowKeys(data.map((p: any) => p.key));
+  };
 
-  const planLabelMap = React.useMemo(
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditableRowKeys([]);
+    setDataSource(planConfigs); // Revert
+  };
+
+  const handleSaveConfig = async () => {
+    const keys = dataSource.map((p) => p.key?.trim()).filter(Boolean);
+    if (new Set(keys).size !== keys.length || keys.some((k) => !k)) {
+      message.error('Plan key cannot be empty or duplicate');
+      return;
+    }
+    setSavingConfig(true);
+    try {
+      const body = { plans: dataSource.map((p) => ({ ...p, key: p.key.trim() })) };
+      const res = await request.put<PlanConfig[]>('/admin/plans/config', body);
+      setPlanConfigs(res as unknown as PlanConfig[]);
+      setIsEditing(false);
+      message.success('Configuration saved');
+      actionRef.current?.reload();
+    } catch {
+      /* handled */
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  // ── Helpers ──────────────────────────────────────────────────────────
+  const planLabelMap = useMemo(
     () => Object.fromEntries(planConfigs.map((p) => [p.key, p.label])), [planConfigs]);
-  const planTokenMap = React.useMemo(
+  const planTokenMap = useMemo(
     () => Object.fromEntries(planConfigs.map((p) => [p.key, p.tokens])), [planConfigs]);
 
   const handleOpenPlan = (record: any) => {
@@ -254,28 +145,150 @@ const Plans: React.FC = () => {
       if (values.override_remaining != null) body.override_remaining = values.override_remaining;
       if (values.plan_expires_at) body.plan_expires_at = values.plan_expires_at;
       await request.put(`/admin/users/${planUser.id}/plan`, body);
-      message.success(`套餐已更新为 ${planLabelMap[values.plan] ?? values.plan}`);
+      message.success(`Plan updated`);
       setIsPlanModalVisible(false);
-      fetchUsers(pagination.current, pagination.pageSize, keyword, filterPlan);
+      actionRef.current?.reload();
     } catch { /* handled */ } finally { setPlanLoading(false); }
   };
 
-  const columns = [
-    { title: '用户名', dataIndex: 'username', key: 'username', width: 130 },
-    { title: '邮箱', dataIndex: 'email', key: 'email', ellipsis: true },
+  // ── Columns ──────────────────────────────────────────────────────────
+
+  const planConfigColumns: ProColumns<PlanConfig>[] = [
     {
-      title: '套餐', dataIndex: 'plan', key: 'plan', width: 90,
-      render: (plan: string) => <Tag>{planLabelMap[plan] || plan}</Tag>,
+      title: 'Key',
+      dataIndex: 'key',
+      formItemProps: { rules: [{ required: true, message: 'Required' }] },
+      width: 100,
+      fixed: 'left',
+      sorter: (a, b) => a.key.localeCompare(b.key),
     },
     {
-      title: 'Token 余量', key: 'token', width: 200,
-      render: (_: any, record: any) => {
+      title: 'Label',
+      dataIndex: 'label',
+      formItemProps: { rules: [{ required: true }] },
+      width: 100,
+      fixed: 'left',
+      sorter: (a, b) => a.label.localeCompare(b.label),
+    },
+    {
+      title: 'Tokens',
+      dataIndex: 'tokens',
+      valueType: 'digit',
+      width: 120,
+      fieldProps: { precision: 0 },
+      sorter: (a, b) => a.tokens - b.tokens,
+    },
+    {
+      title: 'Description',
+      dataIndex: 'desc',
+      width: 150,
+      sorter: (a, b) => (a.desc || '').localeCompare(b.desc || ''),
+    },
+    {
+      title: 'Highlight',
+      dataIndex: 'highlight',
+      valueType: 'switch',
+      width: 80,
+      sorter: (a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1),
+    },
+    {
+      title: 'Badge',
+      dataIndex: 'badge',
+      width: 100,
+      sorter: (a, b) => (a.badge || '').localeCompare(b.badge || ''),
+    },
+    {
+      title: 'Monthly',
+      children: [
+        { title: 'Orig', dataIndex: ['pricing', 'monthly', 'original'], valueType: 'money', width: 90, sorter: (a, b) => (a.pricing?.monthly?.original || 0) - (b.pricing?.monthly?.original || 0) },
+        { title: 'Curr', dataIndex: ['pricing', 'monthly', 'current'], valueType: 'money', width: 90, sorter: (a, b) => (a.pricing?.monthly?.current || 0) - (b.pricing?.monthly?.current || 0) },
+      ]
+    },
+    {
+      title: 'Quarterly',
+      children: [
+        { title: 'Orig', dataIndex: ['pricing', 'quarterly', 'original'], valueType: 'money', width: 90, sorter: (a, b) => (a.pricing?.quarterly?.original || 0) - (b.pricing?.quarterly?.original || 0) },
+        { title: 'Curr', dataIndex: ['pricing', 'quarterly', 'current'], valueType: 'money', width: 90, sorter: (a, b) => (a.pricing?.quarterly?.current || 0) - (b.pricing?.quarterly?.current || 0) },
+      ]
+    },
+    {
+      title: 'Yearly',
+      children: [
+        { title: 'Orig', dataIndex: ['pricing', 'yearly', 'original'], valueType: 'money', width: 90, sorter: (a, b) => (a.pricing?.yearly?.original || 0) - (b.pricing?.yearly?.original || 0) },
+        { title: 'Curr', dataIndex: ['pricing', 'yearly', 'current'], valueType: 'money', width: 90, sorter: (a, b) => (a.pricing?.yearly?.current || 0) - (b.pricing?.yearly?.current || 0) },
+      ]
+    },
+    {
+      title: 'Action',
+      valueType: 'option',
+      width: 80,
+      fixed: 'right',
+      render: (_, record) => [
+        <a
+          key="delete"
+          onClick={() => {
+            setDataSource(dataSource.filter((item) => item.key !== record.key));
+          }}
+        >
+          Delete
+        </a>,
+      ],
+    },
+  ];
+
+  const userColumns: ProColumns<any>[] = [
+    {
+      title: 'Search',
+      dataIndex: 'keyword',
+      hideInTable: true,
+      tooltip: 'Search username or email',
+      fieldProps: {
+        prefix: <SearchOutlined />,
+      },
+    },
+    {
+      title: 'Plan Filter',
+      dataIndex: 'plan',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: planLabelMap,
+    },
+    {
+      title: 'Username',
+      dataIndex: 'username',
+      search: false,
+      copyable: true,
+      width: 120,
+      sorter: (a, b) => a.username.localeCompare(b.username),
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      search: false,
+      copyable: true,
+      ellipsis: true,
+      sorter: (a, b) => a.email.localeCompare(b.email),
+    },
+    {
+      title: 'Plan',
+      dataIndex: 'plan',
+      search: false,
+      width: 100,
+      render: (_, record) => <Tag>{planLabelMap[record.plan] || record.plan}</Tag>,
+      sorter: (a, b) => (a.plan || '').localeCompare(b.plan || ''),
+    },
+    {
+      title: 'Token Usage',
+      search: false,
+      width: 200,
+      sorter: (a, b) => (a.token_remaining || 0) - (b.token_remaining || 0),
+      render: (_, record) => {
         const total = planTokenMap[record.plan] ?? 100_000;
         const remaining = record.token_remaining ?? 0;
         const pct = total > 0 ? Math.round((remaining / total) * 100) : 0;
         const strokeColor = pct < 10 ? '#ff4d4f' : pct < 30 ? '#faad14' : '#52c41a';
         return (
-          <div>
+          <div style={{ width: '100%' }}>
             <div style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
               <span>{tokensToWanZi(remaining)}</span>
               <span style={{ color: '#999' }}>/ {tokensToWanZi(total)}</span>
@@ -285,17 +298,36 @@ const Plans: React.FC = () => {
         );
       },
     },
-    { title: '重置时间', dataIndex: 'token_reset_at', key: 'token_reset_at', width: 130, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '-' },
-    { title: '套餐到期', dataIndex: 'plan_expires_at', key: 'plan_expires_at', width: 130, render: (v: string) => v ? new Date(v).toLocaleDateString('zh-CN') : '永久' },
     {
-      title: '操作', key: 'action', width: 90,
-      render: (_: any, record: any) => (
-        <Button size="small" icon={<ThunderboltOutlined />} onClick={() => handleOpenPlan(record)}>设置套餐</Button>
-      ),
+      title: 'Reset Date',
+      dataIndex: 'token_reset_at',
+      valueType: 'date',
+      search: false,
+      width: 120,
+      sorter: (a, b) => new Date(a.token_reset_at || 0).getTime() - new Date(b.token_reset_at || 0).getTime(),
+    },
+    {
+      title: 'Expires',
+      dataIndex: 'plan_expires_at',
+      valueType: 'date',
+      search: false,
+      width: 120,
+      sorter: (a, b) => new Date(a.plan_expires_at || 0).getTime() - new Date(b.plan_expires_at || 0).getTime(),
+      render: (_, record) => record.plan_expires_at ? new Date(record.plan_expires_at).toLocaleDateString() : 'Permanent',
+    },
+    {
+      title: 'Action',
+      valueType: 'option',
+      width: 100,
+      fixed: 'right',
+      render: (_, record) => [
+        <Button key="set" size="small" icon={<ThunderboltOutlined />} onClick={() => handleOpenPlan(record)}>
+          Set Plan
+        </Button>
+      ],
     },
   ];
 
-  // ── Price summary for read mode cards ────────────────────────────────────
   function PriceTag({ plan }: { plan: PlanConfig }) {
     const m = plan.pricing?.monthly;
     if (!m || (m.original === 0 && m.current === 0)) return <Text type="secondary" style={{ fontSize: 12 }}>免费</Text>;
@@ -309,52 +341,50 @@ const Plans: React.FC = () => {
 
   return (
     <div>
-      <Title level={4} style={{ marginTop: 0 }}>套餐管理</Title>
+      <Title level={4} style={{ marginTop: 0 }}>Plan Management</Title>
 
       {/* ── Plan config editor ── */}
       <Card
-        title="套餐配置"
+        title="Plan Configuration"
         loading={configLoading}
         style={{ marginBottom: 24 }}
         extra={
           isEditing ? (
             <Space>
-              <Button onClick={handleCancelEdit}>取消</Button>
-              <Button type="primary" icon={<SaveOutlined />} loading={savingConfig} onClick={handleSaveConfig}>保存配置</Button>
+              <Button onClick={handleCancelEdit}>Cancel</Button>
+              <Button type="primary" icon={<SaveOutlined />} loading={savingConfig} onClick={handleSaveConfig}>Save Config</Button>
             </Space>
           ) : (
-            <Button icon={<EditOutlined />} onClick={handleStartEdit}>编辑</Button>
+            <Button icon={<EditOutlined />} onClick={handleStartEdit}>Edit</Button>
           )
         }
       >
         {isEditing ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  {[
-                    '标识符', '名称', '月额度', '描述', '高亮', '徽章',
-                    '月付原价', '月付现价',
-                    '季付原价', '季付现价',
-                    '年付原价', '年付现价',
-                    '',
-                  ].map((h, i) => (
-                    <th key={i} style={{ padding: '8px', fontWeight: 500, textAlign: 'left', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {editingConfigs!.map((row, idx) => (
-                  <PlanConfigRow key={idx} value={row} onChange={(v) => handleUpdateRow(idx, v)} onDelete={() => handleDeleteRow(idx)} />
-                ))}
-              </tbody>
-            </table>
-            <Button type="dashed" icon={<PlusOutlined />} style={{ marginTop: 12 }} onClick={handleAddPlan}>
-              添加套餐
-            </Button>
-          </div>
+          <EditableProTable<PlanConfig>
+            rowKey="key"
+            headerTitle="Edit Plans"
+            maxLength={10}
+            scroll={{ x: 1200 }}
+            recordCreatorProps={{
+              position: 'bottom',
+              record: () => ({ key: `new-${Date.now()}`, ...DEFAULT_PLAN } as PlanConfig),
+            }}
+            loading={false}
+            columns={planConfigColumns}
+            value={dataSource}
+            onChange={(val) => setDataSource([...val])}
+            editable={{
+              type: 'multiple',
+              editableKeys: editableKeys,
+              onSave: async () => {
+                // Not used in bulk save mode
+              },
+              onChange: setEditableRowKeys,
+              actionRender: (_, __, defaultDom) => [
+                defaultDom.delete,
+              ],
+            }}
+          />
         ) : (
           <Row gutter={16}>
             {planConfigs.map((plan) => (
@@ -367,11 +397,10 @@ const Plans: React.FC = () => {
                   <div style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>{plan.desc}</div>
                   <Space direction="vertical" size={2}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      月配额：<Text strong>{tokensToWanZi(plan.tokens)}</Text>
+                      Monthly: <Text strong>{tokensToWanZi(plan.tokens)}</Text>
                       <Text type="secondary" style={{ fontSize: 11 }}>{' '}（{plan.tokens.toLocaleString()} tokens）</Text>
                     </Text>
                     <PriceTag plan={plan} />
-                    <Statistic prefix={<UserOutlined />} value={planStats[plan.key] ?? 0} suffix="人" valueStyle={{ fontSize: 16 }} />
                     <Text type="secondary" style={{ fontSize: 11 }}>key: {plan.key}</Text>
                   </Space>
                 </Card>
@@ -382,50 +411,64 @@ const Plans: React.FC = () => {
       </Card>
 
       {/* ── User list ── */}
-      <Card
-        title="用户列表"
-        extra={
-          <Space>
-            <Select placeholder="按套餐筛选" allowClear style={{ width: 140 }} value={filterPlan}
-              onChange={(v) => { setFilterPlan(v); fetchUsers(1, pagination.pageSize, keyword, v); }}>
-              {planConfigs.map((p) => <Option key={p.key} value={p.key}>{p.label}</Option>)}
-            </Select>
-            <Input placeholder="搜索用户名/邮箱" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={handleSearch} style={{ width: 180 }} />
-            <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>搜索</Button>
-          </Space>
-        }
-      >
-        <Table columns={columns} dataSource={users} rowKey="id" pagination={pagination} loading={loading} onChange={handleTableChange} scroll={{ x: 900 }} />
-      </Card>
+      <ProTable
+        headerTitle="User List"
+        actionRef={actionRef}
+        rowKey="id"
+        search={{ labelWidth: 'auto' }}
+        request={async (params) => {
+          const { current, pageSize, keyword, plan } = params;
+          const res: any = await request.get('/admin/users', {
+            params: {
+              page: current,
+              size: pageSize,
+              keyword: keyword,
+            },
+          });
+          let items = res.items || [];
+          // Client-side filtering for plan if backend doesn't support it directly in this endpoint
+          // But wait, the original code did filtering on the client side AFTER fetching?
+          // "if (plan) items = items.filter((u: any) => (u.plan || 'free') === plan);"
+          // Yes, original code fetched page then filtered. This is buggy if the user is on another page.
+          // Ideally backend should support plan filter.
+          // For now, I'll replicate the behavior but acknowledge it's limited.
+          if (plan) {
+             items = items.filter((u: any) => (u.plan || 'free') === plan);
+          }
+          return {
+            data: items,
+            success: true,
+            total: res.total,
+          };
+        }}
+        columns={userColumns}
+        pagination={{ pageSize: 20 }}
+        scroll={{ x: 1000 }}
+      />
 
-      {/* ── Set plan modal ── */}
       <Modal
-        title={`设置套餐：${planUser?.username}`}
-        open={isPlanModalVisible} onOk={handleSetPlan} confirmLoading={planLoading}
-        onCancel={() => setIsPlanModalVisible(false)} okText="确认设置" cancelText="取消" width={460}
+        title="Set User Plan"
+        open={isPlanModalVisible}
+        onCancel={() => setIsPlanModalVisible(false)}
+        onOk={handleSetPlan}
+        confirmLoading={planLoading}
       >
-        <Form form={planForm} layout="vertical" style={{ marginTop: 12 }}>
-          <Form.Item name="plan" label="套餐" rules={[{ required: true, message: '请选择套餐' }]}>
+        <Form form={planForm} layout="vertical">
+          <Form.Item name="plan" label="Plan" rules={[{ required: true }]}>
             <Select>
               {planConfigs.map((p) => (
-                <Option key={p.key} value={p.key}>{p.label}（{tokensToWanZi(p.tokens)}/月）</Option>
+                <Option key={p.key} value={p.key}>{p.label} ({tokensToWanZi(p.tokens)})</Option>
               ))}
+              <Option value="free">Free</Option>
             </Select>
           </Form.Item>
-          <Form.Item name="override_remaining" label="自定义 Token 余量（留空则重置为套餐满额）">
-            <InputNumber min={0} max={100_000_000} style={{ width: '100%' }} placeholder="留空 = 套餐满额" />
+          <Form.Item name="override_remaining" label="Override Remaining Tokens (Optional)">
+            <InputNumber style={{ width: '100%' }} placeholder="Leave empty to keep current" />
           </Form.Item>
-          <Form.Item name="plan_expires_at" label="套餐到期时间（ISO 格式，留空为永久）">
-            <Input placeholder="例：2026-12-31T00:00:00Z" />
+          <Form.Item name="plan_expires_at" label="Plan Expires At">
+            <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
         </Form>
-        {planUser && (
-          <div style={{ background: '#f5f5f5', borderRadius: 6, padding: '10px 14px', fontSize: 13, color: '#666' }}>
-            当前：<strong>{planLabelMap[planUser.plan] || planUser.plan}</strong>，
-            余量 <strong>{tokensToWanZi(planUser.token_remaining ?? 0)}</strong>
-            （{(planUser.token_remaining ?? 0).toLocaleString()} tokens）
-          </div>
-        )}
       </Modal>
     </div>
   );

@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  Table, Button, Input, Space, Tag, Modal, Form, Select,
-  message, Popconfirm, Card, Switch, Tooltip, Badge,
+  Button, Modal, Form, Select, Input, Space, Tag, Switch, Tooltip, Badge, message, Popconfirm
 } from 'antd';
 import {
-  PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined,
-  EyeOutlined, CheckCircleOutlined, StopOutlined,
+  PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, StopOutlined
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
-import axios from 'axios';
+import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
+import request from '@/utils/request';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -73,23 +71,11 @@ const CATEGORY_COLOR: Record<string, string> = {
   analysis: 'purple',
 };
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('admin_token')}`,
-});
-
 // ─── component ────────────────────────────────────────────────────────────────
 
 const GlobalPrompts: React.FC = () => {
-  const [data, setData] = useState<PromptTemplate[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [loading, setLoading] = useState(false);
-  const [keyword, setKeyword] = useState('');
-  const [filterType, setFilterType] = useState<string | undefined>();
-
+  const actionRef = useRef<ActionType>();
+  
   // ── edit / create modal ──────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<PromptTemplate | null>(null);
@@ -100,32 +86,6 @@ const GlobalPrompts: React.FC = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
-
-  // ─── data fetching ──────────────────────────────────────────────────────
-
-  const fetchData = useCallback(async (p = page, size = pageSize, kw = keyword, type = filterType) => {
-    setLoading(true);
-    try {
-      const res = await axios.get('/api/v1/admin/prompt-templates', {
-        headers: authHeaders(),
-        params: {
-          page: p,
-          size,
-          keyword: kw || undefined,
-          template_type: type || undefined,
-          global_only: true,
-        },
-      });
-      setData(res.data.items ?? []);
-      setTotal(res.data.total ?? 0);
-    } catch {
-      message.error('加载失败');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, keyword, filterType]);
-
-  useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── handlers ───────────────────────────────────────────────────────────
 
@@ -163,17 +123,17 @@ const GlobalPrompts: React.FC = () => {
       const values = await form.validateFields();
       setSaving(true);
       if (editing) {
-        await axios.put(`/api/v1/admin/prompt-templates/${editing.id}`, values, { headers: authHeaders() });
+        await request.put(`/admin/prompt-templates/${editing.id}`, values);
         message.success('更新成功');
       } else {
-        await axios.post('/api/v1/admin/prompt-templates', values, { headers: authHeaders() });
+        await request.post('/admin/prompt-templates', values);
         message.success('创建成功');
       }
       setModalOpen(false);
-      fetchData(page, pageSize, keyword, filterType);
+      actionRef.current?.reload();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return; // validation error
-      message.error(editing ? '更新失败' : '创建失败');
+      // message.error(editing ? '更新失败' : '创建失败'); // Handled by interceptor usually
     } finally {
       setSaving(false);
     }
@@ -181,99 +141,115 @@ const GlobalPrompts: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await axios.delete(`/api/v1/admin/prompt-templates/${id}`, { headers: authHeaders() });
+      await request.delete(`/admin/prompt-templates/${id}`);
       message.success('已删除');
-      fetchData(page, pageSize, keyword, filterType);
+      actionRef.current?.reload();
     } catch {
-      message.error('删除失败');
+      // message.error('删除失败');
     }
   };
 
   const handleToggleActive = async (record: PromptTemplate) => {
     try {
-      await axios.put(
-        `/api/v1/admin/prompt-templates/${record.id}`,
-        { is_active: !record.is_active },
-        { headers: authHeaders() },
-      );
+      await request.put(`/admin/prompt-templates/${record.id}`, { is_active: !record.is_active });
       message.success(record.is_active ? '已停用' : '已启用');
-      fetchData(page, pageSize, keyword, filterType);
+      actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      // message.error('操作失败');
     }
   };
 
   const handleToggleDefault = async (record: PromptTemplate) => {
     try {
-      await axios.put(
-        `/api/v1/admin/prompt-templates/${record.id}`,
-        { is_default: !record.is_default },
-        { headers: authHeaders() },
-      );
+      await request.put(`/admin/prompt-templates/${record.id}`, { is_default: !record.is_default });
       message.success(record.is_default ? '已取消默认' : '已设为默认');
-      fetchData(page, pageSize, keyword, filterType);
+      actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      // message.error('操作失败');
     }
   };
 
   // ─── columns ────────────────────────────────────────────────────────────
 
-  const columns: ColumnsType<PromptTemplate> = [
-    { title: 'ID', dataIndex: 'id', width: 60 },
+  const columns: ProColumns<PromptTemplate>[] = [
+    { 
+      title: 'ID', 
+      dataIndex: 'id', 
+      width: 60,
+      search: false,
+      sorter: (a, b) => a.id - b.id,
+    },
     {
       title: '名称',
       dataIndex: 'name',
       ellipsis: true,
-      render: (name, record) => (
-        <Button type="link" style={{ padding: 0, fontWeight: 500 }} onClick={() => openPreview(record)}>
-          {name}
-        </Button>
+      sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (_, record) => (
+        <a style={{ fontWeight: 500 }} onClick={() => openPreview(record)}>
+          {record.name}
+        </a>
       ),
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      search: false,
+      hideInTable: true,
     },
     {
       title: '类型',
       dataIndex: 'template_type',
       width: 120,
-      render: (v) => (
-        <Tag color={TYPE_COLOR[v] ?? 'default'}>{TYPE_LABEL[v] ?? v}</Tag>
+      valueType: 'select',
+      fieldProps: {
+        options: TEMPLATE_TYPES,
+      },
+      sorter: (a, b) => a.template_type.localeCompare(b.template_type),
+      render: (_, record) => (
+        <Tag color={TYPE_COLOR[record.template_type] ?? 'default'}>
+          {TYPE_LABEL[record.template_type] ?? record.template_type}
+        </Tag>
       ),
     },
     {
       title: '分类',
       dataIndex: 'prompt_category',
       width: 90,
-      render: (v) => v ? <Tag color={CATEGORY_COLOR[v] ?? 'default'}>{v}</Tag> : '-',
+      search: false,
+      sorter: (a, b) => (a.prompt_category || '').localeCompare(b.prompt_category || ''),
+      render: (_, record) => record.prompt_category ? <Tag color={CATEGORY_COLOR[record.prompt_category] ?? 'default'}>{record.prompt_category}</Tag> : '-',
     },
     {
       title: '组件',
       dataIndex: 'component_id',
       width: 100,
+      search: false,
       render: (v) => v ? <Tag>{v}</Tag> : '-',
     },
     {
       title: '版本',
       dataIndex: 'version',
       width: 70,
+      search: false,
     },
     {
       title: '状态',
       key: 'status',
       width: 100,
+      search: false,
+      sorter: (a, b) => (a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1),
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title={record.is_active ? '点击停用' : '点击启用'}>
             <Badge
               status={record.is_active ? 'success' : 'default'}
               text={
-                <Button
-                  type="link"
-                  size="small"
-                  style={{ padding: 0, color: record.is_active ? '#52c41a' : '#bfbfbf' }}
+                <a
+                  style={{ color: record.is_active ? '#52c41a' : '#bfbfbf' }}
                   onClick={() => handleToggleActive(record)}
                 >
                   {record.is_active ? '启用' : '停用'}
-                </Button>
+                </a>
               }
             />
           </Tooltip>
@@ -284,6 +260,7 @@ const GlobalPrompts: React.FC = () => {
       title: '默认',
       key: 'is_default',
       width: 80,
+      search: false,
       render: (_, record) => (
         <Tooltip title={record.is_default ? '取消默认' : '设为默认'}>
           <Button
@@ -300,104 +277,81 @@ const GlobalPrompts: React.FC = () => {
       title: '使用次数',
       dataIndex: 'usage_count',
       width: 80,
+      search: false,
+      sorter: (a, b) => a.usage_count - b.usage_count,
     },
     {
       title: '更新时间',
       dataIndex: 'updated_at',
       width: 150,
-      render: (v) => v ? v.slice(0, 19).replace('T', ' ') : '-',
+      search: false,
+      valueType: 'dateTime',
+      sorter: (a, b) => new Date(a.updated_at || '').getTime() - new Date(b.updated_at || '').getTime(),
     },
     {
       title: '操作',
-      key: 'actions',
+      valueType: 'option',
       width: 110,
-      render: (_, record) => (
-        <Space size={4}>
-          <Tooltip title="预览内容">
-            <Button icon={<EyeOutlined />} size="small" onClick={() => openPreview(record)} />
+      render: (_, record) => [
+        <Tooltip key="preview" title="预览内容">
+          <Button icon={<EyeOutlined />} size="small" onClick={() => openPreview(record)} />
+        </Tooltip>,
+        <Tooltip key="edit" title="编辑">
+          <Button icon={<EditOutlined />} size="small" type="primary" onClick={() => openEdit(record)} />
+        </Tooltip>,
+        <Popconfirm
+          key="delete"
+          title="确认删除此 Prompt？"
+          onConfirm={() => handleDelete(record.id)}
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+        >
+          <Tooltip title="删除">
+            <Button icon={<DeleteOutlined />} size="small" danger />
           </Tooltip>
-          <Tooltip title="编辑">
-            <Button icon={<EditOutlined />} size="small" type="primary" onClick={() => openEdit(record)} />
-          </Tooltip>
-          <Popconfirm
-            title="确认删除此 Prompt？"
-            onConfirm={() => handleDelete(record.id)}
-            okText="删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-          >
-            <Tooltip title="删除">
-              <Button icon={<DeleteOutlined />} size="small" danger />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
+        </Popconfirm>,
+      ],
     },
   ];
 
-  // ─── render ─────────────────────────────────────────────────────────────
-
   return (
     <>
-      <Card
-        title="全局 Prompt 管理"
-        extra={
-          <Space>
-            <Select
-              placeholder="按类型筛选"
-              allowClear
-              style={{ width: 140 }}
-              options={TEMPLATE_TYPES}
-              value={filterType}
-              onChange={(v) => {
-                setFilterType(v);
-                setPage(1);
-                fetchData(1, pageSize, keyword, v);
-              }}
-            />
-            <Input.Search
-              placeholder="搜索名称/描述"
-              prefix={<SearchOutlined />}
-              allowClear
-              style={{ width: 220 }}
-              onSearch={(v) => {
-                setKeyword(v);
-                setPage(1);
-                fetchData(1, pageSize, v, filterType);
-              }}
-              onChange={(e) => {
-                if (!e.target.value) {
-                  setKeyword('');
-                  fetchData(1, pageSize, '', filterType);
-                }
-              }}
-            />
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新建 Prompt
-            </Button>
-          </Space>
-        }
-      >
-        <Table
-          columns={columns}
-          dataSource={data}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, size) => {
-              setPage(p);
-              setPageSize(size);
-              fetchData(p, size, keyword, filterType);
+      <ProTable<PromptTemplate>
+        headerTitle="全局 Prompt 管理"
+        actionRef={actionRef}
+        rowKey="id"
+        search={{
+          labelWidth: 'auto',
+        }}
+        toolBarRender={() => [
+          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新建 Prompt
+          </Button>,
+        ]}
+        request={async (params) => {
+          const { current, pageSize, name, template_type } = params;
+          const res: any = await request.get('/admin/prompt-templates', {
+            params: {
+              page: current,
+              size: pageSize,
+              keyword: name, // Map 'name' search field to 'keyword' param
+              template_type,
+              global_only: true,
             },
-          }}
-          scroll={{ x: 960 }}
-        />
-      </Card>
+          });
+          return {
+            data: res.items ?? [],
+            success: true,
+            total: res.total ?? 0,
+          };
+        }}
+        columns={columns}
+        pagination={{
+          pageSize: 20,
+        }}
+        scroll={{ x: 1200 }}
+      />
 
       {/* ── Create / Edit Modal ─────────────────────────────────────────── */}
       <Modal

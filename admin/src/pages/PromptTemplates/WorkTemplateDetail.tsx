@@ -227,11 +227,17 @@ const WorkTemplateDetail: React.FC = () => {
 
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns: ColumnsType<PromptTemplate> = [
-    { title: 'ID', dataIndex: 'id', width: 60 },
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      width: 60,
+      sorter: (a, b) => a.id - b.id,
+    },
     {
       title: '名称',
       dataIndex: 'name',
       width: 200,
+      sorter: (a, b) => a.name.localeCompare(b.name),
       render: (name, record) => (
         <Button type="link" style={{ padding: 0 }} onClick={() => setViewingPrompt(record)}>
           {name}
@@ -242,29 +248,34 @@ const WorkTemplateDetail: React.FC = () => {
       title: '组件 ID',
       dataIndex: 'component_id',
       width: 130,
+      sorter: (a, b) => (a.component_id || '').localeCompare(b.component_id || ''),
       render: (v) => v ? <Tag color="geekblue">{v}</Tag> : '-',
     },
     {
       title: '类别',
       dataIndex: 'prompt_category',
       width: 100,
+      sorter: (a, b) => (a.prompt_category || '').localeCompare(b.prompt_category || ''),
       render: (v) => v ? <Tag color={CATEGORY_COLORS[v] ?? 'default'}>{v}</Tag> : '-',
     },
     {
       title: '版本',
       dataIndex: 'version',
       width: 70,
+      sorter: (a, b) => a.version.localeCompare(b.version),
     },
     {
       title: '状态',
       dataIndex: 'is_active',
       width: 70,
+      sorter: (a, b) => (a.is_active === b.is_active ? 0 : a.is_active ? 1 : -1),
       render: (v) => <Badge status={v ? 'success' : 'error'} text={v ? '启用' : '禁用'} />,
     },
     {
       title: '描述',
       dataIndex: 'description',
       ellipsis: true,
+      sorter: (a, b) => (a.description || '').localeCompare(b.description || ''),
       render: (v) => v || '-',
     },
     {
@@ -369,35 +380,41 @@ const WorkTemplateDetail: React.FC = () => {
             title: '组件 ID',
             dataIndex: 'id',
             width: 140,
+            sorter: (a, b) => a.id.localeCompare(b.id),
             render: (v) => <Tag color="geekblue">{v}</Tag>,
           },
           {
             title: '类型',
             dataIndex: 'type',
             width: 120,
+            sorter: (a, b) => a.type.localeCompare(b.type),
             render: (v) => <Tag>{v}</Tag>,
           },
           {
             title: '标签',
             dataIndex: 'label',
             width: 130,
+            sorter: (a, b) => (a.label || '').localeCompare(b.label || ''),
           },
           {
             title: 'dataKey',
             dataIndex: 'dataKey',
             width: 130,
+            sorter: (a, b) => (a.dataKey || '').localeCompare(b.dataKey || ''),
             render: (v) => v ? <Typography.Text code>{v}</Typography.Text> : '-',
           },
           {
             title: '模块',
             dataIndex: 'moduleName',
             width: 110,
+            sorter: (a, b) => a.moduleName.localeCompare(b.moduleName),
             render: (v, r) => <Tag color="cyan" style={{ fontSize: 11 }}>{v || r.moduleId}</Tag>,
           },
           {
             title: '路径',
             dataIndex: 'path',
             ellipsis: true,
+            sorter: (a, b) => a.path.localeCompare(b.path),
             render: (v) => <Typography.Text type="secondary" style={{ fontSize: 11 }}>{v}</Typography.Text>,
           },
           {
