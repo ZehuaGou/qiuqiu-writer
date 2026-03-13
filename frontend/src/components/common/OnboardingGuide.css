@@ -1,3 +1,4 @@
+/*
 .onboarding-overlay {
   position: fixed;
   top: 0;
@@ -25,6 +26,15 @@
   text-align: center;
   animation: slideUp 0.3s ease-out;
   border: 1px solid var(--border-color, #e0e0e0);
+}
+*/
+
+.onboarding-content {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .onboarding-icon {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { authApi, type LoginRequest, type RegisterRequest, type UserInfo } from '../../utils/authApi';
 import './LoginModal.css';
 
@@ -34,7 +35,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
 
   if (!isOpen) return null;
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -55,7 +56,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -96,8 +97,14 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
   };
 
   return (
-    <div className="login-modal-overlay" onClick={onClose}>
-      <div className="login-modal" onClick={(e) => e.stopPropagation()}>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={400}
+      initialHeight={mode === 'login' ? 450 : 650}
+      className="login-modal"
+      handleClassName=".login-modal-header"
+    >
         <button className="login-modal-close" onClick={onClose}>
           <X size={20} />
         </button>
@@ -275,8 +282,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
             </button>
           </form>
         )}
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }
 

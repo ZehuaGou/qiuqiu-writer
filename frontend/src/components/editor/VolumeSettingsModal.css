@@ -1,4 +1,4 @@
-.volume-modal-overlay {
+/* .volume-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -10,14 +10,14 @@
   justify-content: center;
   z-index: 2000;
   backdrop-filter: blur(4px);
-}
+} */
 
 .volume-modal-content {
   background: var(--bg-primary);
   border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
+  /* width: 90%; */
+  /* max-width: 600px; */
+  /* max-height: 90vh; */
   overflow: hidden;
   box-shadow: var(--shadow-md);
   animation: modalSlideIn 0.2s ease-out;

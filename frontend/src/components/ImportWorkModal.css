@@ -15,9 +15,9 @@
 .import-work-modal {
   background-color: var(--bg-secondary);
   border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
-  max-height: calc(100vh - 32px);
+  /* width: 90%; */
+  /* max-width: 500px; */
+  /* max-height: calc(100vh - 32px); */
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-md);

@@ -1,0 +1,85 @@
+import React, { useRef, useState, useEffect } from 'react';
+import Draggable from 'react-draggable';
+import { ResizableBox } from 'react-resizable';
+import './DraggableResizableModal.css';
+
+interface DraggableResizableModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+  initialWidth?: number;
+  initialHeight?: number;
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  className?: string;
+  overlayClassName?: string;
+  handleClassName?: string;
+}
+
+export default function DraggableResizableModal({
+  isOpen,
+  onClose,
+  children,
+  initialWidth = 520,
+  initialHeight = 400,
+  minWidth = 300,
+  minHeight = 200,
+  maxWidth = 1200,
+  maxHeight = 800,
+  className = '',
+  overlayClassName = '',
+  handleClassName = '.modal-header',
+}: DraggableResizableModalProps) {
+  const nodeRef = useRef<HTMLDivElement>(null);
+  
+  // 使用 state 管理 ResizableBox 的宽高，以便在重新打开时重置或保持
+  const [width, setWidth] = useState(initialWidth);
+  const [height, setHeight] = useState(initialHeight);
+
+  // 当 isOpen 变为 true 时，如果需要重置，可以在这里处理
+  useEffect(() => {
+    if (isOpen) {
+      // 可以在这里添加逻辑
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className={`draggable-resizable-modal-overlay ${overlayClassName}`} onClick={onClose}>
+      <Draggable
+        nodeRef={nodeRef}
+        handle={handleClassName}
+        bounds="parent"
+      >
+        <div ref={nodeRef} style={{ display: 'inline-block' }} className="draggable-wrapper">
+          <ResizableBox
+            width={width}
+            height={height}
+            minConstraints={[minWidth, minHeight]}
+            maxConstraints={[maxWidth, maxHeight]}
+            onResize={(_e, { size }) => {
+              setWidth(size.width);
+              setHeight(size.height);
+            }}
+            className={`react-resizable ${className}`}
+            resizeHandles={['se']}
+            handle={
+              <span className="custom-resize-handle" onClick={(e) => e.stopPropagation()} />
+            }
+          >
+            <div 
+              style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {children}
+            </div>
+          </ResizableBox>
+        </div>
+      </Draggable>
+    </div>
+  );
+}

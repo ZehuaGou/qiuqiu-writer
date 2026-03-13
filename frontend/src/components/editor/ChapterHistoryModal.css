@@ -1,6 +1,6 @@
 /* 文档历史风格：白底、左侧主内容、右侧历史列表、顶部操作栏 */
 
-.chapter-history-overlay {
+/* .chapter-history-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.35);
@@ -8,16 +8,16 @@
   align-items: center;
   justify-content: center;
   z-index: 10000;
-}
+} */
 
 .chapter-history-modal {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
-  width: 94%;
-  max-width: 960px;
-  height: auto;
-  max-height: 85vh;
+  /* width: 94%; */
+  /* max-width: 960px; */
+  /* height: auto; */
+  /* max-height: 85vh; */
   display: flex;
   flex-direction: column;
   overflow: hidden;

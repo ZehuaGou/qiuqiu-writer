@@ -1,4 +1,4 @@
-.login-modal-overlay {
+/* .login-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -10,7 +10,7 @@
   justify-content: center;
   z-index: 1000;
   animation: fadeIn 0.2s ease-in-out;
-}
+} */
 
 @keyframes fadeIn {
   from {
@@ -24,9 +24,9 @@
 .login-modal {
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
-  width: 90%;
-  max-width: 440px;
-  max-height: 90vh;
+  /* width: 90%; */
+  /* max-width: 440px; */
+  /* max-height: 90vh; */
   overflow-y: auto;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);

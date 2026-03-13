@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import DraggableResizableModal from './DraggableResizableModal';
 import { X, Bug, Lightbulb, MessageSquare } from 'lucide-react';
 import { feedbackApi, type FeedbackCreate } from '../../utils/feedbackApi';
 import { parseError } from '../../utils/errorUtils';
@@ -55,10 +56,16 @@ export default function FeedbackModal({ isOpen, onClose, onShowMessage, context 
   };
 
   return (
-    <div className="feedback-overlay" onClick={onClose}>
-      <div className="feedback-modal" onClick={(e) => e.stopPropagation()}>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={460}
+      initialHeight={600}
+      className="feedback-modal"
+      handleClassName=".feedback-header"
+    >
         <div className="feedback-header">
-          <h3>问题反馈</h3>
+            <h3>问题反馈</h3>
           <button className="feedback-close" onClick={onClose}><X size={18} /></button>
         </div>
 
@@ -116,9 +123,7 @@ export default function FeedbackModal({ isOpen, onClose, onShowMessage, context 
             disabled={submitting || !title.trim() || !description.trim()}
           >
             {submitting ? '提交中…' : '提交反馈'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </button></div>
+    </DraggableResizableModal>
   );
 }

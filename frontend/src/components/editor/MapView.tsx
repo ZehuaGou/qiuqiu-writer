@@ -4,6 +4,7 @@ import { ExtensionCategory, Graph, register } from '@antv/g6';
 import { ReactNode } from '@antv/g6-extension-react';
 import type { GraphData } from '@antv/g6';
 import MessageModal from '../common/MessageModal';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import type { MessageType } from '../common/MessageModal';
 import './MapView.css';
 
@@ -527,232 +528,236 @@ export default function MapView({ readOnly }: { readOnly?: boolean }) {
       </div>
 
       {/* 添加地点弹窗 */}
-      {addingLocation && (
-        <div className="edit-modal-overlay" onClick={() => { setAddingLocation(false); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>添加地点</h4>
-            <div className="modal-form">
-              <label>
-                <span>地点名称</span>
-                <input
-                  type="text"
-                  value={editForm.locationName || ''}
-                  onChange={(e) => setEditForm({ ...editForm, locationName: e.target.value })}
-                  className="edit-input"
-                  placeholder="地点名称"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>地点描述（可选）</span>
-                <textarea
-                  value={editForm.locationDescription || ''}
-                  onChange={(e) => setEditForm({ ...editForm, locationDescription: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="描述这个地点..."
-                  rows={3}
-                />
-              </label>
-              <div className="modal-actions">
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setAddingLocation(false);
-                    setEditForm({});
-                  }}
-                >
-                  取消
-                </button>
-                <div className="footer-spacer" />
-                <button className="save-btn" onClick={handleSaveNewLocation}>
-                  保存
-                </button>
-              </div>
-            </div>
+      <DraggableResizableModal
+        isOpen={addingLocation}
+        onClose={() => { setAddingLocation(false); setEditForm({}); }}
+        title="添加地点"
+        initialWidth={500}
+        initialHeight={350}
+      >
+        <div className="modal-form">
+          <label>
+            <span>地点名称</span>
+            <input
+              type="text"
+              value={editForm.locationName || ''}
+              onChange={(e) => setEditForm({ ...editForm, locationName: e.target.value })}
+              className="edit-input"
+              placeholder="地点名称"
+              autoFocus
+            />
+          </label>
+          <label>
+            <span>地点描述（可选）</span>
+            <textarea
+              value={editForm.locationDescription || ''}
+              onChange={(e) => setEditForm({ ...editForm, locationDescription: e.target.value })}
+              className="edit-textarea"
+              placeholder="描述这个地点..."
+              rows={3}
+            />
+          </label>
+          <div className="modal-actions">
+            <button
+              className="cancel-btn"
+              onClick={() => {
+                setAddingLocation(false);
+                setEditForm({});
+              }}
+            >
+              取消
+            </button>
+            <div className="footer-spacer" />
+            <button className="save-btn" onClick={handleSaveNewLocation}>
+              保存
+            </button>
           </div>
         </div>
-      )}
+      </DraggableResizableModal>
 
       {/* 添加连接弹窗 */}
-      {addingConnection && (
-        <div className="edit-modal-overlay" onClick={() => { setAddingConnection(false); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>添加连接</h4>
-            <div className="modal-form">
-              <label>
-                <span>起始地点</span>
-                <select
-                  value={editForm.connectionFrom || ''}
-                  onChange={(e) => setEditForm({ ...editForm, connectionFrom: e.target.value })}
-                  className="edit-select"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>连接类型</span>
-                <input
-                  type="text"
-                  value={editForm.connectionType || ''}
-                  onChange={(e) => setEditForm({ ...editForm, connectionType: e.target.value })}
-                  className="edit-input"
-                  placeholder="例如：道路、河流、传送门等"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>目标地点</span>
-                <select
-                  value={editForm.connectionTo || ''}
-                  onChange={(e) => setEditForm({ ...editForm, connectionTo: e.target.value })}
-                  className="edit-select"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>连接描述（可选）</span>
-                <textarea
-                  value={editForm.connectionDescription || ''}
-                  onChange={(e) => setEditForm({ ...editForm, connectionDescription: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="描述这个连接..."
-                  rows={3}
-                />
-              </label>
-              <div className="modal-actions">
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setAddingConnection(false);
-                    setEditForm({});
-                  }}
-                >
-                  取消
-                </button>
-                <div className="footer-spacer" />
-                <button className="save-btn" onClick={handleSaveNewConnection}>
-                  保存
-                </button>
-              </div>
-            </div>
+      <DraggableResizableModal
+        isOpen={addingConnection}
+        onClose={() => { setAddingConnection(false); setEditForm({}); }}
+        title="添加连接"
+        initialWidth={500}
+        initialHeight={450}
+      >
+        <div className="modal-form">
+          <label>
+            <span>起始地点</span>
+            <select
+              value={editForm.connectionFrom || ''}
+              onChange={(e) => setEditForm({ ...editForm, connectionFrom: e.target.value })}
+              className="edit-select"
+            >
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>连接类型</span>
+            <input
+              type="text"
+              value={editForm.connectionType || ''}
+              onChange={(e) => setEditForm({ ...editForm, connectionType: e.target.value })}
+              className="edit-input"
+              placeholder="例如：道路、河流、传送门等"
+              autoFocus
+            />
+          </label>
+          <label>
+            <span>目标地点</span>
+            <select
+              value={editForm.connectionTo || ''}
+              onChange={(e) => setEditForm({ ...editForm, connectionTo: e.target.value })}
+              className="edit-select"
+            >
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>连接描述（可选）</span>
+            <textarea
+              value={editForm.connectionDescription || ''}
+              onChange={(e) => setEditForm({ ...editForm, connectionDescription: e.target.value })}
+              className="edit-textarea"
+              placeholder="描述这个连接..."
+              rows={3}
+            />
+          </label>
+          <div className="modal-actions">
+            <button
+              className="cancel-btn"
+              onClick={() => {
+                setAddingConnection(false);
+                setEditForm({});
+              }}
+            >
+              取消
+            </button>
+            <div className="footer-spacer" />
+            <button className="save-btn" onClick={handleSaveNewConnection}>
+              保存
+            </button>
           </div>
         </div>
-      )}
+      </DraggableResizableModal>
 
       {/* 编辑地点弹窗 */}
-      {editingLocation && (
-        <div className="edit-modal-overlay" onClick={() => { setEditingLocation(null); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>{readOnly ? '查看地点' : '编辑地点'}</h4>
-            <div className="modal-form">
-              <label>
-                <span>地点名称</span>
-                <input
-                  type="text"
-                  value={editForm.locationName || ''}
-                  onChange={(e) => setEditForm({ ...editForm, locationName: e.target.value })}
-                  className="edit-input"
-                  placeholder="地点名称"
-                  autoFocus
-                  disabled={readOnly}
-                />
-              </label>
-              <label>
-                <span>地点描述</span>
-                <textarea
-                  value={editForm.locationDescription || ''}
-                  onChange={(e) => setEditForm({ ...editForm, locationDescription: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="描述这个地点..."
-                  rows={3}
-                  disabled={readOnly}
-                />
-              </label>
-              <div className="modal-actions">
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setEditingLocation(null);
-                    setEditForm({});
-                  }}
-                >
-                  {readOnly ? '关闭' : '取消'}
+      <DraggableResizableModal
+        isOpen={!!editingLocation}
+        onClose={() => { setEditingLocation(null); setEditForm({}); }}
+        title={readOnly ? '查看地点' : '编辑地点'}
+        initialWidth={500}
+        initialHeight={400}
+      >
+        <div className="modal-form">
+          <label>
+            <span>地点名称</span>
+            <input
+              type="text"
+              value={editForm.locationName || ''}
+              onChange={(e) => setEditForm({ ...editForm, locationName: e.target.value })}
+              className="edit-input"
+              placeholder="地点名称"
+              autoFocus
+              disabled={readOnly}
+            />
+          </label>
+          <label>
+            <span>地点描述</span>
+            <textarea
+              value={editForm.locationDescription || ''}
+              onChange={(e) => setEditForm({ ...editForm, locationDescription: e.target.value })}
+              className="edit-textarea"
+              placeholder="描述这个地点..."
+              rows={3}
+              disabled={readOnly}
+            />
+          </label>
+          <div className="modal-actions">
+            <button
+              className="cancel-btn"
+              onClick={() => {
+                setEditingLocation(null);
+                setEditForm({});
+              }}
+            >
+              {readOnly ? '关闭' : '取消'}
+            </button>
+            {!readOnly && (
+              <>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveLocation}>
+                  保存
                 </button>
-                {!readOnly && (
-                  <>
-                    <div className="footer-spacer" />
-                    <button className="save-btn" onClick={handleSaveLocation}>
-                      保存
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </DraggableResizableModal>
 
       {/* 编辑连接弹窗 */}
-      {editingConnection && (
-        <div className="edit-modal-overlay" onClick={() => { setEditingConnection(null); setEditForm({}); }}>
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>{readOnly ? '查看连接' : '编辑连接'}</h4>
-            <div className="modal-form">
-              <label>
-                <span>连接类型</span>
-                <input
-                  type="text"
-                  value={editForm.connectionType || ''}
-                  onChange={(e) => setEditForm({ ...editForm, connectionType: e.target.value })}
-                  className="edit-input"
-                  placeholder="例如：道路、河流、传送门等"
-                  autoFocus
-                  disabled={readOnly}
-                />
-              </label>
-              <label>
-                <span>连接描述</span>
-                <textarea
-                  value={editForm.connectionDescription || ''}
-                  onChange={(e) => setEditForm({ ...editForm, connectionDescription: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="描述这个连接..."
-                  rows={3}
-                  disabled={readOnly}
-                />
-              </label>
-              <div className="modal-actions">
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setEditingConnection(null);
-                    setEditForm({});
-                  }}
-                >
-                  {readOnly ? '关闭' : '取消'}
+      <DraggableResizableModal
+        isOpen={!!editingConnection}
+        onClose={() => { setEditingConnection(null); setEditForm({}); }}
+        title={readOnly ? '查看连接' : '编辑连接'}
+        initialWidth={500}
+        initialHeight={450}
+      >
+        <div className="modal-form">
+          <label>
+            <span>连接类型</span>
+            <input
+              type="text"
+              value={editForm.connectionType || ''}
+              onChange={(e) => setEditForm({ ...editForm, connectionType: e.target.value })}
+              className="edit-input"
+              placeholder="例如：道路、河流、传送门等"
+              autoFocus
+              disabled={readOnly}
+            />
+          </label>
+          <label>
+            <span>连接描述</span>
+            <textarea
+              value={editForm.connectionDescription || ''}
+              onChange={(e) => setEditForm({ ...editForm, connectionDescription: e.target.value })}
+              className="edit-textarea"
+              placeholder="描述这个连接..."
+              rows={3}
+              disabled={readOnly}
+            />
+          </label>
+          <div className="modal-actions">
+            <button
+              className="cancel-btn"
+              onClick={() => {
+                setEditingConnection(null);
+                setEditForm({});
+              }}
+            >
+              {readOnly ? '关闭' : '取消'}
+            </button>
+            {!readOnly && (
+              <>
+                <div className="footer-spacer" />
+                <button className="save-btn" onClick={handleSaveConnection}>
+                  保存
                 </button>
-                {!readOnly && (
-                  <>
-                    <div className="footer-spacer" />
-                    <button className="save-btn" onClick={handleSaveConnection}>
-                      保存
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </DraggableResizableModal>
       
       <MessageModal
         isOpen={messageState.isOpen}

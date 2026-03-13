@@ -102,7 +102,7 @@ const Dashboard: React.FC = () => {
       {monitorData ? (
         <Row gutter={16}>
           <Col span={8}>
-            <Card title={<span><DashboardOutlined /> CPU Usage</span>} bordered={false}>
+            <Card title={<span><DashboardOutlined /> CPU Usage</span>} variant="borderless">
               <div style={{ textAlign: 'center' }}>
                 <Progress type="dashboard" percent={monitorData.cpu_percent} status={monitorData.cpu_percent > 80 ? 'exception' : 'normal'} />
                 <div style={{ marginTop: 10 }}>Cores: {monitorData.cpu_cores}</div>

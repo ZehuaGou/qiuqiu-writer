@@ -1,8 +1,8 @@
 
 .generated-data-preview-modal {
-  width: 800px;
-  max-width: 95vw;
-  max-height: 90vh;
+  /* width: 800px; */
+  /* max-width: 95vw; */
+  /* max-height: 90vh; */
   display: flex;
   flex-direction: column;
 }
@@ -102,10 +102,10 @@
 
 @media (max-width: 768px) {
   .generated-data-preview-modal {
-    width: 100%;
-    height: 100%;
-    max-width: 100%;
-    max-height: 100dvh;
+    /* width: 100%; */
+    /* height: 100%; */
+    /* max-width: 100%; */
+    /* max-height: 100dvh; */
     border-radius: 0;
   }
 

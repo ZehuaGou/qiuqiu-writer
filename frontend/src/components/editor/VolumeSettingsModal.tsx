@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { X, Save, Trash2 } from 'lucide-react';
 import './VolumeSettingsModal.css';
 
@@ -41,7 +42,7 @@ export default function VolumeSettingsModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!title.trim()) return;
     onSave(title, volumeId, outline, detailOutline);
@@ -49,8 +50,14 @@ export default function VolumeSettingsModal({
   };
 
   return (
-    <div className="volume-modal-overlay">
-      <div className="volume-modal-content">
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={600}
+      initialHeight={650}
+      className="volume-modal-content"
+      handleClassName=".volume-modal-header"
+    >
         <div className="volume-modal-header">
           <h2>{mode === 'create' ? '新建卷' : '卷纲设置'}</h2>
           <button className="volume-modal-close" onClick={onClose}>
@@ -132,7 +139,6 @@ export default function VolumeSettingsModal({
             )}
           </div>
         </form>
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

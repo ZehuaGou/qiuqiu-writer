@@ -1,5 +1,6 @@
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import DraggableResizableModal from './DraggableResizableModal';
 import './MessageModal.css';
 
 export type MessageType = 'success' | 'error' | 'warning' | 'info';
@@ -83,39 +84,45 @@ export default function MessageModal({
 
   // 模态框：带遮罩的完整弹窗
   return (
-    <div className={`message-modal-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}>
-      <div className="message-modal" onClick={e => e.stopPropagation()}>
-        <div className="message-modal-header">
-          <h3>
-            {getIcon(20)}
-            <span>{getDefaultTitle()}</span>
-          </h3>
-          <button className="message-modal-close" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-        
-        <div className="message-modal-body">
-          {message}
-        </div>
-
-        <div className="message-modal-footer">
-          {onConfirm && (
-            <button className="message-btn secondary" onClick={onClose}>
-              {cancelText}
-            </button>
-          )}
-          <button 
-            className="message-btn primary" 
-            onClick={() => {
-              if (onConfirm) onConfirm();
-              onClose();
-            }}
-          >
-            {confirmText}
-          </button>
-        </div>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={400}
+      initialHeight={250}
+      className="message-modal"
+      handleClassName=".message-modal-header"
+      overlayClassName={isOpen ? 'open' : ''}
+    >
+      <div className="message-modal-header">
+        <h3>
+          {getIcon(20)}
+          <span>{getDefaultTitle()}</span>
+        </h3>
+        <button className="message-modal-close" onClick={onClose}>
+          <X size={18} />
+        </button>
       </div>
-    </div>
+          
+          <div className="message-modal-body">
+            {message}
+          </div>
+
+          <div className="message-modal-footer">
+            {onConfirm && (
+              <button className="message-btn secondary" onClick={onClose}>
+                {cancelText}
+              </button>
+            )}
+            <button 
+              className="message-btn primary" 
+              onClick={() => {
+                if (onConfirm) onConfirm();
+                onClose();
+              }}
+            >
+              {confirmText}
+            </button>
+          </div>
+    </DraggableResizableModal>
   );
 }

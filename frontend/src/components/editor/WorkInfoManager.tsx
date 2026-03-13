@@ -18,6 +18,7 @@ import './WorkInfoManager.css';
 
 // Import refactored modules
 import ComponentEditorModal from './work-info/ComponentEditorModal';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { useWorkInfoData } from './work-info/useWorkInfoData';
 import { TabsComponent } from './work-info/TabsComponent';
 import TimelineEditor from './work-info/TimelineEditor';
@@ -1198,48 +1199,51 @@ export default function WorkInfoManager(props: WorkInfoManagerProps = {}) {
       </div>
       
       {/* 模块添加模态框 */}
-      {showAddModule && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '480px', maxHeight: '80vh' }}>
-            <div className="modal-header">
-              <h3>添加新模块</h3>
-              <button className="close-btn" onClick={() => setShowAddModule(false)}><X size={18} /></button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label>模块名称</label>
-                <input
-                  type="text"
-                  value={newModuleForm.name}
-                  onChange={(e) => setNewModuleForm({ ...newModuleForm, name: e.target.value })}
-                  placeholder="例如：世界观、人物设定"
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddModule()}
-                />
-              </div>
-              <div className="form-group">
-                <label>图标</label>
-                <div className="icon-selector">
-                  {Object.keys(IconMap).map(iconName => (
-                    <button
-                      key={iconName}
-                      className={`icon-btn ${newModuleForm.icon === iconName ? 'active' : ''}`}
-                      onClick={() => setNewModuleForm({ ...newModuleForm, icon: iconName })}
-                      title={iconName}
-                    >
-                      {IconMap[iconName]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button onClick={() => setShowAddModule(false)}>取消</button>
-              <button className="primary" onClick={handleAddModule}>确认添加</button>
+      <DraggableResizableModal
+        isOpen={showAddModule}
+        onClose={() => setShowAddModule(false)}
+        initialWidth={480}
+        initialHeight={400}
+        className="add-module-modal-content"
+        handleClassName=".modal-header"
+      >
+        <div className="modal-header">
+          <h3>添加新模块</h3>
+          <button className="close-btn" onClick={() => setShowAddModule(false)}><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label>模块名称</label>
+            <input
+              type="text"
+              value={newModuleForm.name}
+              onChange={(e) => setNewModuleForm({ ...newModuleForm, name: e.target.value })}
+              placeholder="例如：世界观、人物设定"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleAddModule()}
+            />
+          </div>
+          <div className="form-group">
+            <label>图标</label>
+            <div className="icon-selector">
+              {Object.keys(IconMap).map(iconName => (
+                <button
+                  key={iconName}
+                  className={`icon-btn ${newModuleForm.icon === iconName ? 'active' : ''}`}
+                  onClick={() => setNewModuleForm({ ...newModuleForm, icon: iconName })}
+                  title={iconName}
+                >
+                  {IconMap[iconName]}
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      )}
+        <div className="modal-footer">
+          <button onClick={() => setShowAddModule(false)}>取消</button>
+          <button className="primary" onClick={handleAddModule}>确认添加</button>
+        </div>
+      </DraggableResizableModal>
 
       <ComponentEditorModal
         isOpen={showAddComponent}

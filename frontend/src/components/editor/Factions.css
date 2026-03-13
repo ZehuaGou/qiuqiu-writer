@@ -448,7 +448,7 @@
 }
 
 /* Modal Styles */
-.edit-modal-overlay {
+/* .edit-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -495,7 +495,7 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 20px 0;
-}
+} */
 
 .modal-form {
   display: flex;

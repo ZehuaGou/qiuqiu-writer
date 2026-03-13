@@ -1691,7 +1691,7 @@
 }
 
 /* ============ Modal Styles ============ */
-.modal-overlay {
+/* .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -1700,15 +1700,15 @@
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
-}
+} */
 
-.modal-content {
+.add-module-modal-content {
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
+  /* max-height: 90vh; */
   border: 1px solid var(--border-light);
   overflow: hidden;
   animation: modal-in 0.2s ease-out;

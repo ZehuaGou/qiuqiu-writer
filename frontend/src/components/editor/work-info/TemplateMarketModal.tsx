@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import DraggableResizableModal from '../../common/DraggableResizableModal';
 import { X, Search, Save, Globe, User, Edit2, Trash2, MoreHorizontal, Download } from 'lucide-react';
 import { templatesApi } from '../../../utils/templatesApi';
 import type { WorkTemplate, TemplateConfig } from '../../../utils/templatesApi';
@@ -214,8 +215,14 @@ export default function TemplateMarketModal({
   if (!isOpen) return null;
 
   return (
-    <div className="template-market-modal-overlay">
-      <div className="template-market-modal-content">
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={960}
+      initialHeight={800}
+      className="template-market-modal-content"
+      handleClassName=".template-market-header"
+    >
         <div className="template-market-header">
           <h3>模板市场</h3>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
@@ -337,7 +344,7 @@ export default function TemplateMarketModal({
           )}
         </div>
 
-        {showSaveForm && (
+      {showSaveForm && (
           <div className="save-form-overlay">
             <div className="save-form-content">
               <h3>{editingTemplate ? '编辑模板' : '保存为新模板'}</h3>
@@ -395,7 +402,6 @@ export default function TemplateMarketModal({
             if (messageState.onConfirm) messageState.onConfirm();
           }}
         />
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

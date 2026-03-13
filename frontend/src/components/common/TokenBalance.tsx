@@ -2,11 +2,7 @@ import { useEffect, useState } from 'react';
 import { tokenApi, tokensToDisplay, type TokenInfo } from '../../utils/tokenApi';
 import './TokenBalance.css';
 
-interface TokenBalanceProps {
-  compact?: boolean;
-}
-
-export default function TokenBalance({ compact: _compact = true }: TokenBalanceProps) {
+export default function TokenBalance() {
   const [info, setInfo] = useState<TokenInfo | null>(null);
 
   const handleClick = () => {

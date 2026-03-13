@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import DraggableResizableModal from './common/DraggableResizableModal';
 import { X, Upload, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
@@ -393,11 +394,17 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
   };
 
   return (
-    <div className="import-work-modal-overlay" onClick={handleClose}>
-      <div className="import-work-modal" onClick={(e) => e.stopPropagation()}>
+      <DraggableResizableModal
+        isOpen={isOpen}
+        onClose={handleClose}
+        initialWidth={600}
+        initialHeight={500}
+        className="import-work-modal"
+        handleClassName=".import-work-modal-header"
+      >
         <div className="import-work-modal-header">
           <h2>导入作品</h2>
-          <button className="close-btn" onClick={handleClose}>
+          <button className="close-btn" onClick={handleClose} aria-label="关闭">
             <X size={20} />
           </button>
         </div>
@@ -456,21 +463,20 @@ export default function ImportWorkModal({ isOpen, onClose, onSuccess }: ImportWo
         </div>
 
         <div className="import-work-modal-footer">
-          {status === 'success' ? (
-            <button className="btn-primary" onClick={handleClose}>
-              关闭
-            </button>
-          ) : (
-            <button
-              className="btn-primary"
-              onClick={handleImport}
-              disabled={!file || status !== 'idle'}
-            >
-              {status === 'idle' ? '开始导入' : '导入中...'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+            {status === 'success' ? (
+              <button className="btn-primary" onClick={handleClose}>
+                关闭
+              </button>
+            ) : (
+              <button
+                className="btn-primary"
+                onClick={handleImport}
+                disabled={!file || status !== 'idle'}
+              >
+                {status === 'idle' ? '开始导入' : '导入中...'}
+              </button>
+            )}
+          </div>
+      </DraggableResizableModal>
+    );
 }

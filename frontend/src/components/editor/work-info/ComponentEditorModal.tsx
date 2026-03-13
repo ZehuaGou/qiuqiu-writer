@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, Loader2, Maximize2, Trash2 } from 'lucide-react';
+import DraggableResizableModal from '../../common/DraggableResizableModal';
 import type { ComponentType, ComponentConfig, TemplateConfig } from './types';
 import { DataDependenciesSelector } from './DataDependenciesSelector';
 import { promptTemplateApi } from '../../../utils/promptTemplateApi';
@@ -178,10 +179,17 @@ export default function ComponentEditorModal({
   };
 
   return (
-    <div className="component-editor-modal-overlay">
-      <div className="component-editor-modal-content">
+    <>
+      <DraggableResizableModal
+        isOpen={isOpen}
+        onClose={onClose}
+        initialWidth={600}
+        initialHeight={700}
+        className="component-editor-modal-content"
+        handleClassName=".component-editor-modal-header"
+      >
         <div className="component-editor-modal-header">
-          <h3>{isEditing ? '编辑组件' : '添加组件'}</h3>
+          <h3>{isEditing ? '编辑组件' : '添加新组件'}</h3>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
         </div>
         
@@ -484,45 +492,44 @@ export default function ComponentEditorModal({
             </div>
           )}
         </div>
-      </div>
+      </DraggableResizableModal>
 
       {/* Expanded Prompt Editor Modal */}
-      {expandedPromptField && (
-        <div className="component-editor-modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="component-editor-modal-content" style={{ maxWidth: '90vw', width: '800px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="component-editor-modal-header">
-              <h3>
-                编辑
-                {expandedPromptField === 'generatePrompt' ? '生成 Prompt' :
-                 expandedPromptField === 'validatePrompt' ? '校验 Prompt' :
-                 '分析 Prompt'}
-              </h3>
-              <button className="close-btn" onClick={() => setExpandedPromptField(null)}><X size={18} /></button>
-            </div>
-            <div className="component-editor-modal-body" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column' }}>
-              <textarea
-                value={formData[expandedPromptField]}
-                onChange={e => setFormData({ ...formData, [expandedPromptField]: e.target.value })}
-                placeholder="输入 Prompt 模板..."
-                style={{ 
-                  flex: 1, 
-                  fontFamily: 'monospace', 
-                  fontSize: '14px', 
-                  width: '100%', 
-                  resize: 'none',
-                  padding: '12px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px'
-                }}
-                autoFocus
-              />
-            </div>
-            <div className="modal-footer">
-              <button className="primary" onClick={() => setExpandedPromptField(null)}>完成</button>
-            </div>
+      <DraggableResizableModal
+        isOpen={!!expandedPromptField}
+        onClose={() => setExpandedPromptField(null)}
+        title={
+          expandedPromptField === 'generatePrompt' ? '编辑 生成 Prompt' :
+          expandedPromptField === 'validatePrompt' ? '编辑 校验 Prompt' :
+          expandedPromptField === 'analysisPrompt' ? '编辑 分析 Prompt' :
+          '编辑 Prompt'
+        }
+        initialWidth={800}
+        initialHeight={600}
+        overlayClassName="prompt-editor-overlay"
+      >
+          <div className="component-editor-modal-body" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <textarea
+              value={formData[expandedPromptField || 'generatePrompt']}
+              onChange={e => expandedPromptField && setFormData({ ...formData, [expandedPromptField]: e.target.value })}
+              placeholder="输入 Prompt 模板..."
+              style={{ 
+                flex: 1, 
+                fontFamily: 'monospace', 
+                fontSize: '14px', 
+                width: '100%', 
+                resize: 'none',
+                padding: '12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px'
+              }}
+              autoFocus
+            />
           </div>
-        </div>
-      )}
-    </div>
+          <div className="modal-footer">
+            <button className="primary" onClick={() => setExpandedPromptField(null)}>完成</button>
+          </div>
+      </DraggableResizableModal>
+    </>
   );
 }

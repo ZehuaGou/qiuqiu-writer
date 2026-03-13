@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { ArrowLeft, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { chaptersApi } from '../../utils/chaptersApi';
 import { getContentJSONFromYjsSnapshotBase64, getTextFromProsemirrorJSON } from '../../utils/yjsSnapshot';
@@ -86,7 +87,7 @@ export default function ChapterHistoryModal({
   const [versionTextState, setVersionTextState] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [showChanges, setShowChanges] = useState(true);
-
+  
   const getCurrentContentRef = useRef(getCurrentContent);
   getCurrentContentRef.current = getCurrentContent;
   const loadingIdRef = useRef<string | null>(null);
@@ -242,10 +243,16 @@ export default function ChapterHistoryModal({
   if (!isOpen) return null;
 
   return (
-    <div className="chapter-history-overlay" onClick={onClose}>
-      <div className="chapter-history-modal chapter-history-modal--doc-style" onClick={(e) => e.stopPropagation()}>
-        {/* 顶部栏 */}
-        <div className="chapter-history-topbar">
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={960}
+      initialHeight={800}
+      className="chapter-history-modal chapter-history-modal--doc-style"
+      handleClassName=".chapter-history-topbar"
+    >
+          {/* 顶部栏 */}
+          <div className="chapter-history-topbar">
           <button type="button" className="chapter-history-back-doc" onClick={onClose}>
             <ArrowLeft size={18} />
             返回文档
@@ -392,7 +399,6 @@ export default function ChapterHistoryModal({
             </label>
           </div>
         )}
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

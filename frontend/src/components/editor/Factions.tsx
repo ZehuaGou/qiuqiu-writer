@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Edit2, Trash2, ChevronDown, ChevronRight, X, Users } from 'lucide-react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import './Factions.css';
 
 interface Faction {
@@ -458,127 +459,125 @@ export default function Factions({ readOnly }: { readOnly?: boolean }) {
       </div>
 
       {/* 添加势力弹窗 */}
-      {addingFaction && (
-        <div
-          className="edit-modal-overlay"
-          onClick={() => {
-            setAddingFaction(false);
-            setFactionForm({ name: '', summary: '', details: '', levels: [] });
-            setNewLevel('');
-            setParentFactionId(null);
-          }}
-        >
-          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
-            <h4>{parentFactionId ? '添加子势力' : '添加势力'}</h4>
-            <div className="modal-form">
-              <label>
-                <span>势力名称</span>
+      <DraggableResizableModal
+        isOpen={addingFaction}
+        onClose={() => {
+          setAddingFaction(false);
+          setFactionForm({ name: '', summary: '', details: '', levels: [] });
+          setNewLevel('');
+          setParentFactionId(null);
+        }}
+        title={parentFactionId ? '添加子势力' : '添加势力'}
+        initialWidth={600}
+        initialHeight={700}
+      >
+        <div className="modal-form">
+          <label>
+            <span>势力名称</span>
+            <input
+              type="text"
+              value={factionForm.name}
+              onChange={(e) => setFactionForm({ ...factionForm, name: e.target.value })}
+              className="edit-input"
+              placeholder="势力名称"
+              autoFocus
+            />
+          </label>
+          <label>
+            <span>势力简述</span>
+            <textarea
+              value={factionForm.summary}
+              onChange={(e) => setFactionForm({ ...factionForm, summary: e.target.value })}
+              className="edit-textarea"
+              placeholder="输入势力简述..."
+              rows={3}
+            />
+          </label>
+          <label>
+            <span>详细信息</span>
+            <textarea
+              value={factionForm.details}
+              onChange={(e) => setFactionForm({ ...factionForm, details: e.target.value })}
+              className="edit-textarea"
+              placeholder="输入详细信息..."
+              rows={5}
+            />
+          </label>
+          <div className="faction-levels-section">
+            <div className="levels-header">
+              <span className="levels-title">等级阶梯</span>
+              <div className="add-level-input">
                 <input
                   type="text"
-                  value={factionForm.name}
-                  onChange={(e) => setFactionForm({ ...factionForm, name: e.target.value })}
-                  className="edit-input"
-                  placeholder="势力名称"
-                  autoFocus
+                  value={newLevel}
+                  onChange={(e) => setNewLevel(e.target.value)}
+                  placeholder="输入等级名称"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && newLevel.trim()) {
+                      setFactionForm({
+                        ...factionForm,
+                        levels: [...factionForm.levels, newLevel.trim()],
+                      });
+                      setNewLevel('');
+                    }
+                  }}
                 />
-              </label>
-              <label>
-                <span>势力简述</span>
-                <textarea
-                  value={factionForm.summary}
-                  onChange={(e) => setFactionForm({ ...factionForm, summary: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="输入势力简述..."
-                  rows={3}
-                />
-              </label>
-              <label>
-                <span>详细信息</span>
-                <textarea
-                  value={factionForm.details}
-                  onChange={(e) => setFactionForm({ ...factionForm, details: e.target.value })}
-                  className="edit-textarea"
-                  placeholder="输入详细信息..."
-                  rows={5}
-                />
-              </label>
-              <div className="faction-levels-section">
-                <div className="levels-header">
-                  <span className="levels-title">等级阶梯</span>
-                  <div className="add-level-input">
-                    <input
-                      type="text"
-                      value={newLevel}
-                      onChange={(e) => setNewLevel(e.target.value)}
-                      placeholder="输入等级名称"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && newLevel.trim()) {
-                          setFactionForm({
-                            ...factionForm,
-                            levels: [...factionForm.levels, newLevel.trim()],
-                          });
-                          setNewLevel('');
-                        }
-                      }}
-                    />
-                    <button
-                      className="add-level-btn"
-                      onClick={() => {
-                        if (newLevel.trim()) {
-                          setFactionForm({
-                            ...factionForm,
-                            levels: [...factionForm.levels, newLevel.trim()],
-                          });
-                          setNewLevel('');
-                        }
-                      }}
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div className="levels-list">
-                  {factionForm.levels.map((level, index) => (
-                    <div key={index} className="level-item">
-                      <span className="level-order">{index + 1}</span>
-                      <span className="level-name">{level}</span>
-                      <button
-                        className="remove-level-btn"
-                        onClick={() => {
-                          setFactionForm({
-                            ...factionForm,
-                            levels: factionForm.levels.filter((_, i) => i !== index),
-                          });
-                        }}
-                        title="删除"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="modal-actions">
                 <button
-                  className="cancel-btn"
+                  className="add-level-btn"
                   onClick={() => {
-                    setAddingFaction(false);
-                    setFactionForm({ name: '', summary: '', details: '', levels: [] });
-                    setNewLevel('');
-                    setParentFactionId(null);
+                    if (newLevel.trim()) {
+                      setFactionForm({
+                        ...factionForm,
+                        levels: [...factionForm.levels, newLevel.trim()],
+                      });
+                      setNewLevel('');
+                    }
                   }}
                 >
-                  取消
-                </button>
-                <div className="footer-spacer" />
-                <button className="save-btn" onClick={handleSaveNewFaction}>
-                  保存
+                  <Plus size={14} />
                 </button>
               </div>
             </div>
+            <div className="levels-list">
+              {factionForm.levels.map((level, index) => (
+                <div key={index} className="level-item">
+                  <span className="level-order">{index + 1}</span>
+                  <span className="level-name">{level}</span>
+                  <button
+                    className="remove-level-btn"
+                    onClick={() => {
+                      setFactionForm({
+                        ...factionForm,
+                        levels: factionForm.levels.filter((_, i) => i !== index),
+                      });
+                    }}
+                    title="删除"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button
+              className="cancel-btn"
+              onClick={() => {
+                setAddingFaction(false);
+                setFactionForm({ name: '', summary: '', details: '', levels: [] });
+                setNewLevel('');
+                setParentFactionId(null);
+              }}
+            >
+              取消
+            </button>
+            <div className="footer-spacer" />
+            <button className="save-btn" onClick={handleSaveNewFaction}>
+              保存
+            </button>
           </div>
         </div>
-      )}
+      </DraggableResizableModal>
     </div>
   );
 }

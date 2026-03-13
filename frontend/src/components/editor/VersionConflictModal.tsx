@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { X, Download, Upload, GitMerge, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import './VersionConflictModal.css';
 
@@ -77,10 +78,16 @@ export default function VersionConflictModal({
   };
 
   return (
-    <div className="version-conflict-overlay" onClick={onClose}>
-      <div className="version-conflict-modal" onClick={e => e.stopPropagation()}>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={900}
+      initialHeight={700}
+      className="version-conflict-modal"
+      handleClassName=".version-conflict-header"
+    >
         <div className="version-conflict-header">
-          <div className="version-conflict-title">
+            <div className="version-conflict-title">
             <AlertTriangle size={24} className="icon-warning" />
             <h3>检测到版本冲突</h3>
           </div>
@@ -206,8 +213,7 @@ export default function VersionConflictModal({
           <button className="cancel-btn" onClick={onClose} disabled={selectedResolution !== null}>
             取消
           </button>
-        </div>
-      </div>
-    </div>
+          </div>
+    </DraggableResizableModal>
   );
 }

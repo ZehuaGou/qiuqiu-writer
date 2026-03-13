@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Download, FileText, File, CheckCircle2, Circle, AlertCircle, Check } from 'lucide-react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { worksApi } from '../../utils/worksApi';
 import type { VolumeData } from '../../hooks/useChapterManagement';
 import './ExportModal.css';
@@ -142,20 +143,25 @@ export default function ExportModal({
   const hasSelection = selectedChapters.size > 0;
 
   return (
-    <div className="export-modal-overlay" onClick={onClose}>
-      <div className="export-modal" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="export-modal-header">
-          <h2>
-            <Download size={18} />
-            导出作品
-          </h2>
-          <button className="export-modal-close" onClick={onClose} aria-label="关闭">
-            <X size={18} />
-          </button>
-        </div>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={520}
+      initialHeight={600}
+      className="export-modal"
+      handleClassName=".export-modal-header"
+    >
+      <div className="export-modal-header">
+        <h2>
+          <Download size={20} />
+          <span>导出作品</span>
+        </h2>
+        <button className="export-modal-close" onClick={onClose}>
+          <X size={20} />
+        </button>
+      </div>
 
-        <div className="export-modal-content">
+          <div className="export-modal-content">
           {/* Format Selection */}
           <div className="export-section">
             <h3 className="export-section-title">导出格式</h3>
@@ -326,7 +332,6 @@ export default function ExportModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

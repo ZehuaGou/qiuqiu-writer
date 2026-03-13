@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import './OnboardingGuide.css';
+import DraggableResizableModal from './DraggableResizableModal';
 
 interface OnboardingGuideProps {
   onStart: () => void;
@@ -38,11 +39,18 @@ export default function OnboardingGuide({ onStart, onSkip, workId }: OnboardingG
     onSkip();
   };
 
-  if (!isVisible) return null;
-
   return (
-    <div className="onboarding-overlay">
-      <div className="onboarding-modal">
+    <DraggableResizableModal
+      isOpen={isVisible}
+      onClose={handleSkip}
+      title="欢迎使用作品编辑器"
+      initialWidth={480}
+      initialHeight={450}
+      minWidth={400}
+      minHeight={400}
+      className="onboarding-guide-modal"
+    >
+      <div className="onboarding-content">
         <div className="onboarding-icon">
           <BookOpen size={32} />
         </div>
@@ -59,6 +67,6 @@ export default function OnboardingGuide({ onStart, onSkip, workId }: OnboardingG
           </button>
         </div>
       </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

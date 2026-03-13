@@ -1,5 +1,5 @@
 /* ── Overlay ── */
-.qm-overlay {
+/* .qm-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -9,7 +9,7 @@
   z-index: 9999;
   padding: 16px;
   backdrop-filter: blur(2px);
-}
+} */
 
 /* ── Modal ── */
 .qm-modal {
@@ -17,9 +17,9 @@
   background: var(--bg-primary);
   border-radius: 24px;
   padding: 0 0 28px;
-  width: 100%;
-  max-width: 960px;
-  max-height: 92vh;
+  /* width: 100%; */
+  /* max-width: 960px; */
+  /* max-height: 92vh; */
   overflow-y: auto;
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.22);
   border: 1px solid var(--border-color);

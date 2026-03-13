@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { X, Sparkles, Plus, MapPin, Users, FileText, BookOpen, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { chaptersApi } from '../../utils/chaptersApi';
 import { generateChapterOutline } from '../../utils/bookAnalysisApi';
@@ -610,10 +611,17 @@ export default function ChapterSettingsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="chapter-modal-overlay" onClick={onClose}>
-      <div className="chapter-modal" onClick={(e) => e.stopPropagation()}>
+    <>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={800}
+      initialHeight={600}
+      className="chapter-modal"
+      handleClassName=".chapter-modal-header"
+    >
         <div className="chapter-modal-header">
-          <div className="modal-header-content">
+            <div className="modal-header-content">
             <BookOpen size={20} />
             <h2>{mode === 'create' ? '新建章节' : '编辑章节'}</h2>
             <span className="volume-badge">{volumeTitle}</span>
@@ -993,22 +1001,22 @@ export default function ChapterSettingsModal({
             </button>
           )}
         </div>
+      </DraggableResizableModal>
 
-        <MessageModal
-          isOpen={messageState.isOpen}
-          onClose={closeMessage}
-          title={messageState.title}
-          message={messageState.message}
-          type={messageState.type}
-          toast={messageState.toast}
-          autoCloseMs={messageState.autoCloseMs}
-          onConfirm={() => {
-            closeMessage();
-            if (messageState.onConfirm) messageState.onConfirm();
-          }}
-        />
-      </div>
-    </div>
+      <MessageModal
+        isOpen={messageState.isOpen}
+        onClose={closeMessage}
+        title={messageState.title}
+        message={messageState.message}
+        type={messageState.type}
+        toast={messageState.toast}
+        autoCloseMs={messageState.autoCloseMs}
+        onConfirm={() => {
+          closeMessage();
+          if (messageState.onConfirm) messageState.onConfirm();
+        }}
+      />
+    </>
   );
 }
 

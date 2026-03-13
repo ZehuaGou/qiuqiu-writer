@@ -12,9 +12,9 @@
 }
 
 .component-editor-modal-content {
-  max-width: 800px;
-  width: 90%;
-  max-height: 90vh;
+  /* max-width: 800px; */
+  /* width: 90%; */
+  /* max-height: 90vh; */
   display: flex;
   flex-direction: column;
   background-color: white;
@@ -99,7 +99,6 @@
   border-color: #3b82f6;
   background: #eff6ff;
   color: #3b82f6;
-  box-shadow: 0 0 0 1px #3b82f6;
 }
 
 .type-btn span {
@@ -107,37 +106,10 @@
   font-weight: 500;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
-}
-
-.modal-footer button {
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: white;
-  color: #475569;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.modal-footer button.primary {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-}
-
 .component-config-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .form-group {
@@ -152,52 +124,178 @@
   color: #475569;
 }
 
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group textarea,
-.comp-input {
-  padding: 10px;
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 10px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 14px;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
+  transition: all 0.2s;
 }
 
 .form-group input:focus,
+.form-group select:focus,
 .form-group textarea:focus {
+  outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .form-group small {
-  color: #94a3b8;
   font-size: 12px;
+  color: #94a3b8;
 }
 
 .options-config-container {
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
 }
 
 .option-row {
   display: flex;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 8px;
   gap: 8px;
   align-items: center;
 }
 
+.color-picker-trigger {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.color-picker-trigger:hover {
+  transform: scale(1.05);
+}
+
 .icon-btn {
+  padding: 6px;
   background: transparent;
   border: none;
+  border-radius: 4px;
+  color: #94a3b8;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.icon-btn:hover {
+  background: #f1f5f9;
+  color: #ef4444;
+}
+
+.add-option-btn {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px dashed #cbd5e1;
+  width: 100%;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.add-option-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
+}
+
+.tabs-config-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tab-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.modal-footer button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.modal-footer button:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.modal-footer button.primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.modal-footer button.primary:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.prompt-field-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 4px;
+}
+
+.prompt-actions button {
   padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prompt-actions button:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
 }
 
 @media (max-width: 768px) {
@@ -229,4 +327,9 @@
     justify-content: center;
     width: 100%;
   }
+}
+
+/* Ensure prompt editor overlay is above other modals */
+.prompt-editor-overlay {
+  z-index: 1100;
 }

@@ -1,4 +1,4 @@
-.version-conflict-overlay {
+/* .version-conflict-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -10,15 +10,15 @@
   justify-content: center;
   z-index: 10000;
   animation: fadeIn 0.2s ease-out;
-}
+} */
 
 .version-conflict-modal {
   background: var(--bg-primary, #ffffff);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  max-width: 900px;
-  width: 90%;
-  max-height: 90vh;
+  /* max-width: 900px; */
+  /* width: 90%; */
+  /* max-height: 90vh; */
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
@@ -92,6 +92,9 @@
   margin: 0;
   color: var(--text-secondary, #6b7280);
   line-height: 1.6;
+  /* margin-bottom: 12px; */
+}
+
 .version-comparison {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -118,7 +121,6 @@
     grid-template-columns: 1fr;
     gap: 24px;
   }
-} margin-bottom: 24px;
 }
 
 .version-card {

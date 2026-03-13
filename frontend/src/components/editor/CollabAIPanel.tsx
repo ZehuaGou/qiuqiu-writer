@@ -201,6 +201,71 @@ const SLASH_COMMANDS = [
   { id: 'verification-chapter-info', name: '/verification-chapter-info', subtitle: '校验章节信息' },
 ];
 
+// ── 模型选择器组件 ──────────────────────────────────────────────────────────────
+
+function ModelPicker({
+  availableModels,
+  selectedModel,
+  onSelectModel
+}: {
+  availableModels: LLMModelConfig[];
+  selectedModel: string;
+  onSelectModel: (id: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  if (availableModels.length === 0) return null;
+
+  const selectedModelObj = availableModels.find(m => m.model_id === selectedModel);
+  const modelLabel = selectedModelObj ? selectedModelObj.name : '默认模型';
+
+  return (
+    <div className="chapter-picker" ref={dropdownRef}>
+      <button
+        className="toolbar-chip"
+        onClick={() => setIsOpen(o => !o)}
+        title={selectedModelObj?.description || '选择 AI 模型'}
+      >
+        <Bot size={10} />
+        <span style={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelLabel}</span>
+        <span className="chip-arrow">▾</span>
+      </button>
+      {isOpen && (
+        <div className="chapter-dropdown">
+          <div
+            className={`chapter-option ${selectedModel === '' ? 'selected' : ''}`}
+            onMouseDown={e => { e.preventDefault(); onSelectModel(''); setIsOpen(false); }}
+          >
+            默认模型
+          </div>
+          {availableModels.map(m => (
+            <div
+              key={m.id}
+              className={`chapter-option ${selectedModel === m.model_id ? 'selected' : ''}`}
+              onMouseDown={e => { e.preventDefault(); onSelectModel(m.model_id); setIsOpen(false); }}
+              title={m.description}
+            >
+              {m.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 主组件 ────────────────────────────────────────────────────────────────────
 
 export default function CollabAIPanel({
@@ -226,8 +291,6 @@ export default function CollabAIPanel({
   // 模型选择
   const [availableModels, setAvailableModels] = useState<LLMModelConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(''); // '' = 默认模型
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   // slash 命令菜单
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
@@ -254,6 +317,7 @@ export default function CollabAIPanel({
   // 当 currentChapterId 变化时同步选中章节
   useEffect(() => {
     if (currentChapterId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedChapterId(currentChapterId);
     }
   }, [currentChapterId]);
@@ -460,18 +524,6 @@ export default function CollabAIPanel({
     return () => document.removeEventListener('mousedown', handler);
   }, [chapterDropdownOpen]);
 
-  // 点击外部关闭模型下拉
-  useEffect(() => {
-    if (!modelDropdownOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
-        setModelDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [modelDropdownOpen]);
-
   // 点击 @球球 按钮：插入到聊天输入末尾并聚焦
   const handleInsertAtAI = () => {
     const insert = '@球球 ';
@@ -509,44 +561,6 @@ export default function CollabAIPanel({
   const hasActiveTasks = sortedTasks.some(
     t => t.status === 'queued' || t.status === 'running',
   );
-
-  const selectedModelObj = availableModels.find(m => m.model_id === selectedModel);
-  const modelLabel = selectedModelObj ? selectedModelObj.name : '默认模型';
-
-  // 模型选择器（共用于聊天和任务两个 Tab）
-  const ModelPicker = () => availableModels.length > 0 ? (
-    <div className="chapter-picker" ref={modelDropdownRef}>
-      <button
-        className="toolbar-chip"
-        onClick={() => setModelDropdownOpen(o => !o)}
-        title={selectedModelObj?.description || '选择 AI 模型'}
-      >
-        <Bot size={10} />
-        <span style={{ maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{modelLabel}</span>
-        <span className="chip-arrow">▾</span>
-      </button>
-      {modelDropdownOpen && (
-        <div className="chapter-dropdown">
-          <div
-            className={`chapter-option ${selectedModel === '' ? 'selected' : ''}`}
-            onMouseDown={e => { e.preventDefault(); setSelectedModel(''); setModelDropdownOpen(false); }}
-          >
-            默认模型
-          </div>
-          {availableModels.map(m => (
-            <div
-              key={m.id}
-              className={`chapter-option ${selectedModel === m.model_id ? 'selected' : ''}`}
-              onMouseDown={e => { e.preventDefault(); setSelectedModel(m.model_id); setModelDropdownOpen(false); }}
-              title={m.description}
-            >
-              {m.name}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  ) : null;
 
   return (
     <div className="collab-ai-panel">
@@ -621,7 +635,11 @@ export default function CollabAIPanel({
                 <button className="toolbar-chip" onClick={handleInsertAtAI} title="插入 @球球">
                   @球球
                 </button>
-                <ModelPicker />
+                <ModelPicker
+                  availableModels={availableModels}
+                  selectedModel={selectedModel}
+                  onSelectModel={setSelectedModel}
+                />
                 <span className="toolbar-sep" />
                 <button
                   className="chat-input-send"
@@ -737,7 +755,11 @@ export default function CollabAIPanel({
                 >
                   / 指令
                 </button>
-                <ModelPicker />
+                <ModelPicker
+                  availableModels={availableModels}
+                  selectedModel={selectedModel}
+                  onSelectModel={setSelectedModel}
+                />
                 <span className="toolbar-sep" />
                 <span className="chat-input-hint">Ctrl+Enter</span>
                 <button

@@ -49,7 +49,6 @@ import type { ChapterFullData } from '../types/document';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi, type UserInfo } from '../utils/authApi';
 import { countCharacters } from '../utils/textUtils';
-import { generateChapterContent } from '../utils/bookAnalysisApi';
 import { chaptersApi } from '../utils/chaptersApi';
 import { createYjsSnapshotFromEditor, restoreYjsSnapshotToEditor, getTextFromProsemirrorJSON } from '../utils/yjsSnapshot';
 import { sendChatMessage } from '../utils/chatApi';
@@ -91,8 +90,6 @@ export default function NovelEditorPage() {
     endChar: 0,
   });
   const [selectionOptimizing, setSelectionOptimizing] = useState(false);
-  /** 从编辑器选中发起 AI 对话时，只传章节引用（对话框里显示徽章 @chapter:x第n字-第m字，不显示选中正文） */
-  const [initialSelectionRef, setInitialSelectionRef] = useState<{ chapterId: string; startChar: number; endChar: number } | null>(null);
   
   // 权限检查
   const canEdit = useMemo(() => {
@@ -147,8 +144,9 @@ export default function NovelEditorPage() {
       // 重新加载作品信息以更新状态
       const updatedWork = await worksApi.getWork(work.id, true, true);
       setWork(updatedWork);
-    } catch (err: any) {
-      showMessage(err.message || '申请失败', 'error');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '申请失败';
+      showMessage(message, 'error');
     } finally {
       setIsApplying(false);
     }
@@ -252,9 +250,9 @@ export default function NovelEditorPage() {
   } = useChapterManagement({
     workId,
     updateTrigger,
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       // 忽略 404 (可能是新作品没有章节)
-      const msg = err?.message || String(err);
+      const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes('404')) {
         showMessage(`加载章节列表失败: ${msg}`, 'error');
       }
@@ -603,20 +601,12 @@ export default function NovelEditorPage() {
   const handleSelectionAIChatRef = useRef<() => void>(() => {});
 
   const handleSelectionAIChat = () => {
-    if (selectedChapter) {
-      setInitialSelectionRef({
-        chapterId: selectedChapter,
-        startChar: selectionPopup.startChar,
-        endChar: selectionPopup.endChar,
-      });
-    }
     if (isMobile) {
       setMobileChatOpen(true);
     } else {
       if (rightSidebarCollapsed) toggleRightSidebar();
     }
     setSelectionPopup((prev) => ({ ...prev, visible: false }));
-    setTimeout(() => setInitialSelectionRef(null), 500);
   };
 
   // 保持 ref 与最新的 handleSelectionAIChat 同步，避免 Ctrl+U 监听器中闭包过期
@@ -779,72 +769,6 @@ export default function NovelEditorPage() {
         // ignore
       }
     }
-  };
-
-  /** 根据当前章节的大纲和细纲生成章节内容（/gen_chapter 与 AI 助手调用） */
-  const handleGenerateChapterFromOutline = async () => {
-    if (!selectedChapter || !chaptersData[selectedChapter]) {
-      throw new Error('请先选择章节');
-    }
-    const chapterIdNum = parseInt(selectedChapter, 10);
-    if (isNaN(chapterIdNum)) {
-      throw new Error('无效的章节');
-    }
-    const chapterData = chaptersData[selectedChapter];
-    let outline = (chapterData.outline ?? '').trim();
-    let detailOutline = (chapterData.detailOutline ?? '').trim();
-    const title = chapterData.title ?? '';
-
-    if (!outline || !detailOutline) {
-      try {
-        const docResult = await chaptersApi.getChapterDocument(chapterIdNum);
-        const meta = docResult?.chapter_info?.metadata as Record<string, unknown> | undefined;
-        if (meta) {
-          if (!outline && meta.outline != null) {
-            outline = typeof meta.outline === 'string' ? meta.outline : JSON.stringify(meta.outline);
-          }
-          if (!detailOutline && meta.detailed_outline != null) {
-            detailOutline = typeof meta.detailed_outline === 'string'
-              ? meta.detailed_outline
-              : JSON.stringify(meta.detailed_outline);
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (!outline || !detailOutline) {
-      throw new Error('当前章节未填写大纲或细纲，请先在章节设置中填写');
-    }
-    if (!editor) {
-      throw new Error('编辑器未就绪');
-    }
-
-    const meta = work?.metadata as { characters?: Array<{ name?: string }>; component_data?: { characters?: Array<{ name?: string }> } } | undefined;
-    const chars1 = meta?.characters ?? [];
-    const chars2 = meta?.component_data?.characters ?? [];
-    const characterNames = [...chars1, ...chars2]
-      .map((c: { name?: string }) => c?.name)
-      .filter((n): n is string => Boolean(n));
-
-    let fullContent = '';
-    await generateChapterContent(
-      outline,
-      detailOutline,
-      title || undefined,
-      characterNames.length > 0 ? characterNames : undefined,
-      [],
-      (progress) => {
-        if (progress.text) {
-          fullContent += progress.text;
-          handleGenerateContent(fullContent, false);
-        }
-        if (progress.status === 'done') {
-          handleGenerateContent(fullContent, true);
-        }
-      },
-    );
   };
 
   const handleDeleteWork = () => {
@@ -1092,7 +1016,7 @@ export default function NovelEditorPage() {
               </div>
 
 
-                <TokenBalance compact />
+                <TokenBalance />
                 <HeaderSettingsMenu
                   onFindReplace={() => {
                     handleReplace();

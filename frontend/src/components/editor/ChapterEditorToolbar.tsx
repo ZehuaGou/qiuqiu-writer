@@ -22,8 +22,6 @@ export default function ChapterEditorToolbar({
   setHeadingMenuOpen,
   readOnly,
 }: ChapterEditorToolbarProps) {
-  if (readOnly) return null;
-
   const headingMenuRef = useRef<HTMLDivElement>(null);
   const headingButtonRef = useRef<HTMLButtonElement>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
@@ -108,6 +106,8 @@ export default function ChapterEditorToolbar({
   const canRedo = (() => {
     try { return editor?.can().redo() ?? false; } catch { return false; }
   })();
+
+  if (readOnly) return null;
 
   return (
     <div className="novel-editor-toolbar">

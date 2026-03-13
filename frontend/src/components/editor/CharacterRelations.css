@@ -206,7 +206,7 @@
 }
 
 /* 编辑模态框：从底部升起（与 AI 对话一致），点击遮罩关闭 */
-.edit-modal-overlay {
+/* .edit-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -274,7 +274,7 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 20px 0;
-}
+} */
 
 .modal-form {
   display: flex;

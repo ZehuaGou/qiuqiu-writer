@@ -1,5 +1,6 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import DraggableResizableModal from './common/DraggableResizableModal';
 import { worksApi, type WorkCollaborator } from '../utils/worksApi';
 import './ShareWorkModal.css';
 
@@ -155,6 +156,17 @@ export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: S
   const [toast, setToast] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const fetchCollaborators = useCallback(async () => {
+    setLoading(true);
+    try {
+      setCollaborators(await worksApi.getCollaborators(workId));
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [workId]);
+
   useEffect(() => {
     if (isOpen && workId) {
       fetchCollaborators();
@@ -164,18 +176,7 @@ export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: S
       setInputVal('');
       setErrMsg('');
     }
-  }, [isOpen, workId]);
-
-  const fetchCollaborators = async () => {
-    setLoading(true);
-    try {
-      setCollaborators(await worksApi.getCollaborators(workId));
-    } catch (e) {
-      setErrMsg(e instanceof Error ? e.message : '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isOpen, workId, fetchCollaborators]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -263,7 +264,7 @@ export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: S
       } else {
         showToast('复制失败，请手动复制');
       }
-    } catch (err) {
+    } catch {
       showToast('复制失败，请手动复制');
     }
   };
@@ -274,8 +275,14 @@ export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: S
   if (!isOpen) return null;
 
   return (
-    <div className="swm-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="swm-dialog">
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={600}
+      initialHeight={600}
+      className="swm-dialog"
+      handleClassName=".swm-head"
+    >
         {/* Header */}
         <div className="swm-head">
           <span className="swm-head-title">共享</span>
@@ -413,7 +420,6 @@ export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: S
           <div className="swm-toast">{toast}</div>,
           document.body
         )}
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

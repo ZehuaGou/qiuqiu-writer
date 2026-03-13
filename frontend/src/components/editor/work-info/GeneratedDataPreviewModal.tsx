@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import DraggableResizableModal from '../../common/DraggableResizableModal';
 import { X, Code, Eye, User, MapPin, Box, Layers } from 'lucide-react';
 import './GeneratedDataPreviewModal.css';
 
@@ -223,8 +224,14 @@ export function GeneratedDataPreviewModal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="generated-data-preview-modal modal-content">
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={onClose}
+      initialWidth={800}
+      initialHeight={600}
+      className="generated-data-preview-modal"
+      handleClassName=".modal-header"
+    >
         <div className="modal-header">
           <h3>AI 生成结果预览</h3>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
@@ -278,7 +285,6 @@ export function GeneratedDataPreviewModal({
           <button onClick={onClose}>取消</button>
           <button className="primary" onClick={handleSave} disabled={!content.trim()}>确认并保存</button>
         </div>
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }

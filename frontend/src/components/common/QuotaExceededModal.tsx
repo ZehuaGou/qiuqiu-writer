@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import DraggableResizableModal from './DraggableResizableModal';
 import { QRCodeSVG } from 'qrcode.react';
 import { paymentApi, tokenApi, tokensToDisplay, type PlanConfig } from '../../utils/tokenApi';
 import './QuotaExceededModal.css';
@@ -355,68 +356,74 @@ export default function QuotaExceededModal({ isOpen, onClose, currentPlan = 'fre
   const firstPaid = plans.find((p) => (p.pricing?.monthly?.current ?? 0) > 0);
 
   return (
-    <div className="qm-overlay" onClick={handleClose}>
-      <div className="qm-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="qm-close" onClick={handleClose} type="button" aria-label="关闭">✕</button>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      initialWidth={960}
+      initialHeight={800}
+      className="qm-modal"
+      handleClassName=".qm-drag-handle"
+    >
+      <div className="qm-drag-handle" style={{ height: '30px', width: '100%', position: 'absolute', top: 0, left: 0, cursor: 'move', zIndex: 10 }} />
+      <button className="qm-close" onClick={handleClose} type="button" aria-label="关闭" style={{ zIndex: 20 }}>✕</button>
 
-        {payTarget ? (
-          // ── Step 2: 支付 ──
-          <PaymentPanel
-            plan={payTarget.plan}
-            cycle={cycle}
-            themeIndex={payTarget.themeIndex}
-            onBack={() => setPayTarget(null)}
-            onClose={handleClose}
-          />
-        ) : (
-          // ── Step 1: 套餐选择 ──
-          <>
-            <div className="qm-header">
-              <div className="qm-header__deco" aria-hidden="true">
-                <span>✨</span><span>⚡</span><span>✨</span>
-              </div>
-              <h2 className="qm-header__title">AI 额度已用完</h2>
-              <p className="qm-header__subtitle">本月 Token 配额不足，升级套餐解锁无限创作</p>
+      {payTarget ? (
+        // ── Step 2: 支付 ──
+        <PaymentPanel
+          plan={payTarget.plan}
+          cycle={cycle}
+          themeIndex={payTarget.themeIndex}
+          onBack={() => setPayTarget(null)}
+          onClose={handleClose}
+        />
+      ) : (
+        // ── Step 1: 套餐选择 ──
+        <>
+          <div className="qm-header">
+            <div className="qm-header__deco" aria-hidden="true">
+              <span>✨</span><span>⚡</span><span>✨</span>
             </div>
+            <h2 className="qm-header__title">AI 额度已用完</h2>
+            <p className="qm-header__subtitle">本月 Token 配额不足，升级套餐解锁无限创作</p>
+          </div>
 
-            <div className="qm-tabs">
-              {BILLING_CYCLES.map((c) => {
-                const saving = firstPaid ? calcSaving(firstPaid, c) : null;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    className={`qm-tab${cycle === c ? ' qm-tab--active' : ''}`}
-                    onClick={() => setCycle(c)}
-                  >
-                    {BILLING_LABELS[c]}
-                    {saving && <span className="qm-tab__saving">{saving}</span>}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="qm-tabs">
+            {BILLING_CYCLES.map((c) => {
+              const saving = firstPaid ? calcSaving(firstPaid, c) : null;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  className={`qm-tab${cycle === c ? ' qm-tab--active' : ''}`}
+                  onClick={() => setCycle(c)}
+                >
+                  {BILLING_LABELS[c]}
+                  {saving && <span className="qm-tab__saving">{saving}</span>}
+                </button>
+              );
+            })}
+          </div>
 
-            <div className="qm-plans">
-              {plans.length === 0 ? (
-                <div className="qm-loading">加载中…</div>
-              ) : (
-                plans.map((plan, i) => (
-                  <PlanCard
-                    key={plan.key}
-                    plan={plan}
-                    cycle={cycle}
-                    isCurrent={plan.key === currentPlan}
-                    themeIndex={i}
-                    onUpgrade={() => setPayTarget({ plan, themeIndex: i })}
-                  />
-                ))
-              )}
-            </div>
+          <div className="qm-plans">
+            {plans.length === 0 ? (
+              <div className="qm-loading">加载中…</div>
+            ) : (
+              plans.map((plan, i) => (
+                <PlanCard
+                  key={plan.key}
+                  plan={plan}
+                  cycle={cycle}
+                  isCurrent={plan.key === currentPlan}
+                  themeIndex={i}
+                  onUpgrade={() => setPayTarget({ plan, themeIndex: i })}
+                />
+              ))
+            )}
+          </div>
 
-            <p className="qm-footer">如需帮助，请联系客服升级套餐</p>
-          </>
-        )}
-      </div>
-    </div>
+          <p className="qm-footer">如需帮助，请联系客服升级套餐</p>
+        </>
+      )}
+    </DraggableResizableModal>
   );
 }

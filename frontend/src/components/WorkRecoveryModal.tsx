@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import DraggableResizableModal from './common/DraggableResizableModal';
 import { X, RefreshCw, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { 
   getRecoverableWorks, 
@@ -95,8 +96,14 @@ export default function WorkRecoveryModal({
   if (!isOpen) return null;
 
   return (
-    <div className="work-recovery-modal-overlay" onClick={handleClose}>
-      <div className="work-recovery-modal" onClick={(e) => e.stopPropagation()}>
+    <DraggableResizableModal
+      isOpen={isOpen}
+      onClose={handleClose}
+      initialWidth={600}
+      initialHeight={600}
+      className="work-recovery-modal"
+      handleClassName=".work-recovery-modal-header"
+    >
         <div className="work-recovery-modal-header">
           <h2>从本地缓存恢复作品</h2>
           <button className="work-recovery-modal-close" onClick={handleClose}>
@@ -215,8 +222,7 @@ export default function WorkRecoveryModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </DraggableResizableModal>
   );
 }
 

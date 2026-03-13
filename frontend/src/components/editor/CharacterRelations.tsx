@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Plus, Maximize2, X, Trash2, Pencil, ZoomIn, ZoomOut, Link2, List, Share2 } from 'lucide-react';
+import DraggableResizableModal from '../common/DraggableResizableModal';
 import { Graph } from '@antv/g6';
 import type { GraphData } from '@antv/g6';
 import { useIsMobile } from '../../hooks/useMediaQuery';
@@ -870,248 +871,244 @@ function CharacterRelations({ data, onChange, dependencyKeys = [] }: CharacterRe
         </div>
       )}
 
-      {addingRelation && (
-        <div
-          className="edit-modal-overlay"
-          onClick={() => {
-            if (tempEdgeIdRef.current && graphRef.current) {
-              try {
-                // @ts-expect-error G6 5.0 DataID type mismatch
-                graphRef.current.removeData(tempEdgeIdRef.current);
-              } catch {
-                /* ignore */
-              }
-              tempEdgeIdRef.current = null;
+      <DraggableResizableModal
+        isOpen={addingRelation}
+        onClose={() => {
+          if (tempEdgeIdRef.current && graphRef.current) {
+            try {
+              // @ts-expect-error G6 5.0 DataID type mismatch
+              graphRef.current.removeData(tempEdgeIdRef.current);
+            } catch {
+              /* ignore */
             }
-            setAddingRelation(false);
-          }}
-        >
-          <div className="edit-modal" onClick={e => e.stopPropagation()}>
-            <h4>添加关系</h4>
-            <div className="modal-form">
-              <label>
-                <span>从</span>
-                <select
-                  className="edit-select"
-                  value={editForm.relationFrom || ''}
-                  onChange={e =>
-                    setEditForm({ ...editForm, relationFrom: e.target.value })
-                  }
-                >
-                  <option value="">选择角色...</option>
-                  {characters.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>到</span>
-                <select
-                  className="edit-select"
-                  value={editForm.relationTo || ''}
-                  onChange={e =>
-                    setEditForm({ ...editForm, relationTo: e.target.value })
-                  }
-                >
-                  <option value="">选择角色...</option>
-                  {characters.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>关系类型</span>
-                <input
-                  className="edit-input"
-                  type="text"
-                  value={editForm.relationType || ''}
-                  onChange={e =>
-                    setEditForm({ ...editForm, relationType: e.target.value })
-                  }
-                  placeholder="例如：朋友、敌人、亲戚"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>描述</span>
-                <input
-                  className="edit-input"
-                  type="text"
-                  value={editForm.relationDescription || ''}
-                  onChange={e =>
-                    setEditForm({
-                      ...editForm,
-                      relationDescription: e.target.value,
-                    })
-                  }
-                />
-              </label>
-            </div>
-            <div className="modal-actions">
-              <button
-                className="save-btn"
-                onClick={() => {
-                  if (
-                    editForm.relationFrom &&
-                    editForm.relationTo &&
-                    editForm.relationType
-                  ) {
-                    const newRelation: Relation = {
-                      id: `rel_${Date.now()}`,
-                      from: editForm.relationFrom,
-                      to: editForm.relationTo,
-                      type: editForm.relationType,
-                      description: editForm.relationDescription,
-                    };
-                    const newRelations = [...relations, newRelation];
-                    setRelations(newRelations);
-                    if (onChange) {
-                      onChange({
-                        characters,
-                        relations: newRelations,
-                      });
-                    }
-                    setAddingRelation(false);
-                    setEditForm({});
-                  }
-                }}
+            tempEdgeIdRef.current = null;
+          }
+          setAddingRelation(false);
+        }}
+        title="添加关系"
+        initialWidth={500}
+        initialHeight={550}
+      >
+          <div className="modal-form">
+            <label>
+              <span>从</span>
+              <select
+                className="edit-select"
+                value={editForm.relationFrom || ''}
+                onChange={e =>
+                  setEditForm({ ...editForm, relationFrom: e.target.value })
+                }
               >
-                保存
-              </button>
-            </div>
+                <option value="">选择角色...</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>到</span>
+              <select
+                className="edit-select"
+                value={editForm.relationTo || ''}
+                onChange={e =>
+                  setEditForm({ ...editForm, relationTo: e.target.value })
+                }
+              >
+                <option value="">选择角色...</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>关系类型</span>
+              <input
+                className="edit-input"
+                type="text"
+                value={editForm.relationType || ''}
+                onChange={e =>
+                  setEditForm({ ...editForm, relationType: e.target.value })
+                }
+                placeholder="例如：朋友、敌人、亲戚"
+                autoFocus
+              />
+            </label>
+            <label>
+              <span>描述</span>
+              <input
+                className="edit-input"
+                type="text"
+                value={editForm.relationDescription || ''}
+                onChange={e =>
+                  setEditForm({
+                    ...editForm,
+                    relationDescription: e.target.value,
+                  })
+                }
+              />
+            </label>
           </div>
-        </div>
-      )}
+          <div className="modal-actions">
+            <button
+              className="save-btn"
+              onClick={() => {
+                if (
+                  editForm.relationFrom &&
+                  editForm.relationTo &&
+                  editForm.relationType
+                ) {
+                  const newRelation: Relation = {
+                    id: `rel_${Date.now()}`,
+                    from: editForm.relationFrom,
+                    to: editForm.relationTo,
+                    type: editForm.relationType,
+                    description: editForm.relationDescription,
+                  };
+                  const newRelations = [...relations, newRelation];
+                  setRelations(newRelations);
+                  if (onChange) {
+                    onChange({
+                      characters,
+                      relations: newRelations,
+                    });
+                  }
+                  setAddingRelation(false);
+                  setEditForm({});
+                }
+              }}
+            >
+              保存
+            </button>
+          </div>
+      </DraggableResizableModal>
 
-      {editingRelation && (
-        <div
-          className="edit-modal-overlay"
-          onClick={() => setEditingRelation(null)}
-        >
-          <div className="edit-modal" onClick={e => e.stopPropagation()}>
-            <h4>编辑关系</h4>
-            <div className="modal-form">
-              <label>
-                <span>从</span>
-                <select
-                  className="edit-select"
-                  value={editForm.relationFrom || ''}
-                  onChange={e =>
-                    setEditForm({ ...editForm, relationFrom: e.target.value })
-                  }
-                >
-                  <option value="">选择角色...</option>
-                  {characters.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>到</span>
-                <select
-                  className="edit-select"
-                  value={editForm.relationTo || ''}
-                  onChange={e =>
-                    setEditForm({ ...editForm, relationTo: e.target.value })
-                  }
-                >
-                  <option value="">选择角色...</option>
-                  {characters.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>类型</span>
-                <input
-                  className="edit-input"
-                  type="text"
-                  value={editForm.relationType || ''}
-                  onChange={e =>
-                    setEditForm({ ...editForm, relationType: e.target.value })
-                  }
-                  placeholder="例如：朋友、敌人、亲戚"
-                  autoFocus
-                />
-              </label>
-              <label>
-                <span>描述</span>
-                <input
-                  className="edit-input"
-                  type="text"
-                  value={editForm.relationDescription || ''}
-                  onChange={e =>
-                    setEditForm({
-                      ...editForm,
-                      relationDescription: e.target.value,
-                    })
-                  }
-                />
-              </label>
-            </div>
-            <div className="modal-actions">
-              <button
-                className="save-btn"
-                onClick={() => {
-                  if (!editForm.relationFrom || !editForm.relationTo) return;
-                  const newRelations = relations.map(r => {
-                    if (r.id === editingRelation) {
-                      return {
-                        ...r,
-                        from: editForm.relationFrom!,
-                        to: editForm.relationTo!,
-                        type: editForm.relationType || r.type,
-                        description:
-                          editForm.relationDescription ?? r.description,
-                      };
-                    }
-                    return r;
-                  });
-                  setRelations(newRelations);
-                  if (onChange) {
-                    onChange({
-                      characters,
-                      relations: newRelations,
-                    });
-                  }
-                  setEditingRelation(null);
-                  setEditForm({});
-                }}
+      <DraggableResizableModal
+        isOpen={!!editingRelation}
+        onClose={() => setEditingRelation(null)}
+        title="编辑关系"
+        initialWidth={500}
+        initialHeight={550}
+      >
+          <div className="modal-form">
+            <label>
+              <span>从</span>
+              <select
+                className="edit-select"
+                value={editForm.relationFrom || ''}
+                onChange={e =>
+                  setEditForm({ ...editForm, relationFrom: e.target.value })
+                }
               >
-                保存
-              </button>
-              <button
-                type="button"
-                className="modal-delete-btn"
-                onClick={() => {
-                  const newRelations = relations.filter(
-                    r => r.id !== editingRelation
-                  );
-                  setRelations(newRelations);
-                  if (onChange) {
-                    onChange({
-                      characters,
-                      relations: newRelations,
-                    });
-                  }
-                  setEditingRelation(null);
-                  setEditForm({});
-                }}
+                <option value="">选择角色...</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>到</span>
+              <select
+                className="edit-select"
+                value={editForm.relationTo || ''}
+                onChange={e =>
+                  setEditForm({ ...editForm, relationTo: e.target.value })
+                }
               >
-                删除
-              </button>
-            </div>
+                <option value="">选择角色...</option>
+                {characters.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>类型</span>
+              <input
+                className="edit-input"
+                type="text"
+                value={editForm.relationType || ''}
+                onChange={e =>
+                  setEditForm({ ...editForm, relationType: e.target.value })
+                }
+                placeholder="例如：朋友、敌人、亲戚"
+                autoFocus
+              />
+            </label>
+            <label>
+              <span>描述</span>
+              <input
+                className="edit-input"
+                type="text"
+                value={editForm.relationDescription || ''}
+                onChange={e =>
+                  setEditForm({
+                    ...editForm,
+                    relationDescription: e.target.value,
+                  })
+                }
+              />
+            </label>
           </div>
-        </div>
-      )}
+          <div className="modal-actions">
+            <button
+              className="save-btn"
+              onClick={() => {
+                if (!editForm.relationFrom || !editForm.relationTo) return;
+                const newRelations = relations.map(r => {
+                  if (r.id === editingRelation) {
+                    return {
+                      ...r,
+                      from: editForm.relationFrom!,
+                      to: editForm.relationTo!,
+                      type: editForm.relationType || r.type,
+                      description:
+                        editForm.relationDescription ?? r.description,
+                    };
+                  }
+                  return r;
+                });
+                setRelations(newRelations);
+                if (onChange) {
+                  onChange({
+                    characters,
+                    relations: newRelations,
+                  });
+                }
+                setEditingRelation(null);
+                setEditForm({});
+              }}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="modal-delete-btn"
+              onClick={() => {
+                const newRelations = relations.filter(
+                  r => r.id !== editingRelation
+                );
+                setRelations(newRelations);
+                if (onChange) {
+                  onChange({
+                    characters,
+                    relations: newRelations,
+                  });
+                }
+                setEditingRelation(null);
+                setEditForm({});
+              }}
+            >
+              删除
+            </button>
+          </div>
+      </DraggableResizableModal>
 
       {isFullscreen && (
         <div className="fullscreen-modal-overlay">
