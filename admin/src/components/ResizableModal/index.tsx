@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Modal, ModalProps } from 'antd';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
-import { Resizable, ResizableProps, ResizeCallbackData } from 'react-resizable';
+import { Resizable, ResizeCallbackData } from 'react-resizable';
 import './index.css';
 
 interface ResizableModalProps extends ModalProps {
