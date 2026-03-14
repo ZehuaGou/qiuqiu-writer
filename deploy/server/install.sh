@@ -100,7 +100,14 @@ fi
 echo ""
 echo "=== [4/7] 安装 uv（通过 pip + 清华 PyPI 镜像）==="
 if ! command -v uv &>/dev/null; then
-    pip3 install uv -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/ --break-system-packages
+    # 检测 pip 版本是否支持 --break-system-packages
+    PIP_ARGS="-i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+    if pip3 install --help | grep -q "\--break-system-packages"; then
+        PIP_ARGS="$PIP_ARGS --break-system-packages"
+    fi
+    
+    echo "  正在安装 uv..."
+    pip3 install uv $PIP_ARGS
     echo "uv 安装完成：$(uv --version)"
 else
     echo "uv 已存在：$(uv --version)，跳过"
