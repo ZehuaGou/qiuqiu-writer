@@ -16,7 +16,7 @@ EnvironmentFile=/root/xingqiu_writer/backend/.env
 Environment=PYTHONPATH=/root/xingqiu_writer/backend/src
 
 ExecStart=/root/xingqiu_writer/backend/.venv/bin/uvicorn \
-    memos.api.server_api:app \
+    memos.api.ai_api:app \
     --host 127.0.0.1 \
     --port 8001 \
     --workers 2
