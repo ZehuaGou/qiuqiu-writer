@@ -86,6 +86,7 @@ export type CollabAIServerMessage =
   | { type: 'chat_message'; message: RoomChatMessage }
   | { type: 'chat_stream'; message_id: string; delta: string }
   | { type: 'chat_stream_done'; message_id: string }
+  | { type: 'chat_message_deleted'; message_id: string }
   | { type: 'pong' };
 
 export type CollabAIEventHandler = (msg: CollabAIServerMessage) => void;
@@ -216,7 +217,14 @@ export class CollabAIClient {
    * 发送聊天消息
    */
   sendChatMessage(content: string, model?: string): void {
-    this.send({ type: 'chat_message', content, ...(model ? { model } : {}) });
+    this.send({ type: 'chat_message', content, model });
+  }
+
+  /**
+   * 删除自己的聊天消息
+   */
+  deleteChatMessage(messageId: string): void {
+    this.send({ type: 'delete_chat_message', message_id: messageId });
   }
 
   /**
@@ -400,13 +408,14 @@ export function applyChatMessages(
 
     case 'chat_stream_done': {
       const { message_id } = msg;
-      const existingIdx = messages.findIndex(m => m.id === message_id);
-      if (existingIdx >= 0) {
-        const next = [...messages];
-        next[existingIdx] = { ...next[existingIdx], streaming: false };
-        return next;
-      }
-      return messages;
+      return messages.map(m =>
+        m.id === message_id ? { ...m, streaming: false } : m
+      );
+    }
+
+    case 'chat_message_deleted': {
+      const { message_id } = msg;
+      return messages.filter(m => m.id !== message_id);
     }
 
     default:

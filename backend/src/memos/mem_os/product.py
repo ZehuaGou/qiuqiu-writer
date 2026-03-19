@@ -1284,13 +1284,9 @@ class MOSProduct(MOSCore):
             # For non-huggingface backends, we need to collect the full response first
             full_response_text = ""
             for chunk in response_stream:
-                if chunk in ["<think>", "</think>"]:
-                    continue
                 full_response_text += chunk
             response_stream = self._chunk_response_with_tiktoken(full_response_text, chunk_size=5)
         for chunk in response_stream:
-            if chunk in ["<think>", "</think>"]:
-                continue
             token_count += 1
             buffer += chunk
             full_response += chunk

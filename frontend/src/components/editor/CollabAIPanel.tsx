@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bot, Loader2, MessageSquare, Send, Users, Zap } from 'lucide-react';
+import { Bot, Loader2, MessageSquare, Send, Users, Zap, Trash2 } from 'lucide-react';
 import {
   applyCollabAIMessage,
   applyChatMessages,
@@ -73,6 +73,60 @@ function LoadingDots() {
   );
 }
 
+// ── 思考过程及文本渲染组件 ──────────────────────────────────────────────────────────
+
+function parseThinkTags(text: string) {
+  const parts: { type: 'text' | 'think', content: string }[] = [];
+  let currentIndex = 0;
+  
+  while (currentIndex < text.length) {
+    const thinkStart = text.indexOf('<think>', currentIndex);
+    if (thinkStart === -1) {
+      parts.push({ type: 'text', content: text.substring(currentIndex) });
+      break;
+    }
+    
+    if (thinkStart > currentIndex) {
+      parts.push({ type: 'text', content: text.substring(currentIndex, thinkStart) });
+    }
+    
+    const thinkEnd = text.indexOf('</think>', thinkStart + 7);
+    if (thinkEnd === -1) {
+      parts.push({ type: 'think', content: text.substring(thinkStart + 7) });
+      break;
+    }
+    
+    parts.push({ type: 'think', content: text.substring(thinkStart + 7, thinkEnd) });
+    currentIndex = thinkEnd + 8;
+  }
+  
+  return parts;
+}
+
+function MessageContent({ content, streaming }: { content: string, streaming?: boolean }) {
+  if (!content) return null;
+  const parts = parseThinkTags(content);
+  
+  return (
+    <>
+      {parts.map((part, idx) => {
+        if (part.type === 'think') {
+          const isLastAndStreaming = streaming && idx === parts.length - 1;
+          return (
+            <details key={idx} className="ai-think-block" open={isLastAndStreaming}>
+              <summary className="ai-think-summary">
+                {isLastAndStreaming ? '思考中...' : '已深度思考'}
+              </summary>
+              <div className="ai-think-content">{part.content}</div>
+            </details>
+          );
+        }
+        return <span key={idx} style={{ whiteSpace: 'pre-wrap' }}>{part.content}</span>;
+      })}
+    </>
+  );
+}
+
 // ── 单个任务卡片 ──────────────────────────────────────────────────────────────
 
 interface TaskCardProps {
@@ -127,7 +181,9 @@ function TaskCard({ task, canCancel, onCancel, onUseContinueRecommendation }: Ta
       )}
 
       {task.streamContent && (
-        <div className="task-stream-content">{task.streamContent}</div>
+        <div className="task-stream-content">
+          <MessageContent content={task.streamContent} streaming={task.status === 'running'} />
+        </div>
       )}
 
       {/* 续写推荐卡片 */}
@@ -163,9 +219,11 @@ function TaskCard({ task, canCancel, onCancel, onUseContinueRecommendation }: Ta
 function ChatBubble({
   message,
   currentUserId,
+  onDelete,
 }: {
   message: RoomChatMessage;
   currentUserId?: string;
+  onDelete?: (messageId: string) => void;
 }) {
   const isAI = message.is_ai;
   const isMine = !isAI && message.user_id === currentUserId;
@@ -182,9 +240,20 @@ function ChatBubble({
         }
       </div>
       <div className="chat-bubble-wrap">
-        <div className="chat-sender-name">{message.user_name}</div>
+        <div className="chat-sender-name">
+          {message.user_name}
+          {(isMine || isAI) && !message.streaming && onDelete && (
+            <button className="chat-delete-btn" onClick={() => onDelete(message.id)} title="删除消息">
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
         <div className={`chat-bubble ${isAI ? 'ai' : isMine ? 'mine' : 'other'} ${message.streaming ? 'streaming' : ''}`}>
-          {displayContent || (message.streaming ? '' : '…')}
+          {displayContent ? (
+            <MessageContent content={displayContent} streaming={message.streaming} />
+          ) : (
+            message.streaming ? '' : '…'
+          )}
         </div>
       </div>
     </div>
@@ -337,7 +406,8 @@ export default function CollabAIPanel({
         msg.type === 'chat_history' ||
         msg.type === 'chat_message' ||
         msg.type === 'chat_stream' ||
-        msg.type === 'chat_stream_done'
+        msg.type === 'chat_stream_done' ||
+        msg.type === 'chat_message_deleted'
       ) {
         setChatMessages(prev => applyChatMessages(prev, msg));
         return;
@@ -421,6 +491,11 @@ export default function CollabAIPanel({
   // 取消任务
   const handleCancel = useCallback((requestId: string) => {
     clientRef.current?.cancelTask(requestId);
+  }, []);
+
+  // 删除聊天消息
+  const handleDeleteChat = useCallback((messageId: string) => {
+    clientRef.current?.deleteChatMessage(messageId);
   }, []);
 
   // slash 命令菜单：检测输入
@@ -614,7 +689,7 @@ export default function CollabAIPanel({
               </div>
             ) : (
               chatMessages.map(m => (
-                <ChatBubble key={m.id} message={m} currentUserId={currentUserId} />
+                <ChatBubble key={m.id} message={m} currentUserId={currentUserId} onDelete={handleDeleteChat} />
               ))
             )}
             <div ref={chatEndRef} />

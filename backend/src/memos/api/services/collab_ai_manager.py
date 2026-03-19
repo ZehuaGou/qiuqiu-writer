@@ -345,16 +345,21 @@ class CollabAIRoom:
             await self.broadcast({"type": "chat_stream_done", "message_id": message_id})
 
     async def delete_chat_message(self, message_id: str, user_id: str):
-        """删除聊天消息（仅允许发送者删除自己的消息）"""
+        """删除聊天消息（仅允许发送者删除自己的消息，或删除AI的消息）"""
         from memos.api.core.database import AsyncSessionLocal
         from memos.api.models.work_chat_message import WorkChatMessage
-        from sqlalchemy import delete
+        from sqlalchemy import delete, or_
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 delete(WorkChatMessage)
                 .where(WorkChatMessage.id == message_id)
-                .where(WorkChatMessage.user_id == user_id)
+                .where(
+                    or_(
+                        WorkChatMessage.user_id == user_id,
+                        WorkChatMessage.is_ai == True
+                    )
+                )
             )
             await session.commit()
             

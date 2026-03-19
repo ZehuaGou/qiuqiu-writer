@@ -270,9 +270,6 @@ class ChatHandler(BaseHandler):
                     full_response = ""
 
                     for chunk in response_stream:
-                        if chunk in ["<think>", "</think>"]:
-                            continue
-
                         buffer += chunk
                         full_response += chunk
 
