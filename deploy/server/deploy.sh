@@ -16,8 +16,8 @@ echo "=== 项目目录：$PROJECT_DIR ==="
 echo ""
 echo "=== 更新 nginx 配置 (本地宿主机) ==="
 
-cp "$PROJECT_DIR/docker/nginx/frontend.conf" "$NGINX_CONF_DIR/qiuqiuwriter-frontend.conf"
-cp "$PROJECT_DIR/docker/nginx/admin.conf"    "$NGINX_CONF_DIR/qiuqiuwriter-admin.conf"
+cp "$PROJECT_DIR/deploy/server/frontend.conf" "$NGINX_CONF_DIR/qiuqiuwriter-frontend.conf"
+cp "$PROJECT_DIR/deploy/server/admin.conf"    "$NGINX_CONF_DIR/qiuqiuwriter-admin.conf"
 
 ln -sf "$NGINX_CONF_DIR/qiuqiuwriter-frontend.conf" "$NGINX_ENABLED_DIR/qiuqiuwriter-frontend.conf"
 ln -sf "$NGINX_CONF_DIR/qiuqiuwriter-admin.conf"    "$NGINX_ENABLED_DIR/qiuqiuwriter-admin.conf"
