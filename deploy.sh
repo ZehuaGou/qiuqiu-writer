@@ -20,10 +20,8 @@ echo "🚀 开始自动化部署流程 (前端服务)..."
 # 1. 编译前端 (frontend)
 echo "📦 正在准备前端项目 (frontend)..."
 cd "$PROJECT_ROOT/frontend"
-if [ ! -d "node_modules" ]; then
-    echo "  - 正在安装依赖..."
-    npm install --registry=https://registry.npmmirror.com
-fi
+echo "  - 正在安装/更新依赖..."
+npm install --registry=https://registry.npmmirror.com
 echo "  - 正在编译静态资源..."
 npm run build
 
