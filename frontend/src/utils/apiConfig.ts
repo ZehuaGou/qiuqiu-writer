@@ -1,10 +1,12 @@
 /**
  * 前端 API 地址配置（与 admin 一致：开发时用相对路径 + Vite 代理，生产可配 VITE_API_BASE_URL）
  * - 不设置或设为空：请求走相对路径 /api、/ai 等，由 Vite 代理或 Nginx 转发到后端
- * - 设置完整地址：如 https://api.example.com，请求直接打该域名
+ * - 设置完整地址：如 http://api.qiuqiuwriter.top:8000，请求直接打该域名
  */
+const FALLBACK_PROD_BASE = 'http://api.qiuqiuwriter.top:8000';
 export const API_BASE_URL: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?? (import.meta.env.PROD ? FALLBACK_PROD_BASE : '');
 
 /** 当前是否为“相对路径”模式（空 base，依赖代理） */
 export const isRelativeApi = API_BASE_URL === '';

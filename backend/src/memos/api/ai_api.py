@@ -93,6 +93,7 @@ register_router('memos.api.routers.works_router')
 register_router('memos.api.routers.prompt_template_router')
 register_router('memos.api.routers.feedback_router')
 register_router('memos.api.routers.payment_router')
+register_router('memos.api.routers.drama_router')
 
 # 尝试注册产品路由
 try:

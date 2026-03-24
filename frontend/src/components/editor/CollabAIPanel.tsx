@@ -45,6 +45,8 @@ interface CollabAIPanelProps {
   currentUserId?: string;
   /** /gen_chapter 流式内容写入编辑器的回调（content=累积全文, isDone=流完成） */
   onWriteToEditor?: (content: string, isDone: boolean) => void;
+  selectedModel?: string;
+  onSelectedModelChange?: (modelId: string) => void;
 }
 
 // ── 小辅助组件 ───────────────────────────────────────────────────────────────
@@ -344,6 +346,8 @@ export default function CollabAIPanel({
   onUseContinueRecommendation,
   currentUserId,
   onWriteToEditor,
+  selectedModel: selectedModelProp,
+  onSelectedModelChange,
 }: CollabAIPanelProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat');
   const [tasks, setTasks] = useState<Map<string, CollabAITask>>(new Map());
@@ -359,7 +363,9 @@ export default function CollabAIPanel({
 
   // 模型选择
   const [availableModels, setAvailableModels] = useState<LLMModelConfig[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(''); // '' = 默认模型
+  const [internalSelectedModel, setInternalSelectedModel] = useState<string>(''); // '' = 默认模型
+  const selectedModel = selectedModelProp ?? internalSelectedModel;
+  const setSelectedModel = onSelectedModelChange ?? setInternalSelectedModel;
 
   // slash 命令菜单
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
@@ -380,7 +386,11 @@ export default function CollabAIPanel({
 
   // 拉取可用模型列表
   useEffect(() => {
-    fetchAvailableModels().then(models => setAvailableModels(models));
+    fetchAvailableModels().then(models => {
+      // 过滤出文本模型（兼容旧版没有 model_type 的情况）
+      const textModels = models.filter(m => !m.model_type || m.model_type === 'text');
+      setAvailableModels(textModels);
+    });
   }, []);
 
   // 当 currentChapterId 变化时同步选中章节

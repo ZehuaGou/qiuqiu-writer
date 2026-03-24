@@ -24,6 +24,7 @@ interface PromptTemplate {
   component_type?: string;
   prompt_category?: string;
   work_template_id?: number;
+  template_metadata?: Record<string, unknown> | null;
   usage_count: number;
   created_at?: string;
   updated_at?: string;
@@ -44,6 +45,8 @@ const TEMPLATE_TYPES = [
   { label: '组件生成', value: 'component_generate' },
   { label: '组件校验', value: 'component_validate' },
   { label: '组件分析', value: 'component_analysis' },
+  { label: '剧本场景抽取', value: 'drama_scene_extraction' },
+  { label: '剧本角色抽取', value: 'drama_character_extraction' },
   { label: '其他', value: 'other' },
 ];
 
@@ -64,6 +67,8 @@ const TYPE_COLOR: Record<string, string> = {
   component_generate: 'green',
   component_validate: 'lime',
   component_analysis: 'magenta',
+  drama_scene_extraction: 'volcano',
+  drama_character_extraction: 'volcano',
 };
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -109,6 +114,9 @@ const GlobalPrompts: React.FC = () => {
       is_active: record.is_active,
       component_id: record.component_id,
       prompt_category: record.prompt_category,
+      template_metadata: record.template_metadata
+        ? JSON.stringify(record.template_metadata, null, 2)
+        : '',
     });
     setModalOpen(true);
   };
@@ -123,6 +131,19 @@ const GlobalPrompts: React.FC = () => {
     try {
       const values = await form.validateFields();
       setSaving(true);
+      // Parse template_metadata JSON string → object
+      const metaRaw = (values.template_metadata || '').trim();
+      if (metaRaw) {
+        try {
+          values.template_metadata = JSON.parse(metaRaw);
+        } catch {
+          message.error('Metadata JSON 格式错误，请检查后重试');
+          setSaving(false);
+          return;
+        }
+      } else {
+        values.template_metadata = null;
+      }
       if (editing) {
         await request.put(`/admin/prompt-templates/${editing.id}`, values);
         message.success('更新成功');
@@ -134,7 +155,6 @@ const GlobalPrompts: React.FC = () => {
       actionRef.current?.reload();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) return; // validation error
-      // message.error(editing ? '更新失败' : '创建失败'); // Handled by interceptor usually
     } finally {
       setSaving(false);
     }
@@ -414,6 +434,17 @@ const GlobalPrompts: React.FC = () => {
             <Input.TextArea
               rows={14}
               placeholder="输入 Prompt 内容，支持 @work.metadata.xxx / @chapter.content 等变量"
+              style={{ fontFamily: 'monospace', fontSize: 13 }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="template_metadata"
+            label="Metadata（JSON，可选）"
+          >
+            <Input.TextArea
+              rows={3}
+              placeholder='{}'
               style={{ fontFamily: 'monospace', fontSize: 13 }}
             />
           </Form.Item>

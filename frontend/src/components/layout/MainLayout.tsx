@@ -170,9 +170,9 @@ export default function MainLayout() {
                   <BookOpen size={20} />
                   <span className="nav-text">小说创作</span>
                 </Link>
-                <Link 
-                  to="/script"
-                  className={`nav-link ${location.pathname.startsWith('/script') ? 'active' : ''}`}
+                <Link
+                  to="/drama"
+                  className={`nav-link ${location.pathname.startsWith('/drama') ? 'active' : ''}`}
                 >
                   <Clapperboard size={20} />
                   <span className="nav-text">剧本创作</span>
@@ -302,7 +302,7 @@ export default function MainLayout() {
                     <BookOpen size={20} />
                     <span className="nav-text">小说创作</span>
                   </Link>
-                  <Link to="/script" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
+                  <Link to="/drama" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
                     <Clapperboard size={20} />
                     <span className="nav-text">剧本创作</span>
                   </Link>

@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react';
 import {
-  Button, Modal, Form, Input, InputNumber, Switch, message, Space, Tag, Tooltip, Divider,
+  Button, Modal, Form, Input, InputNumber, Switch, message, Space, Tag, Tooltip, Divider, Select
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined,
-  KeyOutlined, LinkOutlined,
+  KeyOutlined, LinkOutlined, CopyOutlined,
 } from '@ant-design/icons';
 import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
 import request from '@/utils/request';
@@ -19,6 +19,7 @@ interface LLMModel {
   id: string;
   name: string;
   model_id: string;
+  model_type?: 'text' | 'image' | 'video' | 'audio'; // 模型类型：文本生成、图片生成、视频生成、语音生成
   api_base_url?: string;   // 自定义 API Base URL，空则使用全局配置
   api_key?: string;        // 自定义 API Key，空则使用全局配置
   description?: string;
@@ -43,6 +44,7 @@ const LLMConfigs: React.FC = () => {
   
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<LLMModel | null>(null);
+  const [copyingFrom, setCopyingFrom] = useState<LLMModel | null>(null);
   const [form] = Form.useForm();
 
   // Helper to save models array to backend
@@ -70,16 +72,32 @@ const LLMConfigs: React.FC = () => {
 
   const handleAdd = () => {
     setEditing(null);
+    setCopyingFrom(null);
     form.resetFields();
-    form.setFieldsValue({ enabled: true, temperature: 0.7, max_tokens: 8000 });
+    form.setFieldsValue({ enabled: true, temperature: 0.7, max_tokens: 8000, model_type: 'text' });
     setModalOpen(true);
   };
 
   const handleEdit = (record: LLMModel) => {
     setEditing(record);
+    setCopyingFrom(null);
     form.setFieldsValue({
       ...record,
+      model_type: record.model_type || 'text',
       // api_key 用占位符代替，避免回传明文
+      api_key: record.api_key ? PLACEHOLDER_KEY : '',
+    });
+    setModalOpen(true);
+  };
+
+  const handleCopy = (record: LLMModel) => {
+    setEditing(null);
+    setCopyingFrom(record);
+    form.resetFields();
+    form.setFieldsValue({
+      ...record,
+      name: `${record.name} (副本)`,
+      model_type: record.model_type || 'text',
       api_key: record.api_key ? PLACEHOLDER_KEY : '',
     });
     setModalOpen(true);
@@ -102,8 +120,12 @@ const LLMConfigs: React.FC = () => {
 
       // 处理 api_key：占位符 = 保留原值
       let finalApiKey = values.api_key?.trim() || undefined;
-      if (finalApiKey === PLACEHOLDER_KEY && editing) {
-        finalApiKey = editing.api_key;
+      if (finalApiKey === PLACEHOLDER_KEY) {
+        if (editing) {
+          finalApiKey = editing.api_key;
+        } else if (copyingFrom) {
+          finalApiKey = copyingFrom.api_key;
+        }
       }
       if (!finalApiKey) finalApiKey = undefined;
 
@@ -111,6 +133,7 @@ const LLMConfigs: React.FC = () => {
         id: editing?.id ?? crypto.randomUUID(),
         name: values.name,
         model_id: values.model_id,
+        model_type: values.model_type || 'text',
         api_base_url: values.api_base_url?.trim() || undefined,
         api_key: finalApiKey,
         description: values.description || '',
@@ -141,6 +164,21 @@ const LLMConfigs: React.FC = () => {
           <strong>{record.name}</strong>
         </Space>
       ),
+    },
+    {
+      title: '类型',
+      dataIndex: 'model_type',
+      width: 100,
+      render: (_, record) => {
+        const typeMap: Record<string, { label: string; color: string }> = {
+          text: { label: '文本生成', color: 'blue' },
+          image: { label: '图片生成', color: 'green' },
+          video: { label: '视频生成', color: 'orange' },
+          audio: { label: '语音生成', color: 'purple' },
+        };
+        const typeInfo = typeMap[record.model_type || 'text'];
+        return <Tag color={typeInfo?.color || 'default'}>{typeInfo?.label || '未知'}</Tag>;
+      },
     },
     {
       title: '连接配置',
@@ -201,10 +239,13 @@ const LLMConfigs: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 120,
+      width: 150,
       render: (_, record) => [
         <Tooltip key="edit" title="编辑">
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+        </Tooltip>,
+        <Tooltip key="copy" title="复制">
+          <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(record)} />
         </Tooltip>,
         <Tooltip key="delete" title="删除">
           <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
@@ -266,6 +307,14 @@ const LLMConfigs: React.FC = () => {
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="显示名称" rules={[{ required: true, message: '请输入' }]}>
             <Input placeholder="如：DeepSeek Chat（请勿在此包含 Key/URL 等敏感信息）" />
+          </Form.Item>
+          <Form.Item name="model_type" label="模型类型" rules={[{ required: true, message: '请选择模型类型' }]}>
+            <Select placeholder="选择模型类型">
+              <Select.Option value="text">文本生成</Select.Option>
+              <Select.Option value="image">图片生成</Select.Option>
+              <Select.Option value="video">视频生成</Select.Option>
+              <Select.Option value="audio">语音生成</Select.Option>
+            </Select>
           </Form.Item>
           <Form.Item
             name="model_id"

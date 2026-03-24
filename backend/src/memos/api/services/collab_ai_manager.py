@@ -174,7 +174,9 @@ class CollabAIRoom:
 
             client = AsyncOpenAI(
                 api_key=custom_key or os.getenv("OPENAI_API_KEY", ""),
-                base_url=custom_base or os.getenv("OPENAI_API_BASE", "https://api.deepseek.com"),
+                base_url=ai_service._normalize_openai_compatible_base_url(
+                    custom_base or os.getenv("OPENAI_API_BASE", "https://api.deepseek.com")
+                ),
             )
             
             char_count = 0

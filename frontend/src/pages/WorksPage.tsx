@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grid, List, Plus, Upload, ChevronDown, Download, Link2, Trash2, RefreshCw, Users } from 'lucide-react';
+import { Grid, List, Plus, Upload, ChevronDown, Download, Link2, Trash2, RefreshCw, Users, Film } from 'lucide-react';
 import { worksApi, type Work } from '../utils/worksApi';
+import { chaptersApi } from '../utils/chaptersApi';
 import { exportAsText, exportAsWord, exportAsPdf } from '../utils/exportUtils';
 import { copyToClipboard } from '../utils/clipboard';
 import ImportWorkModal from '../components/ImportWorkModal';
@@ -28,6 +29,7 @@ export default function WorksPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [shareWork, setShareWork] = useState<Work | null>(null);
@@ -66,6 +68,7 @@ export default function WorksPage() {
       const response = await worksApi.listWorks({
         page: currentPage,
         size: itemsPerPage,
+        work_type: 'long',
       });
       setWorks(response.works);
       setTotal(response.total);
@@ -200,12 +203,11 @@ export default function WorksPage() {
           {
             // 生成作品链接
             const workLink = `${window.location.origin}/novel/editor?workId=${workId}`;
-            
+
             const success = await copyToClipboard(workLink);
             if (success) {
               showToast('链接已复制到剪贴板');
             } else {
-              // 如果复制失败，显示链接让用户手动复制
               showMessage(
                 `无法自动复制链接，请手动复制：\n\n${workLink}\n\n点击"确定"打开链接`,
                 'warning',
@@ -215,12 +217,99 @@ export default function WorksPage() {
             }
           }
           break;
+        case 'convert-to-drama':
+          await handleConvertToDrama(workId);
+          break;
         default:
           
       }
     } catch (err) {
       
       showMessage(err instanceof Error ? err.message : '操作失败', 'error');
+    }
+  };
+
+  // 小说转换为剧本
+  const handleConvertToDrama = async (workId: string) => {
+    setConvertingId(workId);
+    try {
+      const novel = await worksApi.getWork(workId);
+      // 分页拉取全部章节（后端 size 上限 100）
+      let allChapters: Awaited<ReturnType<typeof chaptersApi.listChapters>>['chapters'] = [];
+      let chapPage = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const chapRes = await chaptersApi.listChapters({
+          work_id: workId,
+          page: chapPage,
+          size: 100,
+          sort_by: 'chapter_number',
+          sort_order: 'asc',
+          skipCache: true,
+        });
+        allChapters = [...allChapters, ...chapRes.chapters];
+        hasMore = chapRes.chapters.length === 100;
+        chapPage++;
+      }
+
+      // 并发拉取每章正文内容
+      const contentMap = new Map<number, string>();
+      await Promise.allSettled(
+        allChapters.map(async (ch) => {
+          try {
+            const doc = await chaptersApi.getChapterDocument(ch.id);
+            if (doc.content) contentMap.set(ch.id, doc.content);
+          } catch { /* 忽略单章拉取失败 */ }
+        })
+      );
+
+      // 构建剧本 metadata
+      const genId = () => Math.random().toString(36).slice(2, 10);
+      const rawChars = (novel.metadata?.characters as Record<string, unknown>[] | undefined) || [];
+      const characters = rawChars.map((c, i) => ({
+        id: genId(),
+        name: (c.display_name as string) || (c.name as string) || `角色${i + 1}`,
+        role: (c.role as string) || (i === 0 ? '主角' : '配角'),
+        description: (c.description as string) || '',
+        appearance: (c.appearance as string) || '',
+        personality: (c.personality as string) || '',
+      }));
+      const episodes = allChapters.map((ch, i) => ({
+        id: genId(),
+        number: i + 1,
+        title: ch.title || `第${i + 1}集`,
+        synopsis: (ch.metadata?.outline as string) || contentMap.get(ch.id) || '',
+        script: '',
+        scenes: [],
+        sourceChapterId: ch.id,
+        sourceChapterTitle: ch.title,
+      }));
+
+      const dramaMeta = {
+        genre: '',
+        style: '',
+        totalEpisodes: episodes.length,
+        outline: novel.description || '',
+        characters,
+        episodes,
+        sourceNovelId: novel.id,
+        sourceNovelTitle: novel.title,
+      };
+
+      // 创建剧本作品
+      const drama = await worksApi.createWork({
+        title: `${novel.title}（剧本）`,
+        work_type: 'video',
+        is_public: false,
+      });
+      await worksApi.updateWork(drama.id, { metadata: dramaMeta as unknown as Work['metadata'] });
+
+      showToast(`已成功转换为剧本，共 ${episodes.length} 集`);
+      navigate(`/drama/editor?workId=${drama.id}`);
+    } catch (err) {
+      showMessage(parseError(err, '转换失败，请重试'), 'error');
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -489,6 +578,17 @@ export default function WorksPage() {
                     title="共享作品"
                   >
                     <Users size={16} />
+                  </button>
+                  <button
+                    className="work-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMenuAction('convert-to-drama', String(work.id));
+                    }}
+                    title="转换为剧本"
+                    disabled={convertingId === String(work.id)}
+                  >
+                    <Film size={16} />
                   </button>
                   <button
                     className="work-action-btn danger"

@@ -41,19 +41,23 @@ try:
         get_works_router,
         get_volumes_router,
         get_yjs_router,
+        get_drama_router,
     )
-    
+
     app.include_router(get_chapters_router())
     logger.info("✅ Chapters router registered successfully")
 
     app.include_router(get_volumes_router())
     logger.info("✅ Volumes router registered successfully")
-    
+
     app.include_router(get_works_router())
     logger.info("✅ Works router registered successfully")
 
     app.include_router(get_yjs_router())
     logger.info("✅ Yjs router registered successfully")
+
+    app.include_router(get_drama_router())
+    logger.info("✅ Drama router registered successfully")
 except Exception as e:
     logger.warning(f"⚠️  Failed to register chapters/works routers: {e}", exc_info=True)
 

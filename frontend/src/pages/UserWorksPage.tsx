@@ -36,6 +36,7 @@ export default function UserWorksPage() {
         const response = await worksApi.listWorks({
           page: currentPage,
           size: itemsPerPage,
+          work_type: 'long',
         });
         setWorks(response.works);
         setTotal(response.total);

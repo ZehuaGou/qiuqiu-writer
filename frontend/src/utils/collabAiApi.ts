@@ -13,6 +13,7 @@ export interface LLMModelConfig {
   id: string;
   name: string;
   model_id: string;
+  model_type?: 'text' | 'image' | 'video' | 'audio';
   description: string;
   enabled: boolean;
 }

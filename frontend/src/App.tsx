@@ -21,6 +21,8 @@ const ScriptEditorPage = lazy(() => import('./pages/ScriptEditorPage'));
 const Editor = lazy(() => import('./components/Editor'));
 const PlansPage = lazy(() => import('./pages/PlansPage'));
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
+const DramaListPage = lazy(() => import('./pages/DramaListPage'));
+const DramaEditorPage = lazy(() => import('./pages/DramaEditorPage'));
 
 /** /works 重定向到当前用户的个人主页 /users/:userId */
 function RedirectToMyWorks() {
@@ -62,9 +64,11 @@ function AppContent() {
           <Route path="/ugc-plaza" element={<UGCPlaza />} />
           <Route path="/plans" element={<RequireAuth><PlansPage /></RequireAuth>} />
           <Route path="/transactions" element={<RequireAuth><TransactionsPage /></RequireAuth>} />
+          <Route path="/drama" element={<RequireAuth><DramaListPage /></RequireAuth>} />
         </Route>
         <Route path="/novel/editor" element={<RequireAuth><NovelEditorPage /></RequireAuth>} />
         <Route path="/script/editor" element={<RequireAuth><ScriptEditorPage /></RequireAuth>} />
+        <Route path="/drama/editor" element={<RequireAuth><DramaEditorPage /></RequireAuth>} />
         <Route
           path="/editor-old"
           element={<Editor docId={null} onDocChange={() => {}} />}
