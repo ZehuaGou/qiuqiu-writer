@@ -334,7 +334,7 @@ function EpisodeEditor({
   generatingSceneImage?: string | null;
   editor?: Editor | null;
 }) {
-  const [tab, setTab] = useState<'synopsis' | 'script' | 'scenes' | 'video'>('synopsis');
+  const [tab, setTab] = useState<'script' | 'scenes' | 'video' | 'settings'>('script');
 
   const addScene = () => {
     const scene: DramaScene = { id: genId(), location: '新场景', time: '白天', description: '' };
@@ -364,29 +364,21 @@ function EpisodeEditor({
           )}
         </div>
         <div className="drama-ep-tabs">
-          {(['synopsis', 'script', 'scenes', 'video'] as const).map(t => (
+          {(['script', 'scenes', 'video', 'settings'] as const).map(t => (
             <button
               key={t}
               className={`drama-ep-tab ${tab === t ? 'active' : ''}`}
               onClick={() => setTab(t)}
             >
-              {t === 'synopsis' ? '剧情简介' : t === 'script' ? '剧本正文' : t === 'scenes' ? '场景列表' : '视频生成'}
+              {t === 'script' ? '剧本正文' : t === 'scenes' ? '场景列表' : t === 'video' ? '视频生成' : '集设置'}
               {t === 'video' && episode.videoUrl && <span className="drama-ep-tab-dot" />}
+              {t === 'settings' && !episode.synopsis && <span className="drama-ep-tab-dot" title="剧情简介未填写" />}
             </button>
           ))}
         </div>
       </div>
 
       <div className="drama-ep-editor-body">
-        {tab === 'synopsis' && (
-          <textarea
-            className="drama-textarea full"
-            placeholder="这一集发生了什么？主要冲突和转折点是什么？"
-            value={episode.synopsis}
-            onChange={e => onChange({ synopsis: e.target.value })}
-          />
-        )}
-
         {tab === 'script' && (
           <div className="drama-script-area">
             <div className="drama-script-toolbar">
@@ -394,13 +386,15 @@ function EpisodeEditor({
                 className="drama-ai-generate-btn"
                 onClick={() => onGenerateScript(episode.id)}
                 disabled={isGeneratingScript || !episode.synopsis}
-                title={!episode.synopsis ? '请先填写剧情简介' : 'AI 生成剧本'}
+                title={!episode.synopsis ? '请先在「集设置」中填写剧情简介' : 'AI 生成剧本'}
               >
                 <Sparkles size={14} />
                 {isGeneratingScript ? 'AI 生成中...' : 'AI 生成剧本'}
               </button>
               {!episode.synopsis && (
-                <span className="drama-script-hint">需要先填写「剧情简介」</span>
+                <span className="drama-script-hint" style={{ cursor: 'pointer' }} onClick={() => setTab('settings')}>
+                  → 先去「集设置」填写简介
+                </span>
               )}
             </div>
             {editor ? (
@@ -519,6 +513,43 @@ function EpisodeEditor({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {tab === 'settings' && (
+          <div className="drama-ep-settings">
+            <div className="drama-ep-settings-field">
+              <label className="drama-field-label">集标题</label>
+              <input
+                className="drama-input"
+                value={episode.title}
+                onChange={e => onChange({ title: e.target.value })}
+                placeholder={`第${episode.number}集`}
+              />
+            </div>
+            <div className="drama-ep-settings-field">
+              <label className="drama-field-label">剧情简介</label>
+              <textarea
+                className="drama-textarea"
+                rows={8}
+                placeholder="这一集发生了什么？主要冲突和转折点是什么？"
+                value={episode.synopsis}
+                onChange={e => onChange({ synopsis: e.target.value })}
+              />
+              <div style={{ marginTop: 8 }}>
+                <button
+                  className="drama-ai-generate-btn"
+                  onClick={() => onGenerateScript(episode.id)}
+                  disabled={isGeneratingScript || !episode.synopsis}
+                  title={!episode.synopsis ? '请先填写剧情简介' : 'AI 根据简介生成剧本正文'}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Sparkles size={14} />
+                  {isGeneratingScript ? 'AI 生成中...' : 'AI 生成剧本正文'}
+                </button>
+                <span className="drama-script-hint" style={{ marginLeft: 10 }}>生成后在「剧本正文」tab 查看</span>
+              </div>
+            </div>
           </div>
         )}
       </div>
