@@ -5,11 +5,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Film, Users, Layers, BookOpen, Settings, FileText,
+  ArrowLeft, Film, Users, Layers, BookOpen, MapPin, FileText,
   Plus, Trash2, Save, Sparkles, Edit2, X, Wifi, WifiOff,
-  Check, Download, Video, ChevronLeft, ChevronRight as ChevronRightIcon,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
-  Clapperboard, Play
+  Download, Video, ChevronLeft, ChevronRight as ChevronRightIcon,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen
 } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { worksApi, type Work } from '../utils/worksApi';
@@ -19,22 +18,15 @@ import { useYjsEditor } from '../hooks/useYjsEditor';
 import { dramaChatStream, dramaChatComplete, dramaGenerateImage, dramaExtractScenes, dramaExtractCharacters, getDramaExtractOptions, type DramaExtractModelOption, type DramaSceneGenerationStyleOption } from '../utils/dramaApi';
 import CollabAIPanel from '../components/editor/CollabAIPanel';
 import ImportFromNovelModal from '../components/drama/ImportFromNovelModal';
+import ImportEpisodeFromChapterModal from '../components/drama/ImportEpisodeFromChapterModal';
 import ShareWorkModal from '../components/ShareWorkModal';
 import WorkInfoManager from '../components/editor/WorkInfoManager';
 import ScriptEditor from '../components/editor/ScriptEditor';
 import type { WorkData } from '../components/editor/work-info/types';
-import type { DramaCharacter, DramaEpisode, DramaMeta } from '../components/drama/dramaTypes';
+import type { DramaCharacter, DramaEpisode, DramaMeta, DramaScene, LocalDramaTask } from '../components/drama/dramaTypes';
 import './DramaEditorPage.css';
 
-interface DramaScene {
-  id: string;
-  location: string;
-  time: string;
-  description: string;
-}
-
-type LeftTab = 'work-info' | 'episodes' | 'characters' | 'outline' | 'settings';
-type SceneGenerationStyle = 'balanced' | 'cinematic' | 'concise' | 'detailed';
+type LeftTab = 'work-info' | 'episodes' | 'characters' | 'scenes' | 'outline';
 
 const FALLBACK_SCENE_STYLES: DramaSceneGenerationStyleOption[] = [
   { id: 'balanced', label: '平衡', description: '镜头感与信息量均衡，适合通用场景提取。' },
@@ -47,15 +39,56 @@ function genId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function textToHtml(text: string): string {
+  const html = text
+    .split('\n\n')
+    .map(para => para.trim())
+    .filter(para => para.length > 0)
+    .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  return html || '<p></p>';
+}
+
+const DRAMA_EXTRA_COMMANDS = [
+  {
+    id: 'drama-gen-script',
+    name: '/drama-gen-script',
+    subtitle: '根据当前集简介和角色列表生成剧本，实时写入编辑器',
+  },
+  {
+    id: 'drama-extract-characters',
+    name: '/drama-extract-characters',
+    subtitle: '从所有集的剧本/简介中提取角色信息',
+  },
+  {
+    id: 'drama-extract-scenes',
+    name: '/drama-extract-scenes',
+    subtitle: '从当前集剧本提取场景（可加风格参数：balanced/cinematic/concise/detailed）',
+  },
+] as const;
+
 function parseMeta(work: Work): DramaMeta {
   const m = work.metadata || {};
+  const episodes = (m.episodes as unknown as DramaEpisode[]) || [];
+
+  // 将旧的按集存储场景迁移到全局场景库
+  let globalScenes: DramaScene[] = (m.scenes as unknown as DramaScene[]) || [];
+  if (globalScenes.length === 0) {
+    for (const ep of episodes) {
+      for (const scene of (ep.scenes || [])) {
+        globalScenes.push({ ...scene, episodeId: ep.id });
+      }
+    }
+  }
+
   return {
     genre: (m.genre as string) || '',
     style: (m.style as string) || '',
     totalEpisodes: (m.totalEpisodes as number) || 1,
     outline: (m.outline as string) || '',
     characters: (m.characters as unknown as DramaCharacter[]) || [],
-    episodes: (m.episodes as unknown as DramaEpisode[]) || [],
+    episodes,
+    scenes: globalScenes,
     sourceNovelId: m.sourceNovelId as string | undefined,
     sourceNovelTitle: m.sourceNovelTitle as string | undefined,
   };
@@ -69,14 +102,19 @@ function DramaSideNav({
   activeTab,
   onTabChange,
   onAddEpisode,
+  onAddEpisodeFromNovel,
   onDeleteEpisode,
   onExtractOutline,
   extractingOutline,
-  onExtractCharacters,
-  extractingCharacters,
   onGenerateCharacterImage,
   generatingCharacterImage,
   onSelectCharacter,
+  scenes,
+  onAddScene,
+  onUpdateScene,
+  onDeleteScene,
+  onGenerateSceneImage,
+  generatingSceneImage,
 }: {
   meta: DramaMeta;
   activeEpisodeId: string | null;
@@ -84,15 +122,23 @@ function DramaSideNav({
   activeTab: LeftTab;
   onTabChange: (t: LeftTab) => void;
   onAddEpisode: () => void;
+  onAddEpisodeFromNovel?: () => void;
   onDeleteEpisode: (id: string) => void;
   onExtractOutline?: () => void;
   extractingOutline?: boolean;
-  onExtractCharacters?: () => void;
-  extractingCharacters?: boolean;
   onGenerateCharacterImage?: (id: string) => void;
   generatingCharacterImage?: string | null;
   onSelectCharacter?: (c: DramaCharacter) => void;
+  scenes?: DramaScene[];
+  onAddScene?: () => void;
+  onUpdateScene?: (id: string, patch: Partial<DramaScene>) => void;
+  onDeleteScene?: (id: string) => void;
+  onGenerateSceneImage?: (sceneId: string) => void;
+  generatingSceneImage?: string | null;
 }) {
+  const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
+  const sceneList = scenes || [];
+
   return (
     <div className="drama-sidenav">
       {/* Tab 切换 */}
@@ -122,20 +168,20 @@ function DramaSideNav({
           <span>角色</span>
         </button>
         <button
+          className={`drama-sidenav-tab ${activeTab === 'scenes' ? 'active' : ''}`}
+          onClick={() => onTabChange('scenes')}
+          title="场景库"
+        >
+          <MapPin size={16} />
+          <span>场景</span>
+        </button>
+        <button
           className={`drama-sidenav-tab ${activeTab === 'outline' ? 'active' : ''}`}
           onClick={() => onTabChange('outline')}
           title="大纲"
         >
           <FileText size={16} />
           <span>大纲</span>
-        </button>
-        <button
-          className={`drama-sidenav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => onTabChange('settings')}
-          title="设置"
-        >
-          <Settings size={16} />
-          <span>设置</span>
         </button>
       </div>
 
@@ -154,9 +200,16 @@ function DramaSideNav({
         <div className="drama-sidenav-content">
           <div className="drama-sidenav-header">
             <span className="drama-sidenav-count">{meta.episodes.length} 集</span>
-            <button className="drama-sidenav-add" onClick={onAddEpisode} title="添加集数">
-              <Plus size={14} />
-            </button>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {onAddEpisodeFromNovel && (
+                <button className="drama-sidenav-add" onClick={onAddEpisodeFromNovel} title="从小说导入新集">
+                  <BookOpen size={14} />
+                </button>
+              )}
+              <button className="drama-sidenav-add" onClick={onAddEpisode} title="添加集数">
+                <Plus size={14} />
+              </button>
+            </div>
           </div>
           <div className="drama-ep-nav-list">
             {meta.episodes.length === 0 ? (
@@ -165,6 +218,12 @@ function DramaSideNav({
                 <button className="drama-sidenav-add-btn" onClick={onAddEpisode}>
                   <Plus size={13} /> 添加第一集
                 </button>
+                {onAddEpisodeFromNovel && (
+                  <button className="drama-sidenav-add-btn" onClick={onAddEpisodeFromNovel}
+                    style={{ marginTop: '6px' }}>
+                    <BookOpen size={13} /> 从小说导入
+                  </button>
+                )}
               </div>
             ) : (
               meta.episodes.map(ep => (
@@ -205,31 +264,17 @@ function DramaSideNav({
         <div className="drama-sidenav-content">
           <div className="drama-sidenav-header">
             <span className="drama-sidenav-count">{meta.characters.length} 个角色</span>
-            {onExtractCharacters && (
-              <button 
-                className="drama-sidenav-add" 
-                onClick={onExtractCharacters} 
-                title="从剧本/简介提取角色"
-                disabled={extractingCharacters}
-              >
-                <Sparkles size={14} />
-              </button>
-            )}
           </div>
           <div className="drama-char-nav-list">
             {meta.characters.length === 0 ? (
               <div className="drama-sidenav-empty">
                 <p>还没有角色</p>
-                {onExtractCharacters && (
-                  <button className="drama-sidenav-add-btn" onClick={onExtractCharacters} disabled={extractingCharacters}>
-                    <Sparkles size={13} /> {extractingCharacters ? '提取中...' : 'AI 提取角色'}
-                  </button>
-                )}
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>在聊天面板输入 /drama-extract-characters 提取</p>
               </div>
             ) : (
               meta.characters.map(c => (
-                <div 
-                  key={c.id} 
+                <div
+                  key={c.id}
                   className="drama-char-nav-item"
                   onClick={() => onSelectCharacter?.(c)}
                   style={{ cursor: 'pointer' }}
@@ -241,7 +286,7 @@ function DramaSideNav({
                       <div className="drama-char-nav-avatar">{c.name.slice(0, 1)}</div>
                     )}
                     {onGenerateCharacterImage && (
-                      <button 
+                      <button
                         className="drama-char-nav-avatar-btn"
                         onClick={(e) => { e.stopPropagation(); onGenerateCharacterImage(c.id); }}
                         disabled={generatingCharacterImage === c.id}
@@ -262,15 +307,117 @@ function DramaSideNav({
         </div>
       )}
 
+      {/* 场景库 */}
+      {activeTab === 'scenes' && (
+        <div className="drama-sidenav-content">
+          <div className="drama-sidenav-header">
+            <span className="drama-sidenav-count">{sceneList.length} 个场景</span>
+            {onAddScene && (
+              <button className="drama-sidenav-add" onClick={onAddScene} title="添加场景">
+                <Plus size={14} />
+              </button>
+            )}
+          </div>
+          {sceneList.length === 0 ? (
+            <div className="drama-sidenav-empty">
+              <MapPin size={24} />
+              <p>还没有场景</p>
+              <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>在聊天面板输入 /drama-extract-scenes 提取</p>
+            </div>
+          ) : (
+            <div className="drama-scene-sidebar-list">
+              {sceneList.map((scene, idx) => {
+                const epTitle = meta.episodes.find(e => e.id === scene.episodeId)?.title;
+                const isExpanded = expandedSceneId === scene.id;
+                return (
+                  <div key={scene.id} className={`drama-scene-sidebar-item ${isExpanded ? 'expanded' : ''}`}>
+                    <div
+                      className="drama-scene-sidebar-body"
+                      onClick={() => setExpandedSceneId(isExpanded ? null : scene.id)}
+                    >
+                      <div className="drama-scene-sidebar-num">{idx + 1}</div>
+                      <div className="drama-scene-sidebar-info">
+                        <div className="drama-scene-sidebar-loc">
+                          {scene.location}
+                          <span className="drama-scene-sidebar-time">· {scene.time}</span>
+                        </div>
+                        {epTitle && <span className="drama-scene-sidebar-ep">来自 {epTitle}</span>}
+                        {scene.description && (
+                          <p className="drama-scene-sidebar-desc">{scene.description}</p>
+                        )}
+                      </div>
+                      <div className="drama-scene-sidebar-actions" onClick={e => e.stopPropagation()}>
+                        {onGenerateSceneImage && (
+                          <button
+                            className="drama-icon-btn"
+                            title="生成场景图"
+                            onClick={() => onGenerateSceneImage(scene.id)}
+                            disabled={generatingSceneImage === scene.id}
+                          >
+                            {generatingSceneImage === scene.id
+                              ? <span className="drama-spinner" style={{ width: 12, height: 12 }} />
+                              : <Sparkles size={12} />}
+                          </button>
+                        )}
+                        {onDeleteScene && (
+                          <button
+                            className="drama-icon-btn danger"
+                            title="删除场景"
+                            onClick={() => onDeleteScene(scene.id)}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {isExpanded && onUpdateScene && (
+                      <div className="drama-scene-sidebar-edit">
+                        <div className="drama-scene-row">
+                          <input
+                            className="drama-input sm"
+                            placeholder="地点"
+                            value={scene.location}
+                            onChange={e => onUpdateScene(scene.id, { location: e.target.value })}
+                          />
+                          <select
+                            className="drama-select sm"
+                            value={scene.time}
+                            onChange={e => onUpdateScene(scene.id, { time: e.target.value })}
+                          >
+                            {['白天', '夜晚', '清晨', '黄昏', '室内', '室外'].map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <textarea
+                          className="drama-textarea sm"
+                          placeholder="场景描述..."
+                          value={scene.description}
+                          onChange={e => onUpdateScene(scene.id, { description: e.target.value })}
+                          rows={2}
+                        />
+                        {scene.imageUrl && (
+                          <img src={scene.imageUrl} alt="场景图" className="drama-scene-sidebar-img" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 大纲 */}
       {activeTab === 'outline' && (
         <div className="drama-sidenav-content drama-sidenav-outline">
           <div className="drama-sidenav-header">
             <span className="drama-sidenav-count">故事大纲</span>
             {onExtractOutline && (
-              <button 
-                className="drama-sidenav-add" 
-                onClick={onExtractOutline} 
+              <button
+                className="drama-sidenav-add"
+                onClick={onExtractOutline}
                 title="从剧本/简介提取大纲"
                 disabled={extractingOutline}
               >
@@ -281,7 +428,7 @@ function DramaSideNav({
           <p className="drama-outline-preview">
             {meta.outline || (
               <span className="drama-outline-empty">
-                暂无大纲，在设置中填写
+                暂无大纲
                 {onExtractOutline && (
                   <button className="drama-sidenav-add-btn" onClick={onExtractOutline} disabled={extractingOutline} style={{ marginTop: '10px' }}>
                     <Sparkles size={13} /> {extractingOutline ? '提取中...' : 'AI 提取大纲'}
@@ -294,263 +441,74 @@ function DramaSideNav({
           {meta.style && <span className="drama-outline-tag">{meta.style}</span>}
         </div>
       )}
-
-      {/* 设置占位（内容在右侧面板） */}
-      {activeTab === 'settings' && (
-        <div className="drama-sidenav-content">
-          <div className="drama-sidenav-empty">
-            <Settings size={24} />
-            <p>设置内容在右侧面板中</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── 集数编辑器 ──────────────────────────────────────────────
+// ─── 集数编辑器（无 Tab，标题区 + 简介区 + 正文区） ─────────
 function EpisodeEditor({
   episode,
   onChange,
   onGenerateVideo,
   generatingVideo,
-  onGenerateScript,
-  generatingScript,
-  onGenerateScenes,
-  generatingScenes,
-  onGenerateSceneImage,
-  generatingSceneImage,
   editor,
 }: {
   episode: DramaEpisode;
   onChange: (patch: Partial<DramaEpisode>) => void;
   onGenerateVideo: (episodeId: string) => void;
   generatingVideo: string | null;
-  onGenerateScript: (episodeId: string) => void;
-  generatingScript: string | null;
-  onGenerateScenes: (episodeId: string) => void;
-  generatingScenes: string | null;
-  onGenerateSceneImage?: (episodeId: string, sceneId: string) => void;
-  generatingSceneImage?: string | null;
   editor?: Editor | null;
 }) {
-  const [tab, setTab] = useState<'script' | 'scenes' | 'video' | 'settings'>('script');
-
-  const addScene = () => {
-    const scene: DramaScene = { id: genId(), location: '新场景', time: '白天', description: '' };
-    onChange({ scenes: [...(episode.scenes || []), scene] });
-  };
-
-  const updateScene = (id: string, patch: Partial<DramaScene>) => {
-    onChange({ scenes: (episode.scenes || []).map(s => s.id === id ? { ...s, ...patch } : s) });
-  };
-
-  const deleteScene = (id: string) => {
-    onChange({ scenes: (episode.scenes || []).filter(s => s.id !== id) });
-  };
-
-  const isGenerating = generatingVideo === episode.id;
-  const isGeneratingScript = generatingScript === episode.id;
-
   return (
     <div className="drama-ep-editor">
-      <div className="drama-ep-editor-header">
-        <div className="drama-ep-editor-title-row">
-          <h2 className="drama-ep-editor-title">
-            第{episode.number}集 · {episode.title}
-          </h2>
-          {episode.sourceChapterTitle && (
-            <span className="drama-ep-source-hint">来自《{episode.sourceChapterTitle}》</span>
-          )}
-        </div>
-        <div className="drama-ep-tabs">
-          {(['script', 'scenes', 'video', 'settings'] as const).map(t => (
-            <button
-              key={t}
-              className={`drama-ep-tab ${tab === t ? 'active' : ''}`}
-              onClick={() => setTab(t)}
-            >
-              {t === 'script' ? '剧本正文' : t === 'scenes' ? '场景列表' : t === 'video' ? '视频生成' : '集设置'}
-              {t === 'video' && episode.videoUrl && <span className="drama-ep-tab-dot" />}
-              {t === 'settings' && !episode.synopsis && <span className="drama-ep-tab-dot" title="剧情简介未填写" />}
-            </button>
-          ))}
-        </div>
+      {/* 标题区 */}
+      <div className="drama-ep-title-zone">
+        <span className="drama-ep-num-badge">E{episode.number}</span>
+        <input
+          className="drama-ep-title-input"
+          value={episode.title}
+          onChange={e => onChange({ title: e.target.value })}
+          placeholder={`第${episode.number}集标题`}
+        />
+        {episode.sourceChapterTitle && (
+          <span className="drama-ep-source-hint">来自《{episode.sourceChapterTitle}》</span>
+        )}
+        <button
+          className="drama-icon-btn"
+          title={generatingVideo === episode.id ? '生成中...' : '生成视频'}
+          onClick={() => onGenerateVideo(episode.id)}
+          disabled={generatingVideo === episode.id}
+          style={{ flexShrink: 0 }}
+        >
+          {generatingVideo === episode.id ? <span className="drama-spinner" /> : <Video size={15} />}
+        </button>
       </div>
 
-      <div className="drama-ep-editor-body">
-        {tab === 'script' && (
-          <div className="drama-script-area">
-            <div className="drama-script-toolbar">
-              <button
-                className="drama-ai-generate-btn"
-                onClick={() => onGenerateScript(episode.id)}
-                disabled={isGeneratingScript || !episode.synopsis}
-                title={!episode.synopsis ? '请先在「集设置」中填写剧情简介' : 'AI 生成剧本'}
-              >
-                <Sparkles size={14} />
-                {isGeneratingScript ? 'AI 生成中...' : 'AI 生成剧本'}
-              </button>
-              {!episode.synopsis && (
-                <span className="drama-script-hint" style={{ cursor: 'pointer' }} onClick={() => setTab('settings')}>
-                  → 先去「集设置」填写简介
-                </span>
-              )}
-            </div>
-            {editor ? (
-              <ScriptEditor editor={editor} />
-            ) : (
-              <textarea
-                className="drama-textarea full script-font"
-                placeholder={`INT. 场景名称 - 时间\n\n角色动作描述\n\n角色名\n台词内容\n\n...`}
-                value={episode.script}
-                onChange={e => onChange({ script: e.target.value })}
-              />
-            )}
-          </div>
-        )}
+      {/* 剧情简介区 */}
+      <div className="drama-ep-synopsis-zone">
+        <div className="drama-ep-synopsis-header">
+          <span className="drama-field-label" style={{ margin: 0 }}>剧情简介</span>
+        </div>
+        <textarea
+          className="drama-ep-synopsis-input"
+          placeholder="这一集发生了什么？主要冲突和转折点是什么？"
+          value={episode.synopsis}
+          onChange={e => onChange({ synopsis: e.target.value })}
+          rows={3}
+        />
+      </div>
 
-        {tab === 'scenes' && (
-          <div className="drama-scenes-area">
-            <div className="drama-scenes-toolbar">
-              <button
-                className="drama-ai-generate-btn"
-                onClick={() => onGenerateScenes(episode.id)}
-                disabled={generatingScenes === episode.id || (!episode.synopsis && !episode.script)}
-                title={(!episode.synopsis && !episode.script) ? '请先填写剧情简介或剧本' : 'AI 提取场景'}
-              >
-                <Sparkles size={14} />
-                {generatingScenes === episode.id ? 'AI 生成中...' : 'AI 提取场景'}
-              </button>
-              <button className="drama-add-btn" onClick={addScene}>
-                <Plus size={14} /> 添加场景
-              </button>
-            </div>
-            {(episode.scenes || []).length === 0 ? (
-              <div className="drama-panel-empty"><Layers size={28} /><p>还没有场景</p></div>
-            ) : (
-              <div className="drama-scene-list">
-                {(episode.scenes || []).map((scene, idx) => (
-                  <div key={scene.id} className="drama-scene-item">
-                    <div className="drama-scene-num">{idx + 1}</div>
-                    <div className="drama-scene-fields">
-                      <div className="drama-scene-row">
-                        <input className="drama-input sm" placeholder="地点" value={scene.location}
-                          onChange={e => updateScene(scene.id, { location: e.target.value })} />
-                        <select className="drama-select sm" value={scene.time}
-                          onChange={e => updateScene(scene.id, { time: e.target.value })}>
-                          {['白天', '夜晚', '清晨', '黄昏', '室内', '室外'].map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <textarea className="drama-textarea sm" placeholder="场景描述..." value={scene.description}
-                        onChange={e => updateScene(scene.id, { description: e.target.value })} rows={2} />
-                      {onGenerateSceneImage && (
-                        <div className="drama-scene-image-wrapper">
-                          {scene.imageUrl && (
-                            <img src={scene.imageUrl} alt="场景图" className="drama-scene-img" />
-                          )}
-                          <button 
-                            className="drama-scene-img-btn"
-                            onClick={() => onGenerateSceneImage(episode.id, scene.id)}
-                            disabled={generatingSceneImage === scene.id}
-                          >
-                            <Sparkles size={12} /> {generatingSceneImage === scene.id ? '生成中...' : (scene.imageUrl ? '重新生成' : '生成场景图')}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <button className="drama-icon-btn danger" onClick={() => deleteScene(scene.id)}>
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === 'video' && (
-          <div className="drama-video-area">
-            {episode.videoUrl ? (
-              <div className="drama-video-player">
-                <video src={episode.videoUrl} controls className="drama-video-element" />
-                <div className="drama-video-actions">
-                  <button className="drama-add-btn" onClick={() => onGenerateVideo(episode.id)} disabled={isGenerating}>
-                    <Video size={14} /> {isGenerating ? '生成中...' : '重新生成'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="drama-video-empty">
-                <div className="drama-video-empty-icon">
-                  <Clapperboard size={48} />
-                </div>
-                <h3>生成本集视频</h3>
-                <p>基于剧本正文和场景描述，使用 AI 模型生成对应视频</p>
-                <div className="drama-video-requirements">
-                  <div className={`drama-video-req ${episode.script ? 'met' : ''}`}>
-                    <Check size={13} /> 剧本正文{episode.script ? '已填写' : '（未填写）'}
-                  </div>
-                  <div className={`drama-video-req ${(episode.scenes || []).length > 0 ? 'met' : ''}`}>
-                    <Check size={13} /> 场景列表{(episode.scenes || []).length > 0 ? `（${episode.scenes.length} 个场景）` : '（未添加）'}
-                  </div>
-                </div>
-                <button
-                  className="drama-generate-video-btn"
-                  onClick={() => onGenerateVideo(episode.id)}
-                  disabled={isGenerating || !episode.script}
-                >
-                  {isGenerating ? (
-                    <><span className="drama-spinner" /> 生成中，请稍候...</>
-                  ) : (
-                    <><Play size={16} /> 开始生成视频</>
-                  )}
-                </button>
-                {!episode.script && (
-                  <p className="drama-video-hint">请先在「剧本正文」tab 中填写内容</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === 'settings' && (
-          <div className="drama-ep-settings">
-            <div className="drama-ep-settings-field">
-              <label className="drama-field-label">集标题</label>
-              <input
-                className="drama-input"
-                value={episode.title}
-                onChange={e => onChange({ title: e.target.value })}
-                placeholder={`第${episode.number}集`}
-              />
-            </div>
-            <div className="drama-ep-settings-field">
-              <label className="drama-field-label">剧情简介</label>
-              <textarea
-                className="drama-textarea"
-                rows={8}
-                placeholder="这一集发生了什么？主要冲突和转折点是什么？"
-                value={episode.synopsis}
-                onChange={e => onChange({ synopsis: e.target.value })}
-              />
-              <div style={{ marginTop: 8 }}>
-                <button
-                  className="drama-ai-generate-btn"
-                  onClick={() => onGenerateScript(episode.id)}
-                  disabled={isGeneratingScript || !episode.synopsis}
-                  title={!episode.synopsis ? '请先填写剧情简介' : 'AI 根据简介生成剧本正文'}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                  <Sparkles size={14} />
-                  {isGeneratingScript ? 'AI 生成中...' : 'AI 生成剧本正文'}
-                </button>
-                <span className="drama-script-hint" style={{ marginLeft: 10 }}>生成后在「剧本正文」tab 查看</span>
-              </div>
-            </div>
-          </div>
+      {/* 剧本正文区（全高度） */}
+      <div className="drama-script-area">
+        {editor ? (
+          <ScriptEditor editor={editor} />
+        ) : (
+          <textarea
+            className="drama-textarea full script-font"
+            placeholder={`INT. 场景名称 - 时间\n\n角色动作描述\n\n角色名\n台词内容\n\n...`}
+            value={episode.script}
+            onChange={e => onChange({ script: e.target.value })}
+          />
         )}
       </div>
     </div>
@@ -564,8 +522,9 @@ export default function DramaEditorPage() {
   const workId = searchParams.get('workId');
 
   const [work, setWork] = useState<Work | null>(null);
+  const [workTitle, setWorkTitle] = useState('');
   const [meta, setMeta] = useState<DramaMeta>({
-    genre: '', style: '', totalEpisodes: 1, outline: '', characters: [], episodes: []
+    genre: '', style: '', totalEpisodes: 1, outline: '', characters: [], episodes: [], scenes: []
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -574,25 +533,19 @@ export default function DramaEditorPage() {
   const [episodeChapterMap, setEpisodeChapterMap] = useState<Record<number, number>>({});
   const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [episodeImportModalOpen, setEpisodeImportModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [generatingVideo, setGeneratingVideo] = useState<string | null>(null);
-  const [generatingScript, setGeneratingScript] = useState<string | null>(null);
-  const [generatingScenes, setGeneratingScenes] = useState<string | null>(null);
   const [generatingCharacterImage, setGeneratingCharacterImage] = useState<string | null>(null);
   const [generatingSceneImage, setGeneratingSceneImage] = useState<string | null>(null);
   const [extractingOutline, setExtractingOutline] = useState(false);
-  const [extractingCharacters, setExtractingCharacters] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('');
-  const [sceneExtractModalOpen, setSceneExtractModalOpen] = useState(false);
-  const [sceneExtractEpisodeId, setSceneExtractEpisodeId] = useState<string | null>(null);
-  const [sceneExtractModelId, setSceneExtractModelId] = useState<string>('');
-  const [sceneExtractStyle, setSceneExtractStyle] = useState<SceneGenerationStyle>('balanced');
   const [sceneExtractModels, setSceneExtractModels] = useState<DramaExtractModelOption[]>([]);
   const [sceneExtractStyles, setSceneExtractStyles] = useState<DramaSceneGenerationStyleOption[]>(FALLBACK_SCENE_STYLES);
-  const [loadingExtractOptions, setLoadingExtractOptions] = useState(false);
+  const [localTasks, setLocalTasks] = useState<LocalDramaTask[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<DramaCharacter | null>(null);
   const [isEditingCharacter, setIsEditingCharacter] = useState(false);
   const [editingCharacterData, setEditingCharacterData] = useState<DramaCharacter | null>(null);
@@ -608,6 +561,7 @@ export default function DramaEditorPage() {
       authApi.getCurrentUser().catch(() => null),
     ]).then(([w, user]) => {
       setWork(w);
+      setWorkTitle(w.title || '');
       const m = parseMeta(w);
       setMeta(m);
       if (m.episodes.length > 0) setActiveEpisodeId(m.episodes[0].id);
@@ -617,7 +571,6 @@ export default function DramaEditorPage() {
 
   useEffect(() => {
     let active = true;
-    setLoadingExtractOptions(true);
     getDramaExtractOptions()
       .then((res) => {
         if (!active) return;
@@ -631,13 +584,8 @@ export default function DramaEditorPage() {
         if (!active) return;
         setSceneExtractModels([]);
         setSceneExtractStyles(FALLBACK_SCENE_STYLES);
-      })
-      .finally(() => {
-        if (active) setLoadingExtractOptions(false);
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   // 按集建立 Chapter 映射（用于 Yjs 协作编辑）
@@ -710,6 +658,20 @@ export default function DramaEditorPage() {
     scheduleSave(updated);
   };
 
+  const handleEpisodeImportConfirm = (patch: Partial<DramaEpisode>) => {
+    const num = meta.episodes.length + 1;
+    const ep: DramaEpisode = {
+      id: genId(), number: num, title: `第${num}集`,
+      synopsis: '', script: '', scenes: [],
+      ...patch,
+    };
+    const updated = { ...meta, episodes: [...meta.episodes, ep] };
+    setMeta(updated);
+    setActiveEpisodeId(ep.id);
+    setLeftTab('episodes');
+    scheduleSave(updated);
+  };
+
   const handleDeleteEpisode = (id: string) => {
     const remaining = meta.episodes.filter(e => e.id !== id).map((e, i) => ({ ...e, number: i + 1 }));
     const updated = { ...meta, episodes: remaining };
@@ -721,9 +683,10 @@ export default function DramaEditorPage() {
   };
 
   const handleUpdateTitle = async (title: string) => {
-    if (!workId) return;
+    if (!workId || !title.trim()) return;
     await worksApi.updateWork(workId, { title });
     setWork(prev => prev ? { ...prev, title } : prev);
+    setWorkTitle(title);
   };
 
   const handleImport = (patch: Partial<DramaMeta>) => {
@@ -736,6 +699,208 @@ export default function DramaEditorPage() {
     scheduleSave(updated);
   };
 
+  const handleAddScene = () => {
+    const scene: DramaScene = {
+      id: genId(), location: '新场景', time: '白天', description: '',
+      episodeId: activeEpisodeId || undefined,
+    };
+    const updated = { ...meta, scenes: [...(meta.scenes || []), scene] };
+    setMeta(updated);
+    scheduleSave(updated);
+  };
+
+  const handleUpdateScene = (id: string, patch: Partial<DramaScene>) => {
+    const updated = { ...meta, scenes: (meta.scenes || []).map(s => s.id === id ? { ...s, ...patch } : s) };
+    setMeta(updated);
+    scheduleSave(updated);
+  };
+
+  const handleDeleteScene = (id: string) => {
+    const updated = { ...meta, scenes: (meta.scenes || []).filter(s => s.id !== id) };
+    setMeta(updated);
+    scheduleSave(updated);
+  };
+
+  // 集数导航
+  const episodeIndex = meta.episodes.findIndex(e => e.id === activeEpisodeId);
+  const prevEpisode = episodeIndex > 0 ? meta.episodes[episodeIndex - 1] : null;
+  const nextEpisode = episodeIndex < meta.episodes.length - 1 ? meta.episodes[episodeIndex + 1] : null;
+  const activeEpisode = meta.episodes.find(e => e.id === activeEpisodeId) || null;
+
+  // Yjs 协作编辑器（按集连接）
+  const activeChapterId = activeEpisode ? episodeChapterMap[activeEpisode.number] : undefined;
+  const yjsDocumentId = workId && activeChapterId ? `work_${workId}_chapter_${activeChapterId}` : '';
+  const { editor, connectionStatus } = useYjsEditor({
+    documentId: yjsDocumentId,
+    placeholder: '开始编写剧本正文...',
+    editable: !!yjsDocumentId,
+  });
+
+  // 集数列表（供 CollabAIPanel 使用）
+  const chapterItems = meta.episodes.map(ep => ({
+    id: ep.id,
+    title: ep.title,
+    chapter_number: ep.number,
+  }));
+
+  // ─── Drama AI 命令（聊天面板斜杠命令）───────────────────────
+
+  const handleDramaCommand = useCallback((commandId: string, fullQuery: string) => {
+    if (!workId) return;
+    const ep = activeEpisodeId ? meta.episodes.find(e => e.id === activeEpisodeId) : null;
+    const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const now = Date.now();
+
+    if (commandId === 'drama-extract-characters') {
+      let combinedContent = '';
+      for (const episode of meta.episodes) {
+        combinedContent += `\n第${episode.number}集：${episode.title}\n${episode.synopsis}\n${episode.script}`;
+      }
+      if (!combinedContent.trim()) {
+        alert('没有可用的剧本内容用于提取角色');
+        return;
+      }
+      const preferredModelId = sceneExtractModels.length > 0
+        ? (selectedModel && sceneExtractModels.some(m => m.model_id === selectedModel) ? selectedModel : sceneExtractModels[0].model_id)
+        : null;
+
+      const task: LocalDramaTask = {
+        local_id: localId, type: 'extract-characters',
+        query: fullQuery, episode_id: '', episode_title: '所有集',
+        status: 'running', created_at: now,
+      };
+      setLocalTasks(prev => [task, ...prev]);
+      setLeftTab('episodes'); // 切到 AI 任务 tab 方便查看进度
+
+      dramaExtractCharacters(combinedContent.slice(0, 8000), workId, 12, preferredModelId)
+        .then(result => {
+          if (Array.isArray(result) && result.length > 0) {
+            const newChars = result.map(c => ({
+              id: genId(), name: c.name || '未知角色', role: c.role || '配角',
+              description: c.description || '', appearance: c.appearance || '', personality: c.personality || '',
+            }));
+            const existingNames = new Set(meta.characters.map(c => c.name));
+            const toAdd = newChars.filter(c => !existingNames.has(c.name));
+            const merged = toAdd.length > 0 ? [...meta.characters, ...toAdd] : (meta.characters.length === 0 ? newChars : meta.characters);
+            handleMetaChange({ characters: merged });
+            setLeftTab('characters');
+          }
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'done', result } : t
+          ));
+        })
+        .catch(err => {
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'error', error: String(err) } : t
+          ));
+        });
+      return;
+    }
+
+    if (commandId === 'drama-extract-scenes') {
+      if (!ep) { alert('请先选择要提取场景的集数'); return; }
+      // 解析风格参数（命令后的词）
+      const parts = fullQuery.trim().split(/\s+/).slice(1);
+      const validStyles = sceneExtractStyles.map(s => s.id);
+      const style = parts.find(p => validStyles.includes(p)) ?? 'balanced';
+      const content = editor ? editor.getText() : ep.script;
+      if (!content.trim()) { alert('当前集没有剧本内容，请先生成剧本'); return; }
+
+      const task: LocalDramaTask = {
+        local_id: localId, type: 'extract-scenes',
+        query: `/drama-extract-scenes [${style}]`, episode_id: ep.id, episode_title: ep.title,
+        status: 'running', created_at: now,
+      };
+      setLocalTasks(prev => [task, ...prev]);
+
+      dramaExtractScenes(content, workId, 12, selectedModel || null, style)
+        .then(result => {
+          if (Array.isArray(result) && result.length > 0) {
+            const newScenes = result.map((s, i) => ({
+              id: s.id || `scene-${i + 1}`, location: s.location || '未命名场景',
+              time: s.time || '白天', description: s.description || '', episodeId: ep.id,
+            }));
+            const otherScenes = (meta.scenes || []).filter(sc => sc.episodeId !== ep.id);
+            handleMetaChange({ scenes: [...otherScenes, ...newScenes] });
+            setLeftTab('scenes');
+          }
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'done', result } : t
+          ));
+        })
+        .catch(err => {
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'error', error: String(err) } : t
+          ));
+        });
+      return;
+    }
+
+    if (commandId === 'drama-gen-script') {
+      if (!ep) { alert('请先选择要生成剧本的集数'); return; }
+      if (!ep.synopsis.trim()) { alert('请先填写剧情简介再生成剧本'); return; }
+
+      const characters = meta.characters.map(c => `${c.name}（${c.role}）`).join('、');
+      const prompt = [
+        `请根据以下信息，为第${ep.number}集「${ep.title}」生成专业的剧本正文。`,
+        `\n剧情简介：${ep.synopsis}`,
+        characters ? `\n主要角色：${characters}` : '',
+        meta.outline ? `\n故事背景：${meta.outline}` : '',
+        '\n\n要求：使用标准剧本格式，包含场景说明（INT./EXT.）、角色动作描述和对白。直接输出剧本内容，不要额外说明。',
+      ].filter(Boolean).join('');
+
+      const abortController = new AbortController();
+      const task: LocalDramaTask = {
+        local_id: localId, type: 'gen-script',
+        query: fullQuery, episode_id: ep.id, episode_title: ep.title,
+        status: 'running', streamContent: '', created_at: now, abortController,
+      };
+      setLocalTasks(prev => [task, ...prev]);
+      editor?.commands.setContent('<p></p>');
+
+      let accumulated = '';
+      dramaChatStream(
+        prompt,
+        (chunk: string) => {
+          accumulated += chunk;
+          editor?.commands.setContent(textToHtml(accumulated));
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, streamContent: accumulated } : t
+          ));
+        },
+        workId,
+        { signal: abortController.signal },
+      ).then(() => {
+        // 完成时同步 episode.script 供后续提取使用
+        handleEpisodeChange(ep.id, { script: accumulated });
+        setLocalTasks(prev => prev.map(t =>
+          t.local_id === localId ? { ...t, status: 'done' } : t
+        ));
+      }).catch(err => {
+        if ((err as Error)?.name === 'AbortError') {
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'cancelled' } : t
+          ));
+        } else {
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'error', error: String(err) } : t
+          ));
+        }
+      });
+      return;
+    }
+  }, [workId, activeEpisodeId, meta, editor, sceneExtractModels, sceneExtractStyles, selectedModel, handleMetaChange, handleEpisodeChange]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCancelLocalTask = useCallback((localId: string) => {
+    setLocalTasks(prev => {
+      const task = prev.find(t => t.local_id === localId);
+      task?.abortController?.abort();
+      return prev.map(t =>
+        t.local_id === localId ? { ...t, status: 'cancelled' } : t
+      );
+    });
+  }, []);
+
   const handleGenerateVideo = async (episodeId: string) => {
     // TODO: 对接视频生成模型 API
     setGeneratingVideo(episodeId);
@@ -746,146 +911,6 @@ export default function DramaEditorPage() {
     }, 1500);
   };
 
-  const handleGenerateScript = async (episodeId: string) => {
-    const episode = meta.episodes.find(e => e.id === episodeId);
-    if (!episode || !workId) return;
-
-    const characters = meta.characters.map(c => `${c.name}（${c.role}）`).join('、');
-    const prompt = [
-      `请根据以下信息，为第${episode.number}集「${episode.title}」生成专业的剧本正文。`,
-      `\n剧情简介：${episode.synopsis}`,
-      characters ? `\n主要角色：${characters}` : '',
-      meta.outline ? `\n故事背景：${meta.outline}` : '',
-      '\n\n要求：使用标准剧本格式，包含场景说明（INT./EXT.）、角色动作描述和对白。直接输出剧本内容，不要额外说明。',
-    ].filter(Boolean).join('');
-
-    setGeneratingScript(episodeId);
-    handleEpisodeChange(episodeId, { script: '' });
-
-    let accumulated = '';
-    try {
-      await dramaChatStream(
-        prompt,
-        (chunk: string) => {
-          accumulated += chunk;
-          handleEpisodeChange(episodeId, { script: accumulated });
-        },
-        workId,
-      );
-    } catch {
-      handleEpisodeChange(episodeId, { script: episode.script });
-    } finally {
-      setGeneratingScript(null);
-    }
-  };
-
-  const handleGenerateScenes = (episodeId: string) => {
-    const ep = meta.episodes.find(e => e.id === episodeId);
-    if (!ep || !workId) return;
-
-    if (!ep.script || ep.script.trim() === '') {
-      alert('请先生成或填写剧本内容，然后再生成场景。');
-      return;
-    }
-    setSceneExtractEpisodeId(episodeId);
-    if (selectedModel && !sceneExtractModelId) {
-      setSceneExtractModelId(selectedModel);
-    }
-    setSceneExtractModalOpen(true);
-  };
-
-  const handleConfirmSceneExtract = async () => {
-    if (!workId || !sceneExtractEpisodeId) return;
-    const ep = meta.episodes.find(e => e.id === sceneExtractEpisodeId);
-    if (!ep || !ep.script || ep.script.trim() === '') return;
-
-    setGeneratingScenes(sceneExtractEpisodeId);
-    try {
-      const generatedScenes = await dramaExtractScenes(
-        ep.script,
-        workId,
-        12,
-        sceneExtractModelId || null,
-        sceneExtractStyle,
-      );
-      if (Array.isArray(generatedScenes) && generatedScenes.length > 0) {
-        const newScenes = generatedScenes.map((s, index) => ({
-          id: s.id || `scene-${index + 1}`,
-          location: s.location || '未命名场景',
-          time: s.time || '未标注时间',
-          description: s.description || '',
-        }));
-        handleEpisodeChange(sceneExtractEpisodeId, { scenes: newScenes });
-        handleCloseSceneExtractModal();
-      } else {
-        alert('AI 未提取到有效场景，请尝试补充剧本细节后重试');
-      }
-    } catch (e) {
-      console.error('Failed to generate scenes:', e);
-      alert(e instanceof Error ? e.message : '生成场景失败，请重试');
-    } finally {
-      setGeneratingScenes(null);
-    }
-  };
-
-  const handleCloseSceneExtractModal = () => {
-    setSceneExtractModalOpen(false);
-    setSceneExtractEpisodeId(null);
-  };
-
-  const handleExtractCharacters = async () => {
-    if (!workId) return;
-    setExtractingCharacters(true);
-    try {
-      // Aggregate all episode content
-      let combinedContent = '';
-      for (const ep of meta.episodes) {
-        combinedContent += `\n第${ep.number}集：${ep.title}\n${ep.synopsis}\n${ep.script}`;
-      }
-      if (!combinedContent.trim()) {
-        alert('没有可用的剧本内容用于提取角色');
-        return;
-      }
-      const availableModelIds = new Set(sceneExtractModels.map(model => model.model_id));
-      const preferredModelId = selectedModel && availableModelIds.has(selectedModel)
-        ? selectedModel
-        : sceneExtractModelId && availableModelIds.has(sceneExtractModelId)
-          ? sceneExtractModelId
-          : (sceneExtractModels[0]?.model_id || null);
-      const charactersData = await dramaExtractCharacters(
-        combinedContent.slice(0, 8000),
-        workId,
-        12,
-        preferredModelId,
-      );
-      if (Array.isArray(charactersData)) {
-        const newCharacters = charactersData.map(c => ({
-          id: genId(),
-          name: c.name || '未知角色',
-          role: c.role || '配角',
-          description: c.description || '',
-          appearance: c.appearance || '',
-          personality: c.personality || ''
-        }));
-        
-        // Merge with existing characters or replace
-        // Here we just append new characters that don't exist by name
-        const existingNames = new Set(meta.characters.map(c => c.name));
-        const addedCharacters = newCharacters.filter(c => !existingNames.has(c.name));
-        
-        if (addedCharacters.length > 0) {
-          handleMetaChange({ characters: [...meta.characters, ...addedCharacters] });
-        } else if (meta.characters.length === 0) {
-           handleMetaChange({ characters: newCharacters });
-        }
-      }
-    } catch (err) {
-      console.error('Failed to extract characters:', err);
-      alert(err instanceof Error ? err.message : '提取角色失败，请检查网络或重试');
-    } finally {
-      setExtractingCharacters(false);
-    }
-  };
 
   const handleGenerateCharacterImage = async (characterId: string, style: 'portrait' | 'grid4' = 'portrait') => {
     const char = meta.characters.find(c => c.id === characterId);
@@ -914,21 +939,16 @@ export default function DramaEditorPage() {
     }
   };
 
-  const handleGenerateSceneImage = async (episodeId: string, sceneId: string) => {
-    const ep = meta.episodes.find(e => e.id === episodeId);
-    if (!ep || !workId) return;
-    const scene = ep.scenes?.find(s => s.id === sceneId);
-    if (!scene) return;
+  const handleGenerateSceneImage = async (sceneId: string) => {
+    const scene = (meta.scenes || []).find(s => s.id === sceneId);
+    if (!scene || !workId) return;
 
     setGeneratingSceneImage(sceneId);
     try {
       const prompt = `为剧本生成一张场景概念图。场景地点：${scene.location}，时间：${scene.time}，描述：${scene.description}`;
       const imageUrl = await dramaGenerateImage(prompt, workId);
       if (imageUrl) {
-        const newScenes = ep.scenes!.map(s =>
-          s.id === sceneId ? { ...s, imageUrl } : s
-        );
-        handleEpisodeChange(episodeId, { scenes: newScenes });
+        handleUpdateScene(sceneId, { imageUrl });
       }
     } catch (e) {
       console.error('Failed to generate scene image:', e);
@@ -974,28 +994,6 @@ export default function DramaEditorPage() {
     }
   };
 
-  // 集数导航
-  const episodeIndex = meta.episodes.findIndex(e => e.id === activeEpisodeId);
-  const prevEpisode = episodeIndex > 0 ? meta.episodes[episodeIndex - 1] : null;
-  const nextEpisode = episodeIndex < meta.episodes.length - 1 ? meta.episodes[episodeIndex + 1] : null;
-  const activeEpisode = meta.episodes.find(e => e.id === activeEpisodeId) || null;
-
-  // Yjs 协作编辑器（按集连接）
-  const activeChapterId = activeEpisode ? episodeChapterMap[activeEpisode.number] : undefined;
-  const yjsDocumentId = workId && activeChapterId ? `work_${workId}_chapter_${activeChapterId}` : '';
-  const { editor, connectionStatus } = useYjsEditor({
-    documentId: yjsDocumentId,
-    placeholder: '开始编写剧本正文...',
-    editable: !!yjsDocumentId,
-  });
-
-  // 集数列表（供 CollabAIPanel 使用）
-  const chapterItems = meta.episodes.map(ep => ({
-    id: ep.id,
-    title: ep.title,
-    chapter_number: ep.number,
-  }));
-
   if (loading) {
     return (
       <div className="drama-editor-loading">
@@ -1021,7 +1019,14 @@ export default function DramaEditorPage() {
             {leftCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>
           <Film size={15} className="drama-editor-topbar-icon" />
-          <span className="drama-editor-topbar-title">{work?.title || '剧本'}</span>
+          <input
+            className="drama-title-input"
+            value={workTitle}
+            onChange={e => setWorkTitle(e.target.value)}
+            onBlur={e => { if (e.target.value !== work?.title) handleUpdateTitle(e.target.value); }}
+            onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            placeholder="剧本名称"
+          />
           <span className="drama-save-status">
             {saving ? '保存中...' : savedAt ? `已保存 ${savedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
@@ -1066,53 +1071,27 @@ export default function DramaEditorPage() {
             <DramaSideNav
               meta={meta}
               activeEpisodeId={activeEpisodeId}
-              onSelectEpisode={id => setActiveEpisodeId(id)}
+              onSelectEpisode={id => {
+                setActiveEpisodeId(id);
+                if (leftTab === 'work-info') setLeftTab('episodes');
+              }}
               activeTab={leftTab}
               onTabChange={setLeftTab}
               onAddEpisode={handleAddEpisode}
+              onAddEpisodeFromNovel={() => setEpisodeImportModalOpen(true)}
               onDeleteEpisode={handleDeleteEpisode}
-              onExtractCharacters={handleExtractCharacters}
-              extractingCharacters={extractingCharacters}
               onExtractOutline={handleExtractOutline}
               extractingOutline={extractingOutline}
               onGenerateCharacterImage={handleGenerateCharacterImage}
               generatingCharacterImage={generatingCharacterImage}
               onSelectCharacter={setSelectedCharacter}
+              scenes={meta.scenes || []}
+              onAddScene={handleAddScene}
+              onUpdateScene={handleUpdateScene}
+              onDeleteScene={handleDeleteScene}
+              onGenerateSceneImage={handleGenerateSceneImage}
+              generatingSceneImage={generatingSceneImage}
             />
-
-            {/* 设置面板（在左侧底部展开） */}
-            {leftTab === 'settings' && (
-              <div className="drama-settings-panel">
-                <div className="drama-settings-field">
-                  <label className="drama-field-label">剧本名称</label>
-                  <SettingsTitleEdit title={work?.title || ''} onSave={handleUpdateTitle} />
-                </div>
-                <div className="drama-settings-field">
-                  <label className="drama-field-label">类型</label>
-                  <div className="drama-tag-group">
-                    {['都市', '古装', '悬疑', '爱情', '喜剧', '科幻'].map(g => (
-                      <button key={g} className={`drama-tag sm ${meta.genre === g ? 'active' : ''}`}
-                        onClick={() => handleMetaChange({ genre: g })}>{g}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="drama-settings-field">
-                  <label className="drama-field-label">故事大纲</label>
-                  <textarea className="drama-textarea sm" rows={4} value={meta.outline}
-                    onChange={e => handleMetaChange({ outline: e.target.value })}
-                    placeholder="故事核心..." />
-                </div>
-                <div className="drama-settings-field">
-                  {meta.sourceNovelTitle && (
-                    <p className="drama-source-novel-hint">来源：{meta.sourceNovelTitle}</p>
-                  )}
-                  <button className="drama-import-novel-btn" onClick={() => setImportModalOpen(true)}>
-                    <Download size={14} />
-                    {meta.sourceNovelTitle ? '重新从小说导入' : '从小说导入'}
-                  </button>
-                </div>
-              </div>
-            )}
           </aside>
         )}
 
@@ -1132,12 +1111,6 @@ export default function DramaEditorPage() {
                 onChange={patch => handleEpisodeChange(activeEpisode.id, patch)}
                 onGenerateVideo={handleGenerateVideo}
                 generatingVideo={generatingVideo}
-                onGenerateScript={handleGenerateScript}
-                generatingScript={generatingScript}
-                onGenerateScenes={handleGenerateScenes}
-                generatingScenes={generatingScenes}
-                onGenerateSceneImage={handleGenerateSceneImage}
-                generatingSceneImage={generatingSceneImage}
                 editor={editor}
               />
               {/* 集数导航 */}
@@ -1193,6 +1166,10 @@ export default function DramaEditorPage() {
               currentUserId={currentUserId}
               selectedModel={selectedModel}
               onSelectedModelChange={setSelectedModel}
+              localTasks={localTasks}
+              extraCommands={[...DRAMA_EXTRA_COMMANDS]}
+              onExtraCommand={handleDramaCommand}
+              onCancelLocalTask={handleCancelLocalTask}
             />
           </aside>
         )}
@@ -1205,61 +1182,13 @@ export default function DramaEditorPage() {
         workId={workId}
       />
 
-      {sceneExtractModalOpen && (
-        <div className="drama-modal-overlay" onClick={handleCloseSceneExtractModal}>
-          <div className="drama-modal-content" onClick={e => e.stopPropagation()}>
-            <div className="drama-modal-header">
-              <h3>AI 提取场景设置</h3>
-              <button className="drama-modal-close" onClick={handleCloseSceneExtractModal}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="drama-modal-body">
-              <div className="drama-input-group">
-                <label>提取模型</label>
-                <select
-                  className="drama-select"
-                  value={sceneExtractModelId}
-                  onChange={e => setSceneExtractModelId(e.target.value)}
-                  disabled={loadingExtractOptions}
-                >
-                  <option value="">默认模型（系统配置）</option>
-                  {sceneExtractModels.map(model => (
-                    <option key={model.model_id} value={model.model_id}>
-                      {model.name}（{model.model_id}）
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="drama-input-group">
-                <label>生成风格</label>
-                <select
-                  className="drama-select"
-                  value={sceneExtractStyle}
-                  onChange={e => setSceneExtractStyle(e.target.value as SceneGenerationStyle)}
-                >
-                  {sceneExtractStyles.map(style => (
-                    <option key={style.id} value={style.id}>{style.label}</option>
-                  ))}
-                </select>
-                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {sceneExtractStyles.find(style => style.id === sceneExtractStyle)?.description || ''}
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button className="drama-btn-secondary" onClick={handleCloseSceneExtractModal}>取消</button>
-                <button
-                  className="drama-btn-primary"
-                  onClick={handleConfirmSceneExtract}
-                  disabled={generatingScenes === sceneExtractEpisodeId}
-                >
-                  {generatingScenes === sceneExtractEpisodeId ? '提取中...' : '开始提取'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImportEpisodeFromChapterModal
+        isOpen={episodeImportModalOpen}
+        onClose={() => setEpisodeImportModalOpen(false)}
+        onImport={handleEpisodeImportConfirm}
+        workId={workId}
+        episodeNumber={meta.episodes.length + 1}
+      />
 
       {/* 角色详情/编辑弹窗 */}
       {selectedCharacter && (
@@ -1418,7 +1347,7 @@ export default function DramaEditorPage() {
       <ShareWorkModal
         isOpen={shareModalOpen}
         workId={workId || ''}
-        workTitle={work?.title || '剧本'}
+        workTitle={workTitle || work?.title || '剧本'}
         editorPath="/drama/editor"
         onClose={() => setShareModalOpen(false)}
       />
@@ -1426,18 +1355,3 @@ export default function DramaEditorPage() {
   );
 }
 
-// 标题内联编辑
-function SettingsTitleEdit({ title, onSave }: { title: string; onSave: (t: string) => void }) {
-  const [val, setVal] = useState(title);
-  const [saved, setSaved] = useState(false);
-  const save = async () => { await onSave(val); setSaved(true); setTimeout(() => setSaved(false), 1500); };
-  return (
-    <div className="drama-input-row">
-      <input className="drama-input" value={val} onChange={e => setVal(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && save()} />
-      <button className="drama-save-inline-btn" onClick={save}>
-        {saved ? <Check size={14} /> : <Save size={14} />}
-      </button>
-    </div>
-  );
-}

@@ -122,11 +122,12 @@ export async function dramaChatStream(
   prompt: string,
   onChunk: (text: string) => void,
   workId?: string | null,
-  options?: { systemPrompt?: string; temperature?: number; maxTokens?: number },
+  options?: { systemPrompt?: string; temperature?: number; maxTokens?: number; signal?: AbortSignal },
 ): Promise<void> {
   const token = localStorage.getItem('access_token');
   const res = await fetch('/api/v1/drama/chat/stream', {
     method: 'POST',
+    signal: options?.signal,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

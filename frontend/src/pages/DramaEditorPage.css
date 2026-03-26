@@ -111,6 +111,25 @@
   max-width: 240px;
 }
 
+/* 顶栏内联标题编辑 */
+.drama-title-input {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0;
+  outline: none;
+  max-width: 240px;
+  min-width: 60px;
+  font-family: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drama-title-input::placeholder { color: var(--text-tertiary); }
+.drama-title-input:focus { color: var(--text-primary); }
+
 .drama-save-status {
   font-size: 12px;
   color: var(--text-tertiary);
@@ -557,6 +576,107 @@
   overflow: hidden;
 }
 
+/* 集标题区 */
+.drama-ep-title-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+  flex-shrink: 0;
+}
+
+.drama-ep-num-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 7px;
+  background: rgba(124, 58, 237, 0.18);
+  color: rgba(167, 139, 250, 0.9);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.drama-ep-title-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 0;
+  outline: none;
+  font-family: inherit;
+  letter-spacing: -0.02em;
+}
+.drama-ep-title-input::placeholder { color: var(--text-tertiary); font-weight: 500; }
+
+/* 剧情简介区 */
+.drama-ep-synopsis-zone {
+  flex-shrink: 0;
+  padding: 10px 20px 12px;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.drama-ep-synopsis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drama-ep-synopsis-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(167, 139, 250, 0.9);
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+.drama-ep-synopsis-ai-btn:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(124, 58, 237, 0.35);
+}
+.drama-ep-synopsis-ai-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.drama-ep-synopsis-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--glass-bg-input, rgba(255,255,255,0.03));
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+  border-radius: 7px;
+  resize: none;
+  outline: none;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+.drama-ep-synopsis-input::placeholder { color: var(--text-tertiary); }
+.drama-ep-synopsis-input:focus {
+  border-color: rgba(124, 58, 237, 0.35);
+  background: var(--glass-bg-hover, rgba(255,255,255,0.05));
+}
+
+/* 旧 header 样式保留（兼容未改动的旧代码） */
 .drama-ep-editor-header {
   padding: 14px 20px 0;
   border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.07));
@@ -1599,6 +1719,114 @@
 
 .drama-image-preview-close:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Scene sidebar list ── */
+.drama-scene-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  gap: 2px;
+}
+
+.drama-scene-sidebar-item {
+  border-radius: 8px;
+  overflow: hidden;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.drama-scene-sidebar-item:hover {
+  background: var(--glass-bg, rgba(255,255,255,0.03));
+}
+
+.drama-scene-sidebar-item.expanded {
+  background: var(--glass-bg, rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.07));
+}
+
+.drama-scene-sidebar-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 6px;
+  cursor: pointer;
+}
+
+.drama-scene-sidebar-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--glass-bg-strong, rgba(255,255,255,0.07));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.drama-scene-sidebar-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.drama-scene-sidebar-loc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drama-scene-sidebar-time {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  margin-left: 3px;
+}
+
+.drama-scene-sidebar-ep {
+  display: block;
+  font-size: 10px;
+  color: rgba(167, 139, 250, 0.55);
+  margin-top: 1px;
+}
+
+.drama-scene-sidebar-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin: 2px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drama-scene-sidebar-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  align-items: flex-start;
+  padding-top: 1px;
+}
+
+.drama-scene-sidebar-edit {
+  padding: 6px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+}
+
+.drama-scene-sidebar-img {
+  width: 100%;
+  border-radius: 5px;
+  display: block;
+  object-fit: cover;
+  max-height: 100px;
 }
 
 /* Responsive */

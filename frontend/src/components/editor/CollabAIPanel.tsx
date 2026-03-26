@@ -6,7 +6,7 @@
  * 同时提供聊天 Tab，支持 @球球 触发 AI 参与对话。
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Loader2, MessageSquare, Send, Users, Zap, Trash2 } from 'lucide-react';
 import {
   applyCollabAIMessage,
@@ -19,6 +19,7 @@ import {
   type RoomChatMessage,
 } from '../../utils/collabAiApi';
 import { formatOutlineSummary } from '../../utils/outlineFormat';
+import type { LocalDramaTask } from '../drama/dramaTypes';
 import './CollabAIPanel.css';
 
 /** 面板只需要章节的最基本字段 */
@@ -47,6 +48,14 @@ interface CollabAIPanelProps {
   onWriteToEditor?: (content: string, isDone: boolean) => void;
   selectedModel?: string;
   onSelectedModelChange?: (modelId: string) => void;
+  /** Drama 本地任务列表（前端执行，非 WebSocket） */
+  localTasks?: LocalDramaTask[];
+  /** 追加到 SLASH_COMMANDS 之后的额外命令（drama 专用） */
+  extraCommands?: Array<{ id: string; name: string; subtitle: string }>;
+  /** 用户提交了一条 extraCommand 时的回调 */
+  onExtraCommand?: (commandId: string, fullQuery: string) => void;
+  /** 取消一个本地任务 */
+  onCancelLocalTask?: (localId: string) => void;
 }
 
 // ── 小辅助组件 ───────────────────────────────────────────────────────────────
@@ -56,7 +65,7 @@ function UserAvatar({ name }: { name: string }) {
   return <div className="task-user-avatar">{initial}</div>;
 }
 
-function StatusBadge({ status }: { status: CollabAITask['status'] }) {
+function StatusBadge({ status }: { status: string }) {
   const labels: Record<string, string> = {
     queued: '排队中',
     running: 'AI 处理中',
@@ -216,6 +225,70 @@ function TaskCard({ task, canCancel, onCancel, onUseContinueRecommendation }: Ta
   );
 }
 
+// ── 本地 Drama 任务卡片 ────────────────────────────────────────────────────────
+
+const LOCAL_TASK_LABELS: Record<string, string> = {
+  'gen-script': '生成剧本正文',
+  'extract-characters': '提取角色',
+  'extract-scenes': '提取场景',
+};
+
+function LocalTaskCard({
+  task,
+  onCancel,
+}: {
+  task: LocalDramaTask;
+  onCancel?: (localId: string) => void;
+}) {
+  return (
+    <div className={`collab-ai-task ${task.status}`}>
+      <div className="task-header">
+        <div className="task-user-avatar"><Bot size={12} /></div>
+        <span className="task-chapter-badge">{task.episode_title}</span>
+        <StatusBadge status={task.status} />
+        {task.status === 'running' && onCancel && (
+          <button className="task-cancel-btn" onClick={() => onCancel(task.local_id)} title="取消">
+            取消
+          </button>
+        )}
+      </div>
+      <div className="task-query-summary">{LOCAL_TASK_LABELS[task.type] ?? task.query}</div>
+
+      {/* gen-script：流式文本 */}
+      {task.type === 'gen-script' && (
+        <>
+          {task.status === 'running' && !task.streamContent && (
+            <div className="task-loading"><LoadingDots /><span>生成剧本中…</span></div>
+          )}
+          {task.streamContent && (
+            <div className="task-stream-content">
+              <MessageContent content={task.streamContent} streaming={task.status === 'running'} />
+            </div>
+          )}
+        </>
+      )}
+
+      {/* extract：完成摘要 */}
+      {task.status === 'done' && task.type !== 'gen-script' && Array.isArray(task.result) && (
+        <div className="task-result-summary" style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+          已提取 {task.result.length} 个{task.type === 'extract-characters' ? '角色' : '场景'}，已应用到侧边栏
+        </div>
+      )}
+      {task.status === 'done' && task.type !== 'gen-script' && !Array.isArray(task.result) && (
+        <div className="task-result-summary" style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+          提取完成
+        </div>
+      )}
+
+      {task.status === 'error' && (
+        <div className="task-error" style={{ fontSize: 12, color: 'var(--error)', marginTop: 6 }}>
+          {task.error || '执行失败，请重试'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 聊天气泡 ──────────────────────────────────────────────────────────────────
 
 function ChatBubble({
@@ -348,6 +421,10 @@ export default function CollabAIPanel({
   onWriteToEditor,
   selectedModel: selectedModelProp,
   onSelectedModelChange,
+  localTasks,
+  extraCommands,
+  onExtraCommand,
+  onCancelLocalTask,
 }: CollabAIPanelProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat');
   const [tasks, setTasks] = useState<Map<string, CollabAITask>>(new Map());
@@ -369,8 +446,14 @@ export default function CollabAIPanel({
 
   // slash 命令菜单
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
-  const [cmdMenuItems, setCmdMenuItems] = useState(SLASH_COMMANDS);
+  const [cmdMenuItems, setCmdMenuItems] = useState<Array<{ id: string; name: string; subtitle: string }>>([...SLASH_COMMANDS]);
   const [cmdMenuIndex, setCmdMenuIndex] = useState(0);
+
+  // 合并内置命令 + extraCommands（drama 场景）
+  const allCommands = useMemo(
+    () => [...SLASH_COMMANDS, ...(extraCommands ?? [])],
+    [extraCommands],
+  );
 
   const clientRef = useRef<CollabAIClient | null>(null);
   const tasksEndRef = useRef<HTMLDivElement>(null);
@@ -476,9 +559,21 @@ export default function CollabAIPanel({
 
   // 发送 AI 请求（任务 tab）
   const handleSend = useCallback(() => {
-    if (!query.trim() || selectedChapterId === '' || !clientRef.current) return;
+    if (!query.trim() || !clientRef.current) return;
 
+    // 优先检查 extraCommands（drama 本地命令，不走 WebSocket）
+    const matchedExtra = (extraCommands ?? []).find(cmd => query.trim().startsWith(cmd.name));
+    if (matchedExtra && onExtraCommand) {
+      onExtraCommand(matchedExtra.id, query.trim());
+      setQuery('');
+      return;
+    }
+
+    // 普通 WebSocket 命令：需要 selectedChapterId
+    if (selectedChapterId === '') return;
     const chapterId = Number(selectedChapterId);
+    if (isNaN(chapterId)) return; // drama 模式下 episode.id 是 base36 字符串，禁止发送
+
     const chapter = chapters?.find(c => Number(c.id) === chapterId);
     const chapterTitle = chapter
       ? `第 ${chapter.chapter_number} 章 ${chapter.title}`
@@ -488,7 +583,7 @@ export default function CollabAIPanel({
     clientRef.current.sendAIRequest(chapterId, chapterTitle, query.trim(), selectedModel || undefined);
     setQuery('');
     setSending(false);
-  }, [query, selectedChapterId, chapters, selectedModel]);
+  }, [query, selectedChapterId, chapters, selectedModel, extraCommands, onExtraCommand]);
 
   // 发送聊天消息
   const handleSendChat = useCallback(() => {
@@ -518,7 +613,7 @@ export default function CollabAIPanel({
     if (lastSlash !== -1) {
       const afterSlash = textBefore.substring(lastSlash + 1);
       if (!afterSlash.includes(' ') && !afterSlash.includes('\n')) {
-        const filtered = SLASH_COMMANDS.filter(c =>
+        const filtered = allCommands.filter(c =>
           c.name.toLowerCase().includes('/' + afterSlash.toLowerCase())
         );
         if (filtered.length > 0) {
@@ -533,7 +628,7 @@ export default function CollabAIPanel({
   };
 
   // 点击菜单项选中指令
-  const handleSelectCmd = useCallback((cmd: typeof SLASH_COMMANDS[0]) => {
+  const handleSelectCmd = useCallback((cmd: { id: string; name: string; subtitle: string }) => {
     const el = taskTextareaRef.current;
     if (!el) return;
     const cursor = el.selectionStart ?? query.length;
@@ -619,12 +714,11 @@ export default function CollabAIPanel({
   // 点击 / 指令按钮：插入 / 并触发菜单
   const handleInsertSlash = () => {
     const el = taskTextareaRef.current;
-    if (!el || selectedChapterId === '') return;
+    if (!el) return;
     const newQuery = query.endsWith(' ') || query === '' ? query + '/' : query + ' /';
     setQuery(newQuery);
-    // 触发菜单
-    const filtered = SLASH_COMMANDS;
-    setCmdMenuItems(filtered);
+    // 触发菜单（包含 extraCommands）
+    setCmdMenuItems(allCommands);
     setCmdMenuIndex(0);
     setCmdMenuOpen(true);
     setTimeout(() => el.focus(), 0);
@@ -643,9 +737,19 @@ export default function CollabAIPanel({
     (a, b) => b.created_at - a.created_at,
   );
 
-  const hasActiveTasks = sortedTasks.some(
-    t => t.status === 'queued' || t.status === 'running',
-  );
+  const hasActiveTasks =
+    sortedTasks.some(t => t.status === 'queued' || t.status === 'running') ||
+    (localTasks ?? []).some(t => t.status === 'running');
+
+  // 合并远程任务和本地任务，按创建时间倒序
+  const allLocalTasks = localTasks ?? [];
+  type CombinedItem =
+    | { kind: 'remote'; task: CollabAITask; key: string }
+    | { kind: 'local'; task: LocalDramaTask; key: string };
+  const combinedTaskItems: CombinedItem[] = [
+    ...sortedTasks.map(t => ({ kind: 'remote' as const, task: t, key: t.request_id })),
+    ...allLocalTasks.map(t => ({ kind: 'local' as const, task: t, key: t.local_id })),
+  ].sort((a, b) => b.task.created_at - a.task.created_at);
 
   return (
     <div className="collab-ai-panel">
@@ -744,22 +848,30 @@ export default function CollabAIPanel({
       {activeTab === 'tasks' && (
         <>
           <div className="collab-ai-tasks">
-            {sortedTasks.length === 0 ? (
+            {combinedTaskItems.length === 0 ? (
               <div className="collab-ai-empty">
                 <Zap size={28} strokeWidth={1.5} />
-                <span>暂无协作 AI 任务</span>
-                <span>选择章节发送指令，所有协作者都能看到进度</span>
+                <span>暂无 AI 任务</span>
+                <span>输入 / 查看可用指令</span>
               </div>
             ) : (
-              sortedTasks.map(task => (
-                <TaskCard
-                  key={task.request_id}
-                  task={task}
-                  canCancel={task.user_id === currentUserId}
-                  onCancel={handleCancel}
-                  onUseContinueRecommendation={onUseContinueRecommendation}
-                />
-              ))
+              combinedTaskItems.map(item =>
+                item.kind === 'remote' ? (
+                  <TaskCard
+                    key={item.key}
+                    task={item.task}
+                    canCancel={item.task.user_id === currentUserId}
+                    onCancel={handleCancel}
+                    onUseContinueRecommendation={onUseContinueRecommendation}
+                  />
+                ) : (
+                  <LocalTaskCard
+                    key={item.key}
+                    task={item.task}
+                    onCancel={onCancelLocalTask}
+                  />
+                )
+              )
             )}
             <div ref={tasksEndRef} />
           </div>
@@ -788,11 +900,11 @@ export default function CollabAIPanel({
               <textarea
                 ref={taskTextareaRef}
                 className="chat-input-textarea"
-                placeholder={selectedChapterId ? '输入 / 查看指令…' : '请先选择章节'}
+                placeholder={selectedChapterId ? '输入 / 查看指令…' : (extraCommands?.length ? '输入 / 查看 AI 指令…' : '请先选择章节')}
                 value={query}
                 onChange={handleQueryChange}
                 onKeyDown={handleKeyDown}
-                disabled={selectedChapterId === ''}
+                disabled={selectedChapterId === '' && !extraCommands?.length}
                 rows={2}
               />
               <div className="chat-input-toolbar">
@@ -835,7 +947,7 @@ export default function CollabAIPanel({
                 <button
                   className="toolbar-chip"
                   onClick={handleInsertSlash}
-                  disabled={selectedChapterId === ''}
+                  disabled={selectedChapterId === '' && !extraCommands?.length}
                   title="插入指令"
                 >
                   / 指令
@@ -850,7 +962,7 @@ export default function CollabAIPanel({
                 <button
                   className="chat-input-send"
                   onClick={handleSend}
-                  disabled={!query.trim() || selectedChapterId === '' || sending}
+                  disabled={!query.trim() || (selectedChapterId === '' && !extraCommands?.length) || sending}
                   title="发送 (Ctrl+Enter)"
                 >
                   {sending ? <Loader2 size={13} className="spinning" /> : <Send size={13} />}
