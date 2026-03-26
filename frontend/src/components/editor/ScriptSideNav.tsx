@@ -4,27 +4,32 @@ import './ScriptSideNav.css';
 
 export type ScriptNavItem = 'work-info' | 'tags' | 'outline' | 'characters';
 
+export interface ScriptEpisode {
+  id: number;
+  title: string;
+  word_count: number;
+}
+
 interface ScriptSideNavProps {
   activeNav: ScriptNavItem;
   onNavChange: (nav: ScriptNavItem) => void;
   selectedEpisode: number | null;
   onEpisodeSelect: (episodeId: number | null) => void;
+  /** 外部传入的剧集列表（来自API）。未提供时使用内置示例数据。 */
+  episodes?: ScriptEpisode[];
+  /** 点击"新增剧集"按钮时的回调 */
+  onAddEpisode?: () => void;
 }
 
-interface Episode {
-  id: number;
-  title: string;
-  wordCount: number;
-}
-
-const mockEpisodes: Episode[] = [
-  { id: 0, title: '剧本概述', wordCount: 0 },
-  { id: 1, title: '第1集', wordCount: 0 },
+const defaultEpisodes: ScriptEpisode[] = [
+  { id: 0, title: '剧本概述', word_count: 0 },
+  { id: 1, title: '第1集', word_count: 0 },
 ];
 
-export default function ScriptSideNav({ activeNav, onNavChange, selectedEpisode, onEpisodeSelect }: ScriptSideNavProps) {
+export default function ScriptSideNav({ activeNav, onNavChange, selectedEpisode, onEpisodeSelect, episodes, onAddEpisode }: ScriptSideNavProps) {
   const [episodesExpanded, setEpisodesExpanded] = useState(true);
   const [draftsExpanded, setDraftsExpanded] = useState(false);
+  const episodeList = episodes ?? defaultEpisodes;
 
   const navItems = [
     { id: 'work-info' as ScriptNavItem, label: '作品信息', icon: BookOpen },
@@ -62,13 +67,13 @@ export default function ScriptSideNav({ activeNav, onNavChange, selectedEpisode,
             {episodesExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             <span>剧集</span>
           </button>
-          <button className="nav-add-btn" title="添加剧集">
+          <button className="nav-add-btn" title="添加剧集" onClick={onAddEpisode}>
             <Plus size={14} />
           </button>
         </div>
         {episodesExpanded && (
           <div className="nav-submenu">
-            {mockEpisodes.map((episode) => (
+            {episodeList.map((episode) => (
               <button
                 key={episode.id}
                 className={`nav-episode-item ${selectedEpisode === episode.id ? 'active' : ''}`}
@@ -77,7 +82,7 @@ export default function ScriptSideNav({ activeNav, onNavChange, selectedEpisode,
                 }}
               >
                 <span>{episode.title}</span>
-                <span className="episode-word-count">{episode.wordCount}字</span>
+                <span className="episode-word-count">{episode.word_count}字</span>
               </button>
             ))}
           </div>

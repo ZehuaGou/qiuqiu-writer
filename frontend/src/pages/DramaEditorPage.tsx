@@ -5,17 +5,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Film, Users, Layers, BookOpen, Settings,
-  Plus, Trash2, Save, Sparkles, Edit2, X,
+  ArrowLeft, Film, Users, Layers, BookOpen, Settings, FileText,
+  Plus, Trash2, Save, Sparkles, Edit2, X, Wifi, WifiOff,
   Check, Download, Video, ChevronLeft, ChevronRight as ChevronRightIcon,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
   Clapperboard, Play
 } from 'lucide-react';
+import type { Editor } from '@tiptap/react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi } from '../utils/authApi';
+import { chaptersApi } from '../utils/chaptersApi';
+import { useYjsEditor } from '../hooks/useYjsEditor';
 import { dramaChatStream, dramaChatComplete, dramaGenerateImage, dramaExtractScenes, dramaExtractCharacters, getDramaExtractOptions, type DramaExtractModelOption, type DramaSceneGenerationStyleOption } from '../utils/dramaApi';
 import CollabAIPanel from '../components/editor/CollabAIPanel';
 import ImportFromNovelModal from '../components/drama/ImportFromNovelModal';
+import ShareWorkModal from '../components/ShareWorkModal';
+import WorkInfoManager from '../components/editor/WorkInfoManager';
+import ScriptEditor from '../components/editor/ScriptEditor';
+import type { WorkData } from '../components/editor/work-info/types';
 import type { DramaCharacter, DramaEpisode, DramaMeta } from '../components/drama/dramaTypes';
 import './DramaEditorPage.css';
 
@@ -26,7 +33,7 @@ interface DramaScene {
   description: string;
 }
 
-type LeftTab = 'episodes' | 'characters' | 'outline' | 'settings';
+type LeftTab = 'work-info' | 'episodes' | 'characters' | 'outline' | 'settings';
 type SceneGenerationStyle = 'balanced' | 'cinematic' | 'concise' | 'detailed';
 
 const FALLBACK_SCENE_STYLES: DramaSceneGenerationStyleOption[] = [
@@ -91,6 +98,14 @@ function DramaSideNav({
       {/* Tab 切换 */}
       <div className="drama-sidenav-tabs">
         <button
+          className={`drama-sidenav-tab ${activeTab === 'work-info' ? 'active' : ''}`}
+          onClick={() => onTabChange('work-info')}
+          title="作品信息"
+        >
+          <BookOpen size={16} />
+          <span>作品</span>
+        </button>
+        <button
           className={`drama-sidenav-tab ${activeTab === 'episodes' ? 'active' : ''}`}
           onClick={() => onTabChange('episodes')}
           title="集数"
@@ -111,7 +126,7 @@ function DramaSideNav({
           onClick={() => onTabChange('outline')}
           title="大纲"
         >
-          <BookOpen size={16} />
+          <FileText size={16} />
           <span>大纲</span>
         </button>
         <button
@@ -123,6 +138,16 @@ function DramaSideNav({
           <span>设置</span>
         </button>
       </div>
+
+      {/* 作品信息占位（内容在主区域） */}
+      {activeTab === 'work-info' && (
+        <div className="drama-sidenav-content">
+          <div className="drama-sidenav-empty">
+            <BookOpen size={24} />
+            <p>作品信息在右侧展示</p>
+          </div>
+        </div>
+      )}
 
       {/* 集数列表 */}
       {activeTab === 'episodes' && (
@@ -295,6 +320,7 @@ function EpisodeEditor({
   generatingScenes,
   onGenerateSceneImage,
   generatingSceneImage,
+  editor,
 }: {
   episode: DramaEpisode;
   onChange: (patch: Partial<DramaEpisode>) => void;
@@ -306,6 +332,7 @@ function EpisodeEditor({
   generatingScenes: string | null;
   onGenerateSceneImage?: (episodeId: string, sceneId: string) => void;
   generatingSceneImage?: string | null;
+  editor?: Editor | null;
 }) {
   const [tab, setTab] = useState<'synopsis' | 'script' | 'scenes' | 'video'>('synopsis');
 
@@ -376,12 +403,16 @@ function EpisodeEditor({
                 <span className="drama-script-hint">需要先填写「剧情简介」</span>
               )}
             </div>
-            <textarea
-              className="drama-textarea full script-font"
-              placeholder={`INT. 场景名称 - 时间\n\n角色动作描述\n\n角色名\n台词内容\n\n...`}
-              value={episode.script}
-              onChange={e => onChange({ script: e.target.value })}
-            />
+            {editor ? (
+              <ScriptEditor editor={editor} />
+            ) : (
+              <textarea
+                className="drama-textarea full script-font"
+                placeholder={`INT. 场景名称 - 时间\n\n角色动作描述\n\n角色名\n台词内容\n\n...`}
+                value={episode.script}
+                onChange={e => onChange({ script: e.target.value })}
+              />
+            )}
           </div>
         )}
 
@@ -508,9 +539,11 @@ export default function DramaEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [leftTab, setLeftTab] = useState<LeftTab>('episodes');
+  const [leftTab, setLeftTab] = useState<LeftTab>('work-info');
+  const [episodeChapterMap, setEpisodeChapterMap] = useState<Record<number, number>>({});
   const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
@@ -575,6 +608,35 @@ export default function DramaEditorPage() {
       active = false;
     };
   }, []);
+
+  // 按集建立 Chapter 映射（用于 Yjs 协作编辑）
+  useEffect(() => {
+    if (!workId || meta.episodes.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { chapters } = await chaptersApi.listChapters({ work_id: workId });
+        if (cancelled) return;
+        const map: Record<number, number> = {};
+        for (const ch of chapters) {
+          if (ch.chapter_number) map[ch.chapter_number] = ch.id;
+        }
+        for (const ep of meta.episodes) {
+          if (!map[ep.number]) {
+            const newCh = await chaptersApi.createChapter({
+              work_id: workId,
+              title: ep.title,
+              chapter_number: ep.number,
+            });
+            if (cancelled) return;
+            map[ep.number] = newCh.id;
+          }
+        }
+        if (!cancelled) setEpisodeChapterMap(map);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [workId, meta.episodes.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 自动保存（防抖 1.5s）
   const scheduleSave = useCallback((newMeta: DramaMeta) => {
@@ -887,6 +949,15 @@ export default function DramaEditorPage() {
   const nextEpisode = episodeIndex < meta.episodes.length - 1 ? meta.episodes[episodeIndex + 1] : null;
   const activeEpisode = meta.episodes.find(e => e.id === activeEpisodeId) || null;
 
+  // Yjs 协作编辑器（按集连接）
+  const activeChapterId = activeEpisode ? episodeChapterMap[activeEpisode.number] : undefined;
+  const yjsDocumentId = workId && activeChapterId ? `work_${workId}_chapter_${activeChapterId}` : '';
+  const { editor, connectionStatus } = useYjsEditor({
+    documentId: yjsDocumentId,
+    placeholder: '开始编写剧本正文...',
+    editable: !!yjsDocumentId,
+  });
+
   // 集数列表（供 CollabAIPanel 使用）
   const chapterItems = meta.episodes.map(ep => ({
     id: ep.id,
@@ -923,12 +994,30 @@ export default function DramaEditorPage() {
           <span className="drama-save-status">
             {saving ? '保存中...' : savedAt ? `已保存 ${savedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
+          {yjsDocumentId && (
+            <span className="drama-status-tag">
+              {connectionStatus === 'connected' ? (
+                <Wifi size={12} />
+              ) : connectionStatus === 'connecting' ? (
+                <Wifi size={12} style={{ opacity: 0.5 }} />
+              ) : (
+                <WifiOff size={12} style={{ opacity: 0.4 }} />
+              )}
+              {connectionStatus === 'connected' ? '协作中' : connectionStatus === 'connecting' ? '连接中...' : '已断开'}
+            </span>
+          )}
         </div>
         <div className="drama-editor-topbar-right">
-          <button className="drama-ai-btn" title="AI 辅助创作（即将上线）">
-            <Sparkles size={14} />
-            AI 辅助
-          </button>
+          {workId && (
+            <button
+              className="drama-share-btn"
+              onClick={() => setShareModalOpen(true)}
+              title="邀请协作者"
+            >
+              <Users size={15} />
+              <span>分享</span>
+            </button>
+          )}
           <button
             className="drama-sidebar-toggle"
             onClick={() => setRightCollapsed(v => !v)}
@@ -998,7 +1087,14 @@ export default function DramaEditorPage() {
 
         {/* 主内容区 */}
         <main className="drama-editor-main">
-          {activeEpisode ? (
+          {leftTab === 'work-info' ? (
+            <div className="work-info-panel-wrapper">
+              <WorkInfoManager
+                workId={workId}
+                workData={work ? { metadata: { ...(work.metadata || {}) } } as WorkData : undefined}
+              />
+            </div>
+          ) : activeEpisode ? (
             <>
               <EpisodeEditor
                 episode={activeEpisode}
@@ -1011,6 +1107,7 @@ export default function DramaEditorPage() {
                 generatingScenes={generatingScenes}
                 onGenerateSceneImage={handleGenerateSceneImage}
                 generatingSceneImage={generatingSceneImage}
+                editor={editor}
               />
               {/* 集数导航 */}
               <div className="drama-ep-nav-footer">
@@ -1286,6 +1383,14 @@ export default function DramaEditorPage() {
           <button className="drama-image-preview-close" onClick={() => setPreviewImage(null)}>×</button>
         </div>
       )}
+
+      <ShareWorkModal
+        isOpen={shareModalOpen}
+        workId={workId || ''}
+        workTitle={work?.title || '剧本'}
+        editorPath="/drama/editor"
+        onClose={() => setShareModalOpen(false)}
+      />
     </div>
   );
 }

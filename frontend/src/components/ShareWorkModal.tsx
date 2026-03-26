@@ -9,6 +9,8 @@ interface ShareWorkModalProps {
   workId: string;
   workTitle: string;
   onClose: () => void;
+  /** 编辑器路径，用于生成分享链接。默认 '/novel/editor' */
+  editorPath?: string;
 }
 
 const PERMISSION_OPTIONS = [
@@ -146,7 +148,7 @@ function PermSelect({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: ShareWorkModalProps) {
+export default function ShareWorkModal({ isOpen, workId, workTitle, onClose, editorPath = '/novel/editor' }: ShareWorkModalProps) {
   const [collaborators, setCollaborators] = useState<WorkCollaborator[]>([]);
   const [loading, setLoading] = useState(false);
   const [inputVal, setInputVal] = useState('');
@@ -230,7 +232,7 @@ export default function ShareWorkModal({ isOpen, workId, workTitle, onClose }: S
   };
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}/novel/editor?workId=${workId}`;
+    const url = `${window.location.origin}${editorPath}?workId=${workId}`;
     
     // 尝试使用 navigator.clipboard (仅在安全上下文 HTTPS/localhost 可用)
     if (navigator.clipboard && window.isSecureContext) {

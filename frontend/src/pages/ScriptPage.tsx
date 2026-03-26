@@ -1,10 +1,33 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, FileText, ChevronLeft, ChevronRight, ChevronDown, Search } from 'lucide-react';
+import { worksApi } from '../utils/worksApi';
+import { chaptersApi } from '../utils/chaptersApi';
 import './ScriptPage.css';
 
 export default function ScriptPage() {
   const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
   const currentPage = 1;
+
+  const handleNewScript = async () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const work = await worksApi.createWork({ title: '新剧本', work_type: 'script' });
+      // 自动创建第一集
+      await chaptersApi.createChapter({
+        work_id: work.id,
+        title: '第1集',
+        chapter_number: 1,
+      });
+      navigate(`/script/editor?workId=${work.id}`);
+    } catch {
+      // ignore
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="script-page">
@@ -15,7 +38,10 @@ export default function ScriptPage() {
         </div>
         <div className="script-new-cards">
           {/* 新建空白剧本 */}
-          <div className="script-new-card primary" onClick={() => navigate('/script/editor')}>
+          <div
+            className={`script-new-card primary${creating ? ' loading' : ''}`}
+            onClick={handleNewScript}
+          >
             <div className="card-icon-wrapper">
               <div className="card-icon-bg primary-bg" />
               <div className="card-icon primary-icon">
@@ -92,4 +118,3 @@ export default function ScriptPage() {
     </div>
   );
 }
-

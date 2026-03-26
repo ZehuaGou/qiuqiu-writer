@@ -75,6 +75,27 @@
   color: var(--text-primary);
 }
 
+.drama-share-btn {
+  height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: var(--glass-bg, rgba(255,255,255,0.04));
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.drama-share-btn:hover {
+  background: var(--glass-bg-strong, rgba(255,255,255,0.07));
+  color: var(--text-primary);
+}
+
 .drama-editor-topbar-icon {
   color: rgba(167, 139, 250, 0.8);
   flex-shrink: 0;
@@ -94,6 +115,20 @@
   font-size: 12px;
   color: var(--text-tertiary);
   white-space: nowrap;
+}
+
+.drama-status-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(52, 211, 153, 0.1);
+  color: rgba(52, 211, 153, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .drama-ai-btn {
@@ -494,6 +529,14 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.work-info-panel-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+  min-height: 0;
 }
 
 /* ── Right sidebar (AI panel) ── */
