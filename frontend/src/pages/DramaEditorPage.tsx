@@ -5,28 +5,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Film, Users, Layers, BookOpen, MapPin, FileText,
+  ArrowLeft, Film, Users, Layers, BookOpen, MapPin,
   Plus, Trash2, Save, Sparkles, Edit2, X, Wifi, WifiOff,
   Download, Video, ChevronLeft, ChevronRight as ChevronRightIcon,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Settings
 } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi } from '../utils/authApi';
 import { chaptersApi } from '../utils/chaptersApi';
 import { useYjsEditor } from '../hooks/useYjsEditor';
-import { dramaChatStream, dramaChatComplete, dramaGenerateImage, dramaExtractScenes, dramaExtractCharacters, getDramaExtractOptions, type DramaExtractModelOption, type DramaSceneGenerationStyleOption } from '../utils/dramaApi';
+import { dramaChatStream, dramaGenerateImage, dramaExtractScenes, dramaExtractCharacters, getDramaExtractOptions, type DramaExtractModelOption, type DramaSceneGenerationStyleOption } from '../utils/dramaApi';
 import CollabAIPanel from '../components/editor/CollabAIPanel';
 import ImportFromNovelModal from '../components/drama/ImportFromNovelModal';
 import ImportEpisodeFromChapterModal from '../components/drama/ImportEpisodeFromChapterModal';
 import ShareWorkModal from '../components/ShareWorkModal';
 import WorkInfoManager from '../components/editor/WorkInfoManager';
-import ScriptEditor from '../components/editor/ScriptEditor';
+import DramaScriptEditor from '../components/editor/DramaScriptEditor';
 import type { WorkData } from '../components/editor/work-info/types';
 import type { DramaCharacter, DramaEpisode, DramaMeta, DramaScene, LocalDramaTask } from '../components/drama/dramaTypes';
 import './DramaEditorPage.css';
 
-type LeftTab = 'work-info' | 'episodes' | 'characters' | 'scenes' | 'outline';
+type LeftTab = 'work-info' | 'episodes' | 'characters' | 'scenes';
 
 const FALLBACK_SCENE_STYLES: DramaSceneGenerationStyleOption[] = [
   { id: 'balanced', label: '平衡', description: '镜头感与信息量均衡，适合通用场景提取。' },
@@ -39,13 +39,20 @@ function genId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function textToHtml(text: string): string {
-  const html = text
-    .split('\n\n')
-    .map(para => para.trim())
-    .filter(para => para.length > 0)
-    .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
-    .join('');
+/** 将 AI 输出的结构标记文本转为 TipTap HTML（剧本格式） */
+function screenplayTextToHtml(text: string): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const html = lines.map(line => {
+    if (line.startsWith('【场】')) return `<h1>${esc(line.slice(3))}</h1>`;
+    if (line.startsWith('【名】')) return `<h2>${esc(line.slice(3))}</h2>`;
+    if (line.startsWith('【提】')) return `<h3>${esc(line.slice(3))}</h3>`;
+    if (line.startsWith('【白】')) return `<blockquote><p>${esc(line.slice(3))}</p></blockquote>`;
+    if (line.startsWith('【动】')) return `<p>${esc(line.slice(3))}</p>`;
+    // 兼容 AI 偶尔遗漏标记时的普通文本
+    return `<p>${esc(line)}</p>`;
+  }).join('');
   return html || '<p></p>';
 }
 
@@ -104,8 +111,6 @@ function DramaSideNav({
   onAddEpisode,
   onAddEpisodeFromNovel,
   onDeleteEpisode,
-  onExtractOutline,
-  extractingOutline,
   onGenerateCharacterImage,
   generatingCharacterImage,
   onSelectCharacter,
@@ -124,8 +129,6 @@ function DramaSideNav({
   onAddEpisode: () => void;
   onAddEpisodeFromNovel?: () => void;
   onDeleteEpisode: (id: string) => void;
-  onExtractOutline?: () => void;
-  extractingOutline?: boolean;
   onGenerateCharacterImage?: (id: string) => void;
   generatingCharacterImage?: string | null;
   onSelectCharacter?: (c: DramaCharacter) => void;
@@ -174,14 +177,6 @@ function DramaSideNav({
         >
           <MapPin size={16} />
           <span>场景</span>
-        </button>
-        <button
-          className={`drama-sidenav-tab ${activeTab === 'outline' ? 'active' : ''}`}
-          onClick={() => onTabChange('outline')}
-          title="大纲"
-        >
-          <FileText size={16} />
-          <span>大纲</span>
         </button>
       </div>
 
@@ -409,43 +404,63 @@ function DramaSideNav({
         </div>
       )}
 
-      {/* 大纲 */}
-      {activeTab === 'outline' && (
-        <div className="drama-sidenav-content drama-sidenav-outline">
-          <div className="drama-sidenav-header">
-            <span className="drama-sidenav-count">故事大纲</span>
-            {onExtractOutline && (
-              <button
-                className="drama-sidenav-add"
-                onClick={onExtractOutline}
-                title="从剧本/简介提取大纲"
-                disabled={extractingOutline}
-              >
-                <Sparkles size={14} />
-              </button>
-            )}
-          </div>
-          <p className="drama-outline-preview">
-            {meta.outline || (
-              <span className="drama-outline-empty">
-                暂无大纲
-                {onExtractOutline && (
-                  <button className="drama-sidenav-add-btn" onClick={onExtractOutline} disabled={extractingOutline} style={{ marginTop: '10px' }}>
-                    <Sparkles size={13} /> {extractingOutline ? '提取中...' : 'AI 提取大纲'}
-                  </button>
-                )}
-              </span>
-            )}
-          </p>
-          {meta.genre && <span className="drama-outline-tag">{meta.genre}</span>}
-          {meta.style && <span className="drama-outline-tag">{meta.style}</span>}
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── 集数编辑器（无 Tab，标题区 + 简介区 + 正文区） ─────────
+// ─── 集数设置模态框 ─────────────────────────────────────────
+function EpisodeSettingsModal({
+  episode,
+  onChange,
+  onClose,
+}: {
+  episode: DramaEpisode;
+  onChange: (patch: Partial<DramaEpisode>) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="drama-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="drama-modal-content" style={{ maxWidth: 520 }}>
+        <div className="drama-modal-header">
+          <h3>第{episode.number}集设置</h3>
+          <button className="drama-modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="drama-modal-body" style={{ gap: 16, padding: '20px' }}>
+          {/* 集标题 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label className="drama-field-label" style={{ margin: 0 }}>集标题</label>
+            <input
+              className="drama-ep-title-input"
+              style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: 8, padding: '8px 12px' }}
+              value={episode.title}
+              onChange={e => onChange({ title: e.target.value })}
+              placeholder={`第${episode.number}集标题`}
+            />
+          </div>
+          {/* 来源提示 */}
+          {episode.sourceChapterTitle && (
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              来自《{episode.sourceChapterTitle}》
+            </div>
+          )}
+          {/* 剧情简介 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label className="drama-field-label" style={{ margin: 0 }}>剧情简介</label>
+            <textarea
+              className="drama-ep-synopsis-input"
+              placeholder="这一集发生了什么？主要冲突和转折点是什么？"
+              value={episode.synopsis}
+              onChange={e => onChange({ synopsis: e.target.value })}
+              rows={5}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 集数编辑器（标题区 + 正文区） ──────────────────────────
 function EpisodeEditor({
   episode,
   onChange,
@@ -459,6 +474,8 @@ function EpisodeEditor({
   generatingVideo: string | null;
   editor?: Editor | null;
 }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
     <div className="drama-ep-editor">
       {/* 标题区 */}
@@ -475,6 +492,14 @@ function EpisodeEditor({
         )}
         <button
           className="drama-icon-btn"
+          title="集数设置（简介等）"
+          onClick={() => setSettingsOpen(true)}
+          style={{ flexShrink: 0 }}
+        >
+          <Settings size={15} />
+        </button>
+        <button
+          className="drama-icon-btn"
           title={generatingVideo === episode.id ? '生成中...' : '生成视频'}
           onClick={() => onGenerateVideo(episode.id)}
           disabled={generatingVideo === episode.id}
@@ -484,24 +509,10 @@ function EpisodeEditor({
         </button>
       </div>
 
-      {/* 剧情简介区 */}
-      <div className="drama-ep-synopsis-zone">
-        <div className="drama-ep-synopsis-header">
-          <span className="drama-field-label" style={{ margin: 0 }}>剧情简介</span>
-        </div>
-        <textarea
-          className="drama-ep-synopsis-input"
-          placeholder="这一集发生了什么？主要冲突和转折点是什么？"
-          value={episode.synopsis}
-          onChange={e => onChange({ synopsis: e.target.value })}
-          rows={3}
-        />
-      </div>
-
       {/* 剧本正文区（全高度） */}
       <div className="drama-script-area">
         {editor ? (
-          <ScriptEditor editor={editor} />
+          <DramaScriptEditor editor={editor} />
         ) : (
           <textarea
             className="drama-textarea full script-font"
@@ -511,6 +522,15 @@ function EpisodeEditor({
           />
         )}
       </div>
+
+      {/* 集数设置模态框 */}
+      {settingsOpen && (
+        <EpisodeSettingsModal
+          episode={episode}
+          onChange={onChange}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -541,7 +561,6 @@ export default function DramaEditorPage() {
   const [generatingVideo, setGeneratingVideo] = useState<string | null>(null);
   const [generatingCharacterImage, setGeneratingCharacterImage] = useState<string | null>(null);
   const [generatingSceneImage, setGeneratingSceneImage] = useState<string | null>(null);
-  const [extractingOutline, setExtractingOutline] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [sceneExtractModels, setSceneExtractModels] = useState<DramaExtractModelOption[]>([]);
   const [sceneExtractStyles, setSceneExtractStyles] = useState<DramaSceneGenerationStyleOption[]>(FALLBACK_SCENE_STYLES);
@@ -846,7 +865,13 @@ export default function DramaEditorPage() {
         `\n剧情简介：${ep.synopsis}`,
         characters ? `\n主要角色：${characters}` : '',
         meta.outline ? `\n故事背景：${meta.outline}` : '',
-        '\n\n要求：使用标准剧本格式，包含场景说明（INT./EXT.）、角色动作描述和对白。直接输出剧本内容，不要额外说明。',
+        '\n\n输出格式要求：每行必须以下列前缀之一开头，每行只含一种内容，不得有多余说明：\n' +
+        '【场】场次标题（如：【场】INT. 地点 - 时间）\n' +
+        '【动】动作/环境描述\n' +
+        '【名】角色名（单独一行，后跟对白或舞台提示）\n' +
+        '【提】括弧内的舞台提示（如：【提】低声，握紧拳头）\n' +
+        '【白】角色对白（紧接在【名】或【提】之后）\n' +
+        '直接输出剧本，不要额外解释。',
       ].filter(Boolean).join('');
 
       const abortController = new AbortController();
@@ -863,7 +888,7 @@ export default function DramaEditorPage() {
         prompt,
         (chunk: string) => {
           accumulated += chunk;
-          editor?.commands.setContent(textToHtml(accumulated));
+          editor?.commands.setContent(screenplayTextToHtml(accumulated));
           setLocalTasks(prev => prev.map(t =>
             t.local_id === localId ? { ...t, streamContent: accumulated } : t
           ));
@@ -958,41 +983,6 @@ export default function DramaEditorPage() {
     }
   };
 
-  const handleExtractOutline = async () => {
-    if (!workId) return;
-    setExtractingOutline(true);
-    try {
-      // Aggregate all episode content
-      let combinedContent = '';
-      for (const ep of meta.episodes) {
-        combinedContent += `\n第${ep.number}集：${ep.title}\n${ep.synopsis}\n${ep.script}`;
-      }
-      if (!combinedContent.trim()) {
-        alert('没有可用的剧本内容用于提取大纲');
-        return;
-      }
-      
-      const prompt = [
-        `请根据以下剧本内容，提取出剧本的整体大纲（约300字）。`,
-        `\n剧本内容：\n${combinedContent.slice(0, 8000)}`,
-        `\n要求：只返回大纲内容，不要输出任何标题或其他说明。`
-      ].join('\n');
-      
-      const responseText = await dramaChatComplete(prompt, workId, {
-        systemPrompt: '你是一个专业的剧本大纲提取助手。'
-      });
-      
-      const outline = responseText.trim();
-      if (outline) {
-        handleMetaChange({ outline });
-      }
-    } catch (err) {
-      console.error('Failed to extract outline:', err);
-      alert('提取大纲失败，请检查网络或重试');
-    } finally {
-      setExtractingOutline(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -1080,8 +1070,6 @@ export default function DramaEditorPage() {
               onAddEpisode={handleAddEpisode}
               onAddEpisodeFromNovel={() => setEpisodeImportModalOpen(true)}
               onDeleteEpisode={handleDeleteEpisode}
-              onExtractOutline={handleExtractOutline}
-              extractingOutline={extractingOutline}
               onGenerateCharacterImage={handleGenerateCharacterImage}
               generatingCharacterImage={generatingCharacterImage}
               onSelectCharacter={setSelectedCharacter}

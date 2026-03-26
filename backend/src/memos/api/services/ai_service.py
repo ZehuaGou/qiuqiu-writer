@@ -3,6 +3,7 @@ AI服务层
 处理AI模型调用和章节分析逻辑
 """
 
+import asyncio
 import json
 import os
 from datetime import datetime, timezone
@@ -154,9 +155,86 @@ class AIService:
 
             # 3. 调用图片生成API
             logger.info(f"Generating image with prompt: {prompt}, model: {actual_model}")
-            
-            # 特殊处理 MiniMax 的非标准 OpenAI 图片生成接口
-            if client.base_url and "minimaxi.com" in str(client.base_url):
+
+            # ── 特殊处理：DashScope Qwen 图像模型（非 OpenAI 兼容格式）──────────
+            _base_str = str(client.base_url).lower()
+            _is_dashscope = "dashscope.aliyuncs.com" in _base_str
+            _is_qwen_image = actual_model.lower().startswith("qwen-image") or actual_model.lower().startswith("wanx")
+            if _is_dashscope and _is_qwen_image:
+                import httpx
+                # DashScope 图像生成端点（无论 base_url 如何配置，均使用固定端点）
+                DASHSCOPE_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+                # qwen-image-2.0 使用 multimodal 端点
+                if "qwen-image" in actual_model.lower():
+                    DASHSCOPE_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+
+                # size 格式转换：1024x1024 → 1024*1024
+                dashscope_size = size.replace("x", "*")
+
+                async with httpx.AsyncClient() as httpx_client:
+                    headers = {
+                        "Authorization": f"Bearer {client.api_key}",
+                        "Content-Type": "application/json",
+                    }
+                    payload = {
+                        "model": actual_model,
+                        "input": {
+                            "messages": [
+                                {"role": "user", "content": [{"text": prompt}]}
+                            ]
+                        },
+                        "parameters": {
+                            "size": dashscope_size,
+                            "prompt_extend": True,
+                            "watermark": False,
+                        },
+                    }
+                    resp = await httpx_client.post(
+                        DASHSCOPE_IMAGE_URL, headers=headers, json=payload, timeout=120.0
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    output = data.get("output", {})
+                    task_id = output.get("task_id")
+                    task_status = output.get("task_status", "")
+
+                    # 同步返回（极少见）
+                    if task_status == "SUCCEEDED":
+                        results = output.get("results", [])
+                        image_url = results[0].get("url") if results else None
+                    elif task_id:
+                        # 轮询任务结果
+                        poll_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
+                        poll_headers = {
+                            "Authorization": f"Bearer {client.api_key}",
+                        }
+                        for _ in range(40):  # 最多等待 120 秒
+                            await asyncio.sleep(3)
+                            poll_resp = await httpx_client.get(
+                                poll_url, headers=poll_headers, timeout=30.0
+                            )
+                            poll_resp.raise_for_status()
+                            poll_data = poll_resp.json()
+                            poll_output = poll_data.get("output", {})
+                            poll_status = poll_output.get("task_status", "")
+                            if poll_status == "SUCCEEDED":
+                                results = poll_output.get("results", [])
+                                image_url = results[0].get("url") if results else None
+                                break
+                            elif poll_status == "FAILED":
+                                raise ValueError(
+                                    f"DashScope 图片生成失败: {poll_output.get('message', '未知错误')}"
+                                )
+                        else:
+                            raise ValueError("DashScope 图片生成超时，请稍后重试")
+                    else:
+                        raise ValueError(f"DashScope 返回格式异常: {data}")
+
+                    if not image_url:
+                        raise ValueError("DashScope 返回的图片 URL 为空")
+
+            # ── 特殊处理：MiniMax 非标准 OpenAI 图片生成接口 ─────────────────
+            elif client.base_url and "minimaxi.com" in str(client.base_url):
                 import httpx
                 import re
 
