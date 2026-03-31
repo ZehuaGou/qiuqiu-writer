@@ -23,6 +23,18 @@ export interface DramaCharacterExtractItem {
   personality: string;
 }
 
+export interface DramaPanelItem {
+  id: string;
+  index: number;
+  shotType: string;
+  action: string;
+  characters: string[];
+  dialogue?: string | null;
+  emotion?: string;
+  imageUrl?: string | null;
+  imagePrompt?: string | null;
+}
+
 export interface DramaExtractModelOption {
   id: string;
   name: string;
@@ -61,13 +73,14 @@ export async function dramaChatComplete(
 export async function dramaGenerateImage(
   prompt: string,
   workId?: string | null,
-  options?: { model?: string; size?: string },
+  options?: { model?: string; size?: string; referenceImageUrls?: string[] },
 ): Promise<string> {
   const res = await client.post<{ imageUrl: string }>('/api/v1/drama/image', {
     prompt,
     work_id: workId ?? null,
     model: options?.model ?? 'dall-e-3',
     size: options?.size ?? '1024x1024',
+    reference_image_urls: options?.referenceImageUrls ?? [],
   });
   return res.imageUrl;
 }
@@ -122,6 +135,29 @@ export async function dramaExtractCharacters(
     model_id: modelId ?? null,
   });
   return Array.isArray(res.items) ? res.items : [];
+}
+
+export async function dramaGenerateStoryboard(
+  script: string,
+  options?: {
+    episodeTitle?: string;
+    episodeSynopsis?: string;
+    characters?: Array<{ name: string; role: string }>;
+    workId?: string | null;
+    modelId?: string | null;
+    maxPanels?: number;
+  },
+): Promise<{ panels: DramaPanelItem[]; total: number }> {
+  const res = await client.post<{ panels: DramaPanelItem[]; total: number }>('/api/v1/drama/storyboard/generate', {
+    script,
+    episode_title: options?.episodeTitle ?? '',
+    episode_synopsis: options?.episodeSynopsis ?? '',
+    characters: options?.characters ?? [],
+    work_id: options?.workId ?? null,
+    model_id: options?.modelId ?? null,
+    max_panels: options?.maxPanels ?? 12,
+  });
+  return { panels: Array.isArray(res.panels) ? res.panels : [], total: res.total ?? 0 };
 }
 
 export async function dramaChatStream(

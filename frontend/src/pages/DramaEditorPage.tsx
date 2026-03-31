@@ -7,15 +7,16 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Film, Users, Layers, BookOpen, MapPin,
   Plus, Trash2, Save, Sparkles, Edit2, X, Wifi, WifiOff,
-  Download, Video, ChevronLeft, ChevronRight as ChevronRightIcon,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Settings
+  Download, ChevronLeft, ChevronRight as ChevronRightIcon,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Settings,
+  Clapperboard, Check
 } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi } from '../utils/authApi';
 import { chaptersApi } from '../utils/chaptersApi';
 import { useYjsEditor } from '../hooks/useYjsEditor';
-import { dramaChatStream, dramaGenerateImage, dramaExtractScenes, dramaExtractCharacters, getDramaExtractOptions, type DramaExtractModelOption, type DramaSceneGenerationStyleOption } from '../utils/dramaApi';
+import { dramaChatStream, dramaGenerateImage, dramaExtractScenes, dramaExtractCharacters, getDramaExtractOptions, dramaGenerateStoryboard, type DramaExtractModelOption, type DramaSceneGenerationStyleOption } from '../utils/dramaApi';
 import CollabAIPanel from '../components/editor/CollabAIPanel';
 import MessageModal from '../components/common/MessageModal';
 import { useModalState } from '../hooks/useModalState';
@@ -24,11 +25,12 @@ import ImportEpisodeFromChapterModal from '../components/drama/ImportEpisodeFrom
 import ShareWorkModal from '../components/ShareWorkModal';
 import WorkInfoManager from '../components/editor/WorkInfoManager';
 import DramaScriptEditor from '../components/editor/DramaScriptEditor';
+import StoryboardView from '../components/drama/StoryboardView';
 import type { WorkData } from '../components/editor/work-info/types';
-import type { DramaCharacter, DramaEpisode, DramaMeta, DramaScene, LocalDramaTask } from '../components/drama/dramaTypes';
+import type { DramaCharacter, DramaEpisode, DramaMeta, DramaScene, DramaStoryboard, LocalDramaTask, EpisodeProductionStatus } from '../components/drama/dramaTypes';
 import './DramaEditorPage.css';
 
-type LeftTab = 'work-info' | 'episodes' | 'characters' | 'scenes';
+type LeftTab = 'work-info' | 'episodes' | 'characters' | 'scenes' | 'production';
 
 const FALLBACK_SCENE_STYLES: DramaSceneGenerationStyleOption[] = [
   { id: 'balanced', label: '平衡', description: '镜头感与信息量均衡，适合通用场景提取。' },
@@ -103,6 +105,16 @@ function parseMeta(work: Work): DramaMeta {
   };
 }
 
+/** 计算集数各生产阶段的完成状态 */
+function getEpisodeProductionStatus(ep: DramaEpisode): EpisodeProductionStatus {
+  return {
+    script: ep.script && ep.script.trim().length > 30 ? 'done' : 'empty',
+    storyboard: ep.storyboard && ep.storyboard.panels.length > 0 ? 'done' : 'empty',
+    panels: ep.storyboard?.panels.some(p => p.imageUrl) ? 'done' : 'empty',
+    video: ep.videoUrl ? 'done' : 'empty',
+  };
+}
+
 // ─── 左侧导航 ────────────────────────────────────────────────
 function DramaSideNav({
   meta,
@@ -122,6 +134,7 @@ function DramaSideNav({
   onGenerateSceneImage,
   generatingSceneImage,
   onSelectScene,
+  onGenerateStoryboard,
 }: {
   meta: DramaMeta;
   activeEpisodeId: string | null;
@@ -140,6 +153,7 @@ function DramaSideNav({
   onGenerateSceneImage?: (sceneId: string) => void;
   generatingSceneImage?: string | null;
   onSelectScene?: (scene: DramaScene) => void;
+  onGenerateStoryboard?: (episodeId: string) => void;
 }) {
   const sceneList = scenes || [];
 
@@ -178,6 +192,14 @@ function DramaSideNav({
         >
           <MapPin size={16} />
           <span>场景</span>
+        </button>
+        <button
+          className={`drama-sidenav-tab ${activeTab === 'production' ? 'active production-tab-active' : ''}`}
+          onClick={() => onTabChange('production')}
+          title="漫剧制作中心"
+        >
+          <Clapperboard size={16} />
+          <span>制作</span>
         </button>
       </div>
 
@@ -222,34 +244,40 @@ function DramaSideNav({
                 )}
               </div>
             ) : (
-              meta.episodes.map(ep => (
-                <div
-                  key={ep.id}
-                  className={`drama-ep-nav-item ${activeEpisodeId === ep.id ? 'active' : ''}`}
-                  onClick={() => onSelectEpisode(ep.id)}
-                >
-                  <div className="drama-ep-nav-num">{ep.number}</div>
-                  <div className="drama-ep-nav-info">
-                    <span className="drama-ep-nav-title">{ep.title}</span>
-                    {ep.synopsis && (
-                      <span className="drama-ep-nav-synopsis">{ep.synopsis}</span>
-                    )}
-                  </div>
-                  {ep.videoUrl && (
-                    <div className="drama-ep-nav-video-dot" title="已生成视频" />
-                  )}
-                  <button
-                    className="drama-ep-nav-delete"
-                    title="删除本集"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onDeleteEpisode(ep.id);
-                    }}
+              meta.episodes.map(ep => {
+                const prodStatus = getEpisodeProductionStatus(ep);
+                return (
+                  <div
+                    key={ep.id}
+                    className={`drama-ep-nav-item ${activeEpisodeId === ep.id ? 'active' : ''}`}
+                    onClick={() => onSelectEpisode(ep.id)}
                   >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))
+                    <div className="drama-ep-nav-num">{ep.number}</div>
+                    <div className="drama-ep-nav-info">
+                      <span className="drama-ep-nav-title">{ep.title}</span>
+                      {ep.synopsis && (
+                        <span className="drama-ep-nav-synopsis">{ep.synopsis}</span>
+                      )}
+                      <div className="drama-ep-prod-stages">
+                        <span className={`drama-ep-prod-dot ${prodStatus.script === 'done' ? 'done-script' : ''}`} title="剧本" />
+                        <span className={`drama-ep-prod-dot ${prodStatus.storyboard === 'done' ? 'done-storyboard' : ''}`} title="分镜" />
+                        <span className={`drama-ep-prod-dot ${prodStatus.panels === 'done' ? 'done-panels' : ''}`} title="分镜图" />
+                        <span className={`drama-ep-prod-dot ${prodStatus.video === 'done' ? 'done-video' : ''}`} title="视频" />
+                      </div>
+                    </div>
+                    <button
+                      className="drama-ep-nav-delete"
+                      title="删除本集"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onDeleteEpisode(ep.id);
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -373,6 +401,105 @@ function DramaSideNav({
         </div>
       )}
 
+      {/* 制作中心 */}
+      {activeTab === 'production' && (() => {
+        const totalCount = meta.episodes.length;
+        const completedCount = meta.episodes.filter(ep => getEpisodeProductionStatus(ep).video === 'done').length;
+        const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+        // 各阶段完成数量
+        const scriptDone = meta.episodes.filter(ep => getEpisodeProductionStatus(ep).script === 'done').length;
+        const storyboardDone = meta.episodes.filter(ep => getEpisodeProductionStatus(ep).storyboard === 'done').length;
+        const panelsDone = meta.episodes.filter(ep => getEpisodeProductionStatus(ep).panels === 'done').length;
+        const videoDone = meta.episodes.filter(ep => getEpisodeProductionStatus(ep).video === 'done').length;
+        return (
+          <div className="drama-sidenav-content drama-production-center">
+            <div className="drama-prod-overview">
+              <div className="drama-prod-overview-title">漫剧制作中心</div>
+              <div className="drama-prod-stage-stats">
+                <div className="drama-prod-stage-stat">
+                  <span className="drama-prod-stage-dot done-script" />
+                  <span>{scriptDone}/{totalCount} 剧本</span>
+                </div>
+                <div className="drama-prod-stage-stat">
+                  <span className="drama-prod-stage-dot done-storyboard" />
+                  <span>{storyboardDone}/{totalCount} 分镜</span>
+                </div>
+                <div className="drama-prod-stage-stat">
+                  <span className="drama-prod-stage-dot done-panels" />
+                  <span>{panelsDone}/{totalCount} 图片</span>
+                </div>
+                <div className="drama-prod-stage-stat">
+                  <span className="drama-prod-stage-dot done-video" />
+                  <span>{videoDone}/{totalCount} 视频</span>
+                </div>
+              </div>
+              <div className="drama-prod-progress-bar-wrap">
+                <div className="drama-prod-progress-bar">
+                  <div className="drama-prod-progress-fill" style={{ width: `${progressPercent}%` }} />
+                </div>
+                <span className="drama-prod-progress-label">{completedCount}/{totalCount} 集成片</span>
+              </div>
+            </div>
+
+            <div className="drama-prod-batch-actions">
+              <button
+                className="drama-prod-batch-btn storyboard"
+                onClick={() => {
+                  const ep = meta.episodes.find(e => getEpisodeProductionStatus(e).script === 'done' && getEpisodeProductionStatus(e).storyboard !== 'done');
+                  if (ep) onGenerateStoryboard?.(ep.id);
+                }}
+                disabled={meta.episodes.every(ep => getEpisodeProductionStatus(ep).storyboard === 'done' || getEpisodeProductionStatus(ep).script !== 'done')}
+                title="为第一个已完成剧本但未生成分镜的集数生成分镜"
+              >
+                <Clapperboard size={13} />
+                批量生成分镜
+              </button>
+            </div>
+
+            {totalCount === 0 ? (
+              <div className="drama-sidenav-empty" style={{ marginTop: 16 }}>
+                <p>还没有集数</p>
+              </div>
+            ) : (
+              <div className="drama-prod-ep-table">
+                <div className="drama-prod-ep-table-header">
+                  <span>集</span>
+                  <span title="剧本完成">剧</span>
+                  <span title="分镜完成">镜</span>
+                  <span title="分镜图完成">图</span>
+                  <span title="视频完成">频</span>
+                </div>
+                {meta.episodes.map(ep => {
+                  const s = getEpisodeProductionStatus(ep);
+                  return (
+                    <div
+                      key={ep.id}
+                      className={`drama-prod-ep-row ${activeEpisodeId === ep.id ? 'active' : ''}`}
+                      onClick={() => { onSelectEpisode(ep.id); onTabChange('episodes'); }}
+                      title={`${ep.title} — 点击切换`}
+                    >
+                      <span className="drama-prod-ep-num">E{ep.number}</span>
+                      <span className={`drama-prod-status-cell ${s.script === 'done' ? 'done' : ''}`}>
+                        {s.script === 'done' ? <Check size={10} /> : '·'}
+                      </span>
+                      <span className={`drama-prod-status-cell ${s.storyboard === 'done' ? 'done' : ''}`}>
+                        {s.storyboard === 'done' ? <Check size={10} /> : '·'}
+                      </span>
+                      <span className={`drama-prod-status-cell ${s.panels === 'done' ? 'done' : ''}`}>
+                        {s.panels === 'done' ? <Check size={10} /> : '·'}
+                      </span>
+                      <span className={`drama-prod-status-cell ${s.video === 'done' ? 'done' : ''}`}>
+                        {s.video === 'done' ? <Check size={10} /> : '·'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
@@ -435,15 +562,33 @@ function EpisodeEditor({
   onChange,
   onGenerateVideo,
   generatingVideo,
+  onGenerateStoryboard,
+  generatingStoryboard,
+  viewMode,
+  onSwitchToStoryboard,
+  onSwitchToScript,
   editor,
+  meta,
+  workId,
+  selectedImageSize,
 }: {
   episode: DramaEpisode;
   onChange: (patch: Partial<DramaEpisode>) => void;
   onGenerateVideo: (episodeId: string) => void;
   generatingVideo: string | null;
+  onGenerateStoryboard?: (episodeId: string) => void;
+  generatingStoryboard?: boolean;
+  viewMode?: 'script' | 'storyboard';
+  onSwitchToStoryboard?: () => void;
+  onSwitchToScript?: () => void;
   editor?: Editor | null;
+  meta: DramaMeta;
+  workId: string | null;
+  selectedImageSize?: string;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const prodStatus = getEpisodeProductionStatus(episode);
+  const isStoryboard = viewMode === 'storyboard';
 
   return (
     <div className="drama-ep-editor">
@@ -459,6 +604,17 @@ function EpisodeEditor({
         {episode.sourceChapterTitle && (
           <span className="drama-ep-source-hint">来自《{episode.sourceChapterTitle}》</span>
         )}
+        {isStoryboard && (
+          <button
+            className="drama-icon-btn drama-switch-view-btn"
+            title="返回剧本编辑"
+            onClick={onSwitchToScript}
+            style={{ flexShrink: 0, gap: 4, padding: '4px 10px', fontSize: 12, borderRadius: 6 }}
+          >
+            <ChevronLeft size={13} />
+            <span>剧本</span>
+          </button>
+        )}
         <button
           className="drama-icon-btn"
           title="集数设置（简介等）"
@@ -467,30 +623,120 @@ function EpisodeEditor({
         >
           <Settings size={15} />
         </button>
-        <button
-          className="drama-icon-btn"
-          title={generatingVideo === episode.id ? '生成中...' : '生成视频'}
-          onClick={() => onGenerateVideo(episode.id)}
-          disabled={generatingVideo === episode.id}
-          style={{ flexShrink: 0 }}
-        >
-          {generatingVideo === episode.id ? <span className="drama-spinner" /> : <Video size={15} />}
-        </button>
       </div>
 
-      {/* 剧本正文区（全高度） */}
-      <div className="drama-script-area">
-        {editor ? (
-          <DramaScriptEditor editor={editor} />
-        ) : (
-          <textarea
-            className="drama-textarea full script-font"
-            placeholder={`INT. 场景名称 - 时间\n\n角色动作描述\n\n角色名\n台词内容\n\n...`}
-            value={episode.script}
-            onChange={e => onChange({ script: e.target.value })}
-          />
-        )}
+      {/* 生产流水线进度条 */}
+      <div className="drama-production-pipeline">
+        {/* 剧本阶段 */}
+        <div
+          className={`drama-pipeline-node ${prodStatus.script === 'done' ? 'done stage-script' : 'stage-script-empty'} ${!isStoryboard ? 'current-view' : ''}`}
+          onClick={!isStoryboard ? undefined : onSwitchToScript}
+          style={isStoryboard && prodStatus.script === 'done' ? { cursor: 'pointer' } : undefined}
+          title={isStoryboard ? '返回剧本编辑' : undefined}
+        >
+          <div className="drama-pipeline-dot">
+            {prodStatus.script === 'done' && <Check size={8} />}
+          </div>
+          <span className="drama-pipeline-label">剧本</span>
+        </div>
+        <div className={`drama-pipeline-connector ${prodStatus.script === 'done' ? 'active' : ''}`} />
+
+        {/* 分镜阶段 */}
+        <div className={`drama-pipeline-node ${prodStatus.storyboard === 'done' ? 'done stage-storyboard' : prodStatus.script === 'done' ? 'next stage-storyboard-empty' : 'stage-storyboard-empty'} ${isStoryboard ? 'current-view' : ''}`}>
+          <div className="drama-pipeline-dot">
+            {generatingStoryboard
+              ? <span className="drama-spinner" style={{ width: 8, height: 8 }} />
+              : prodStatus.storyboard === 'done' && <Check size={8} />}
+          </div>
+          <span className="drama-pipeline-label">分镜</span>
+          {prodStatus.storyboard === 'done' && !isStoryboard && (
+            <button
+              className="drama-pipeline-action-btn storyboard"
+              onClick={onSwitchToStoryboard}
+              title="查看分镜视图"
+            >
+              查看
+            </button>
+          )}
+          {prodStatus.script === 'done' && prodStatus.storyboard !== 'done' && !generatingStoryboard && (
+            <button
+              className="drama-pipeline-action-btn storyboard"
+              onClick={() => onGenerateStoryboard?.(episode.id)}
+              title="AI 生成分镜脚本"
+            >
+              生成
+            </button>
+          )}
+          {generatingStoryboard && (
+            <span className="drama-pipeline-generating-label">生成中...</span>
+          )}
+        </div>
+        <div className={`drama-pipeline-connector ${prodStatus.storyboard === 'done' ? 'active' : ''}`} />
+
+        {/* 分镜图阶段 */}
+        <div className={`drama-pipeline-node ${prodStatus.panels === 'done' ? 'done stage-panels' : prodStatus.storyboard === 'done' ? 'next stage-panels-empty' : 'stage-panels-empty'}`}>
+          <div className="drama-pipeline-dot">
+            {prodStatus.panels === 'done' && <Check size={8} />}
+          </div>
+          <span className="drama-pipeline-label">分镜图</span>
+          {prodStatus.storyboard === 'done' && prodStatus.panels !== 'done' && (
+            <button
+              className="drama-pipeline-action-btn panels"
+              onClick={onSwitchToStoryboard}
+              title="在分镜视图中批量生图"
+            >
+              生图
+            </button>
+          )}
+        </div>
+        <div className={`drama-pipeline-connector ${prodStatus.panels === 'done' ? 'active' : ''}`} />
+
+        {/* 视频阶段 */}
+        <div className={`drama-pipeline-node ${prodStatus.video === 'done' ? 'done stage-video' : 'stage-video-empty'}`}>
+          <div className="drama-pipeline-dot">
+            {prodStatus.video === 'done'
+              ? <Check size={8} />
+              : generatingVideo === episode.id && <span className="drama-spinner" style={{ width: 8, height: 8 }} />}
+          </div>
+          <span className="drama-pipeline-label">视频</span>
+          <button
+            className="drama-pipeline-action-btn video"
+            onClick={() => onGenerateVideo(episode.id)}
+            disabled={generatingVideo === episode.id}
+            title={generatingVideo === episode.id ? '生成中...' : '生成视频'}
+          >
+            {generatingVideo === episode.id ? '生成中' : prodStatus.video === 'done' ? '重新生成' : '生成'}
+          </button>
+        </div>
       </div>
+
+      {/* 剧本正文区（仅 script 模式显示） */}
+      {!isStoryboard && (
+        <div className="drama-script-area">
+          {editor ? (
+            <DramaScriptEditor editor={editor} />
+          ) : (
+            <textarea
+              className="drama-textarea full script-font"
+              placeholder={`INT. 场景名称 - 时间\n\n角色动作描述\n\n角色名\n台词内容\n\n...`}
+              value={episode.script}
+              onChange={e => onChange({ script: e.target.value })}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 分镜视图（仅 storyboard 模式显示） */}
+      {isStoryboard && (
+        <StoryboardView
+          episode={episode}
+          meta={meta}
+          workId={workId}
+          selectedImageSize={selectedImageSize}
+          onUpdateStoryboard={storyboard => onChange({ storyboard })}
+          onRegenerateStoryboard={() => onGenerateStoryboard?.(episode.id)}
+        />
+      )}
 
       {/* 集数设置模态框 */}
       {settingsOpen && (
@@ -527,7 +773,9 @@ export default function DramaEditorPage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const [viewMode, setViewMode] = useState<'script' | 'storyboard'>('script');
   const [generatingVideo, setGeneratingVideo] = useState<string | null>(null);
+  const [generatingStoryboard, setGeneratingStoryboard] = useState(false);
   const [generatingCharacterImage, setGeneratingCharacterImage] = useState<string | null>(null);
   const [generatingSceneImage, setGeneratingSceneImage] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -930,6 +1178,42 @@ export default function DramaEditorPage() {
     }, 1500);
   };
 
+  const handleGenerateStoryboard = async (episodeId: string) => {
+    const episode = meta.episodes.find(ep => ep.id === episodeId);
+    if (!episode || !episode.script.trim()) {
+      showMessage('请先完成剧本内容再生成分镜', 'error', undefined, undefined, { toast: true, autoCloseMs: 3000 });
+      return;
+    }
+    setGeneratingStoryboard(true);
+    try {
+      const characters = meta.characters.map(c => ({ name: c.name, role: c.role }));
+      const result = await dramaGenerateStoryboard(episode.script, {
+        episodeTitle: episode.title,
+        episodeSynopsis: episode.synopsis,
+        characters,
+        workId: workId ?? null,
+        maxPanels: 20,
+      });
+      const storyboard: DramaStoryboard = {
+        episodeId,
+        panels: result.panels.map(p => ({
+          ...p,
+          shotType: p.shotType as import('../components/drama/dramaTypes').ShotType,
+          dialogue: p.dialogue ?? undefined,
+          imageUrl: p.imageUrl ?? undefined,
+          imagePrompt: p.imagePrompt ?? undefined,
+        })),
+        generatedAt: Date.now(),
+      };
+      handleEpisodeChange(episodeId, { storyboard });
+      setViewMode('storyboard');
+    } catch (e) {
+      showMessage(e instanceof Error ? e.message : '分镜生成失败，请重试', 'error', undefined, undefined, { toast: true, autoCloseMs: 4000 });
+    } finally {
+      setGeneratingStoryboard(false);
+    }
+  };
+
 
   // 打开图片生成模态框
   const openCharacterImageModal = (characterId: string, style: 'portrait' | 'grid4' = 'portrait') => {
@@ -1072,6 +1356,7 @@ export default function DramaEditorPage() {
               activeEpisodeId={activeEpisodeId}
               onSelectEpisode={id => {
                 setActiveEpisodeId(id);
+                setViewMode('script');
                 if (leftTab === 'work-info') setLeftTab('episodes');
               }}
               activeTab={leftTab}
@@ -1088,6 +1373,7 @@ export default function DramaEditorPage() {
               onGenerateSceneImage={openSceneImageModal}
               generatingSceneImage={generatingSceneImage}
               onSelectScene={setSelectedScene}
+              onGenerateStoryboard={handleGenerateStoryboard}
             />
           </aside>
         )}
@@ -1108,7 +1394,15 @@ export default function DramaEditorPage() {
                 onChange={patch => handleEpisodeChange(activeEpisode.id, patch)}
                 onGenerateVideo={handleGenerateVideo}
                 generatingVideo={generatingVideo}
+                onGenerateStoryboard={handleGenerateStoryboard}
+                generatingStoryboard={generatingStoryboard}
+                viewMode={viewMode}
+                onSwitchToStoryboard={() => setViewMode('storyboard')}
+                onSwitchToScript={() => setViewMode('script')}
                 editor={editor}
+                meta={meta}
+                workId={workId}
+                selectedImageSize={selectedImageSize}
               />
               {/* 集数导航 */}
               <div className="drama-ep-nav-footer">

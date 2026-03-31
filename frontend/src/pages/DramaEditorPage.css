@@ -1850,6 +1850,313 @@
   max-height: 100px;
 }
 
+/* ── Production Stage Dot Colors ── */
+.drama-ep-prod-dot.done-script    { background: #7c3aed; }
+.drama-ep-prod-dot.done-storyboard { background: #2563eb; }
+.drama-ep-prod-dot.done-panels    { background: #0891b2; }
+.drama-ep-prod-dot.done-video     { background: #059669; }
+
+/* Episode Nav: Production Stage Badges */
+.drama-ep-prod-stages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.drama-ep-prod-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+/* ── Production Pipeline Bar ── */
+.drama-production-pipeline {
+  display: flex;
+  align-items: center;
+  padding: 8px 20px;
+  gap: 0;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.12);
+}
+
+.drama-pipeline-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  min-width: 52px;
+}
+
+.drama-pipeline-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 8px;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.drama-pipeline-node.done .drama-pipeline-dot {
+  border-color: transparent;
+}
+
+.drama-pipeline-node.done.stage-script .drama-pipeline-dot    { background: #7c3aed; }
+.drama-pipeline-node.done.stage-storyboard .drama-pipeline-dot { background: #2563eb; }
+.drama-pipeline-node.done.stage-panels .drama-pipeline-dot    { background: #0891b2; }
+.drama-pipeline-node.done.stage-video .drama-pipeline-dot     { background: #059669; }
+
+.drama-pipeline-node.next .drama-pipeline-dot {
+  border-color: rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 0 8px rgba(255,255,255,0.1);
+}
+
+.drama-pipeline-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.drama-pipeline-node.done .drama-pipeline-label  { color: var(--text-secondary); }
+.drama-pipeline-node.next .drama-pipeline-label  { color: var(--text-primary); }
+
+.drama-pipeline-connector {
+  flex: 1;
+  height: 2px;
+  background: rgba(255,255,255,0.08);
+  margin-bottom: 14px;
+  transition: background 0.3s ease;
+}
+
+.drama-pipeline-connector.active { background: rgba(124,58,237,0.4); }
+
+.drama-pipeline-action-btn {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.drama-pipeline-action-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary);
+}
+
+.drama-pipeline-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.drama-pipeline-action-btn.storyboard:hover:not(:disabled) {
+  border-color: rgba(37,99,235,0.5);
+  background: rgba(37,99,235,0.12);
+  color: #93c5fd;
+}
+
+.drama-pipeline-action-btn.panels:hover:not(:disabled) {
+  border-color: rgba(8,145,178,0.5);
+  background: rgba(8,145,178,0.12);
+  color: #67e8f9;
+}
+
+.drama-pipeline-action-btn.video:hover:not(:disabled) {
+  border-color: rgba(5,150,105,0.5);
+  background: rgba(5,150,105,0.12);
+  color: #6ee7b7;
+}
+
+/* ── Production Tab Active Style ── */
+.drama-sidenav-tab.production-tab-active {
+  color: #059669 !important;
+}
+
+/* ── Production Center Tab ── */
+.drama-production-center {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.drama-prod-overview {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drama-prod-overview-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+
+.drama-prod-stage-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.drama-prod-stage-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.drama-prod-stage-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  flex-shrink: 0;
+}
+
+/* Reuse same color classes */
+.drama-prod-stage-dot.done-script    { background: #7c3aed; }
+.drama-prod-stage-dot.done-storyboard { background: #2563eb; }
+.drama-prod-stage-dot.done-panels    { background: #0891b2; }
+.drama-prod-stage-dot.done-video     { background: #059669; }
+
+.drama-prod-progress-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drama-prod-progress-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.07);
+  overflow: hidden;
+}
+
+.drama-prod-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7c3aed, #059669);
+  transition: width 0.4s ease;
+}
+
+.drama-prod-progress-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.drama-prod-batch-actions {
+  padding: 8px 12px;
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.06));
+}
+
+.drama-prod-batch-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.drama-prod-batch-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+
+.drama-prod-batch-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.drama-prod-batch-btn.storyboard:hover:not(:disabled) {
+  border-color: rgba(37,99,235,0.4);
+  background: rgba(37,99,235,0.1);
+  color: #93c5fd;
+}
+
+/* Episode production status table */
+.drama-prod-ep-table {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  gap: 1px;
+}
+
+.drama-prod-ep-table-header {
+  display: grid;
+  grid-template-columns: 32px repeat(4, 1fr);
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.drama-prod-ep-table-header span:first-child { text-align: left; }
+
+.drama-prod-ep-row {
+  display: grid;
+  grid-template-columns: 32px repeat(4, 1fr);
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  align-items: center;
+}
+
+.drama-prod-ep-row:hover { background: rgba(255,255,255,0.04); }
+.drama-prod-ep-row.active { background: rgba(124,58,237,0.1); }
+
+.drama-prod-ep-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.drama-prod-status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: rgba(255,255,255,0.2);
+}
+
+.drama-prod-status-cell.done { color: #34d399; }
+
 /* Responsive */
 @media (max-width: 900px) {
   .drama-editor-right { width: 280px; }

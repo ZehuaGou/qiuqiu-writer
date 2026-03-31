@@ -19,6 +19,43 @@ export interface DramaScene {
   episodeId?: string; // 全局场景库 — 记录来源集数
 }
 
+// 镜头类型
+export type ShotType = 'wide' | 'medium' | 'close' | 'extreme-close' | 'bird-eye' | 'low-angle';
+
+// 单格分镜
+export interface DramaPanel {
+  id: string;
+  index: number;           // 格序号（1,2,3...）
+  shotType: ShotType;      // 镜头类型
+  sceneId?: string;        // 关联场景库中的场景
+  actTitle?: string;       // 所属场次标题（如 "INT. 办公室 - 白天"）
+  actIndex?: number;       // 场次序号（1,2,3...）
+  characters: string[];    // 出现的角色名列表
+  action: string;          // 动作/环境描述
+  dialogue?: string;       // 台词（可空）
+  emotion?: string;        // 情绪基调
+  imageUrl?: string;       // 生成的分镜图URL
+  imagePrompt?: string;    // 图片生成提示词（可手动编辑）
+}
+
+// 分镜脚本（整集）
+export interface DramaStoryboard {
+  episodeId: string;
+  panels: DramaPanel[];
+  generatedAt?: number;    // 生成时间戳
+}
+
+// 生产阶段状态
+export type StageStatus = 'empty' | 'done';
+
+// 生产状态（每集）
+export interface EpisodeProductionStatus {
+  script: StageStatus;
+  storyboard: StageStatus;
+  panels: StageStatus;
+  video: StageStatus;
+}
+
 export interface DramaEpisode {
   id: string;
   number: number;
@@ -29,6 +66,7 @@ export interface DramaEpisode {
   videoUrl?: string;
   sourceChapterId?: number;
   sourceChapterTitle?: string;
+  storyboard?: DramaStoryboard;  // 分镜脚本
 }
 
 export interface DramaMeta {

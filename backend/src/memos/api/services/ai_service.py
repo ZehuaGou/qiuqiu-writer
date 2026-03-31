@@ -112,6 +112,7 @@ class AIService:
         n: int = 1,
         feature: str = "image_generation",
         work_id: Optional[str] = None,
+        reference_image_urls: Optional[list[str]] = None,
     ) -> str:
         """调用AI生成图片，返回图片URL"""
         from memos.api.core.database import AsyncSessionLocal
@@ -180,11 +181,20 @@ class AIService:
                         "Authorization": f"Bearer {client.api_key}",
                         "Content-Type": "application/json",
                     }
+                    ref_urls = [u for u in (reference_image_urls or []) if u]
+                    if "qwen-image" in actual_model.lower():
+                        # qwen-image-2.0 多模态格式：支持多张参考图
+                        content: list[dict] = [{"image": u} for u in ref_urls]
+                        content.append({"text": prompt})
+                    else:
+                        # wanx 系列：仅 text，参考图通过 input.ref_img 传入（下方处理）
+                        content = [{"text": prompt}]
+
                     payload = {
                         "model": actual_model,
                         "input": {
                             "messages": [
-                                {"role": "user", "content": [{"text": prompt}]}
+                                {"role": "user", "content": content}
                             ]
                         },
                         "parameters": {
@@ -193,6 +203,12 @@ class AIService:
                             "watermark": False,
                         },
                     }
+
+                    # wanx 单张参考图（ref_img + ref_mode）
+                    if "wanx" in actual_model.lower() and ref_urls:
+                        payload["input"]["ref_img"] = ref_urls[0]
+                        payload["parameters"]["ref_mode"] = "refonly"
+
                     resp = await httpx_client.post(
                         DASHSCOPE_IMAGE_URL, headers=headers, json=payload, timeout=120.0
                     )

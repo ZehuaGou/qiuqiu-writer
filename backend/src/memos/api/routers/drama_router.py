@@ -284,6 +284,7 @@ class DramaImageRequest(BaseModel):
     work_id: str | None = None
     model: str = "dall-e-3"
     size: str = "1024x1024"
+    reference_image_urls: list[str] = []
 
 
 class DramaExtractRequest(BaseModel):
@@ -292,6 +293,16 @@ class DramaExtractRequest(BaseModel):
     max_items: int = 12
     model_id: str | None = None
     generation_style: str | None = None
+
+
+class DramaStoryboardRequest(BaseModel):
+    script: str
+    episode_title: str = ""
+    episode_synopsis: str = ""
+    characters: list[dict] = []
+    work_id: str | None = None
+    model_id: str | None = None
+    max_panels: int = 12
 
 
 @router.get("/prompt-config")
@@ -334,6 +345,7 @@ async def drama_generate_image(
             size=req.size,
             feature="drama_image",
             work_id=req.work_id,
+            reference_image_urls=req.reference_image_urls or [],
         )
         return {"imageUrl": image_url}
     except ValueError as e:
@@ -577,3 +589,151 @@ async def drama_chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+STORYBOARD_GENERATE_PROMPT = """你是专业的漫剧分镜导演，擅长将剧本拆解为可执行的分镜脚本。
+
+剧集信息：
+- 标题：{episode_title}
+- 简介：{episode_synopsis}
+- 角色列表：{characters_info}
+
+剧本正文：
+{script}
+
+请将以上剧本拆解为分镜脚本，每格分镜代表一个独立画面。
+
+重要规则：
+- 剧本中的 H1 场次标题（如"INT. 办公室 - 白天"、"EXT. 街道 - 夜晚"）代表独立场次
+- 每格分镜必须归属于其所在的场次
+- 同一场次下的分镜格按顺序紧密排列
+
+输出要求：
+1) 仅返回 JSON 数组，不要 Markdown、不要解释文字
+2) 最多返回 {max_panels} 格分镜，按叙事顺序排列
+3) 每格必须包含：
+- index: 全局格序号（1、2、3...，贯穿全集）
+- actIndex: 场次序号（1、2、3...，每个场次递增）
+- actTitle: 场次标题（直接使用剧本中的 H1 场次行内容，如"INT. 办公室 - 白天"）
+- shotType: 镜头类型，必须是以下之一：wide（全景）、medium（中景）、close（近景）、extreme-close（特写）、bird-eye（俯瞰）、low-angle（仰拍）
+- action: 画面动作与环境描述（40-80字，聚焦可视化内容）
+- characters: 出现角色的名字数组（如 ["李明", "张华"]，无角色则为 []）
+- dialogue: 本格的对白文字（无对白则为 null 或空字符串）
+- emotion: 情绪基调（如"紧张""温馨""震撼"，1-4字）
+
+返回格式示例（包含多个场次）：
+[
+  {{
+    "index": 1,
+    "actIndex": 1,
+    "actTitle": "INT. 办公室 - 白天",
+    "shotType": "wide",
+    "action": "空旷的办公室，阳光从百叶窗倾斜射入，主角推门进入",
+    "characters": ["李明"],
+    "dialogue": null,
+    "emotion": "平静"
+  }},
+  {{
+    "index": 2,
+    "actIndex": 1,
+    "actTitle": "INT. 办公室 - 白天",
+    "shotType": "close",
+    "action": "李明走向桌面，看到一封信件",
+    "characters": ["李明"],
+    "dialogue": "这是什么？",
+    "emotion": "疑惑"
+  }},
+  {{
+    "index": 3,
+    "actIndex": 2,
+    "actTitle": "EXT. 街道 - 夜晚",
+    "shotType": "wide",
+    "action": "夜晚城市全景，霓虹灯倒映在湿润的街道上",
+    "characters": [],
+    "dialogue": null,
+    "emotion": "孤独"
+  }}
+]"""
+
+
+@router.post("/storyboard/generate")
+async def drama_generate_storyboard(
+    req: DramaStoryboardRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    ai_service: AIService = Depends(get_ai_service),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """根据剧本正文生成分镜脚本（JSON 格式）"""
+    if not req.script.strip():
+        raise HTTPException(status_code=400, detail="script 不能为空")
+
+    max_panels = max(1, min(req.max_panels, 24))
+    characters_info = (
+        "、".join(f"{c.get('name', '')}（{c.get('role', '')}）" for c in req.characters if c.get("name"))
+        if req.characters
+        else "暂无角色信息"
+    )
+
+    try:
+        enabled_models = await get_enabled_text_models(db)
+        model_id = resolve_extract_model_id(req.model_id, enabled_models)
+
+        prompt = STORYBOARD_GENERATE_PROMPT.format(
+            episode_title=req.episode_title or "本集",
+            episode_synopsis=req.episode_synopsis or "（无简介）",
+            characters_info=characters_info,
+            script=req.script,
+            max_panels=max_panels,
+        )
+
+        result = await ai_service.get_ai_response(
+            content="",
+            prompt=prompt,
+            system_prompt="你是专业的漫剧分镜导演，输出必须是严格 JSON 数组。",
+            model=model_id,
+            temperature=0.5,
+            max_tokens=6000,
+            use_json_format=False,
+            user_id=current_user_id,
+            feature="drama_storyboard",
+            work_id=req.work_id,
+        )
+
+        items = parse_json_array(result)
+        panels = []
+        valid_shot_types = {"wide", "medium", "close", "extreme-close", "bird-eye", "low-angle"}
+        for idx, item in enumerate(items[:max_panels], start=1):
+            if not isinstance(item, dict):
+                continue
+            shot_type = str(item.get("shotType", "medium")).strip()
+            if shot_type not in valid_shot_types:
+                shot_type = "medium"
+            act_title = str(item.get("actTitle", "") or "").strip() or "场次1"
+            act_index_raw = item.get("actIndex")
+            try:
+                act_index = int(act_index_raw) if act_index_raw is not None else 1
+            except (ValueError, TypeError):
+                act_index = 1
+            panels.append(
+                {
+                    "id": f"panel-{idx}",
+                    "index": idx,
+                    "actTitle": act_title,
+                    "actIndex": act_index,
+                    "shotType": shot_type,
+                    "action": str(item.get("action", "")).strip(),
+                    "characters": [str(c) for c in item.get("characters", []) if c],
+                    "dialogue": str(item.get("dialogue", "") or "").strip() or None,
+                    "emotion": str(item.get("emotion", "") or "").strip(),
+                    "imageUrl": None,
+                    "imagePrompt": None,
+                }
+            )
+        return {"panels": panels, "total": len(panels)}
+
+    except ValueError as e:
+        logger.warning(f"drama_generate_storyboard warning: {e}")
+        raise map_extract_error_to_http(e, "分镜生成")
+    except Exception as e:
+        logger.error(f"drama_generate_storyboard error: {e}")
+        raise HTTPException(status_code=500, detail=f"分镜生成失败：{str(e)}")
