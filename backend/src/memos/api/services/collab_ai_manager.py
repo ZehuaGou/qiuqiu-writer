@@ -615,6 +615,7 @@ class CollabAIRoom:
             payload["model"] = task.model
 
         try:
+            stream_error: str | None = None
             async with httpx.AsyncClient(timeout=300.0) as client:
                 async with client.stream(
                     "POST",
@@ -622,6 +623,16 @@ class CollabAIRoom:
                     json=payload,
                     headers={"Accept": "text/event-stream"},
                 ) as resp:
+                    if resp.status_code >= 400 and resp.status_code != 402:
+                        error_text = (await resp.aread()).decode("utf-8", errors="ignore")
+                        stream_error = error_text or f"AI 服务请求失败（HTTP {resp.status_code}）"
+                        task.status = "error"
+                        await self.broadcast({
+                            "type": "ai_error",
+                            "request_id": task.request_id,
+                            "error": stream_error,
+                        })
+                        return
                     if resp.status_code == 402:
                         task.status = "error"
                         await self.broadcast({
@@ -641,6 +652,20 @@ class CollabAIRoom:
                             continue
                         try:
                             event = json.loads(data_str)
+                            if event.get("type") == "error":
+                                stream_error = str(
+                                    event.get("content")
+                                    or event.get("message")
+                                    or event.get("data")
+                                    or "AI 执行失败"
+                                )
+                                task.status = "error"
+                                await self.broadcast({
+                                    "type": "ai_error",
+                                    "request_id": task.request_id,
+                                    "error": stream_error,
+                                })
+                                break
                             await self.broadcast({
                                 "type": "ai_stream",
                                 "request_id": task.request_id,
@@ -648,6 +673,10 @@ class CollabAIRoom:
                             })
                         except json.JSONDecodeError:
                             pass
+
+            if task.status == "error":
+                logger.warning(f"[CollabAI:{self.work_id}] Task {task.request_id[:8]} finished with stream error: {stream_error}")
+                return
 
             if task.status != "cancelled":
                 task.status = "done"

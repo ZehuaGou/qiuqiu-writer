@@ -152,6 +152,22 @@ def _parse_chapter_ids_from_command(query: str) -> list[int]:
     return ids
 
 
+def _parse_current_chapter_id_from_session_id(session_id: str | None) -> int | None:
+    """从会话 ID 中提取当前章节 ID。"""
+    if not session_id:
+        return None
+    prefix = "collab_"
+    if not session_id.startswith(prefix):
+        return None
+    raw = session_id[len(prefix):].strip()
+    if not raw.isdigit():
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
 def _parse_continue_chapter_user_description(query: str) -> str | None:
     """
     从 /continue-chapter 命令中解析用户对下一章的语言描述。
@@ -690,9 +706,13 @@ async def chat(chat_req: ChatRequest):
                 return
 
             chapter_ids = None
+            current_chapter_id = _parse_current_chapter_id_from_session_id(chat_req.session_id)
             if chat_req.query.strip().lower().startswith("/analysis-chapter"):
                 ids = _parse_chapter_ids_from_command(chat_req.query)
-                chapter_ids = ids if ids else None
+                if ids:
+                    chapter_ids = ids
+                elif current_chapter_id is not None:
+                    chapter_ids = [current_chapter_id]
 
             # Phase 0: 初始检查与获取章节列表（需要 DB）
             chapter_info_list = []
@@ -716,7 +736,7 @@ async def chat(chat_req: ChatRequest):
                             chapter = await chapter_service.get_chapter_by_id(chapter_id)
                             if chapter and chapter.work_id == work_id:
                                 chapters.append(chapter)
-                    else:
+                    elif current_chapter_id is None:
                         chapters, _ = await chapter_service.get_chapters(
                             filters={"work_id": work_id},
                             page=1,
@@ -724,6 +744,8 @@ async def chat(chat_req: ChatRequest):
                             sort_by="chapter_number",
                             sort_order="asc"
                         )
+                    else:
+                        chapters = []
                     
                     # 提取必要信息，避免后续使用 detached 对象
                     for c in chapters:
@@ -836,6 +858,8 @@ async def chat(chat_req: ChatRequest):
                     return
                 
                 # 如果没有指定章节，默认使用第一章
+                if not chapter_ids and current_chapter_id is not None:
+                    chapter_ids = [current_chapter_id]
                 if not chapter_ids:
                     chapters, _ = await chapter_service.get_chapters(
                         filters={"work_id": work_id},
@@ -953,6 +977,7 @@ async def chat(chat_req: ChatRequest):
                     return
 
                 chapter_ids = _parse_chapter_ids_from_command(chat_req.query)
+                current_chapter_id = _parse_current_chapter_id_from_session_id(chat_req.session_id)
 
                 # 初始检查
                 async with AsyncSessionLocal() as check_db:
@@ -968,6 +993,8 @@ async def chat(chat_req: ChatRequest):
                         return
                     
                     # 如果没有指定章节，默认使用第一章
+                    if not chapter_ids and current_chapter_id is not None:
+                        chapter_ids = [current_chapter_id]
                     if not chapter_ids:
                         chapters, _ = await chapter_service.get_chapters(
                             filters={"work_id": work_id},

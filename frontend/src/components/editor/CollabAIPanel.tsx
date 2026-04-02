@@ -209,6 +209,12 @@ function TaskCard({ task, canCancel, onCancel, onUseContinueRecommendation }: Ta
         />
       )}
 
+      {task.status === 'error' && (
+        <div className="task-error" style={{ fontSize: 12, color: 'var(--error)', marginTop: 6 }}>
+          {task.error || '执行失败，请重试'}
+        </div>
+      )}
+
       {/* 续写推荐卡片 */}
       {task.continueChapterResult && onUseContinueRecommendation && (
         <div className="task-recommendation-cards">

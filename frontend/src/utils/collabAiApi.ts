@@ -49,6 +49,8 @@ export interface CollabAITask {
   queue_position?: number;
   /** 该任务的输出需要直接写入编辑器（如 /gen_chapter） */
   write_to_editor?: boolean;
+  /** 错误信息 */
+  error?: string;
   /** 用户选择的模型 model_id */
   model?: string;
   /** 本次任务使用的 prompt 模板 ID（用于打分关联） */
@@ -350,7 +352,7 @@ export function applyCollabAIMessage(
     case 'ai_error': {
       const existing = next.get(msg.request_id);
       if (existing) {
-        next.set(msg.request_id, { ...existing, status: 'error' });
+        next.set(msg.request_id, { ...existing, status: 'error', error: msg.error });
       }
       break;
     }
