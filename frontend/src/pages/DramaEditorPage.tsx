@@ -6,12 +6,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Film, Users, Layers, BookOpen, MapPin,
-  Plus, Trash2, Save, Sparkles, Edit2, X, Wifi, WifiOff,
+  Plus, Trash2, Sparkles, X, Wifi, WifiOff,
   Download, ChevronLeft, ChevronRight as ChevronRightIcon,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Settings,
   Clapperboard, Check, Upload, Star, Image as ImageIcon
 } from 'lucide-react';
-import type { Editor } from '@tiptap/react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import type { JSONContent } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import UnderlineExtension from '@tiptap/extension-underline';
 import { worksApi, type Work } from '../utils/worksApi';
 import { authApi } from '../utils/authApi';
 import { chaptersApi } from '../utils/chaptersApi';
@@ -24,10 +27,12 @@ import ImportFromNovelModal from '../components/drama/ImportFromNovelModal';
 import ImportEpisodeFromChapterModal from '../components/drama/ImportEpisodeFromChapterModal';
 import ShareWorkModal from '../components/ShareWorkModal';
 import WorkInfoManager from '../components/editor/WorkInfoManager';
+import ChapterEditorToolbar from '../components/editor/ChapterEditorToolbar';
 import DramaScriptEditor from '../components/editor/DramaScriptEditor';
 import StoryboardView from '../components/drama/StoryboardView';
 import type { WorkData } from '../components/editor/work-info/types';
 import type { DramaCharacter, DramaEpisode, DramaMeta, DramaScene, DramaStoryboard, LocalDramaTask, EpisodeProductionStatus, SubjectType } from '../components/drama/dramaTypes';
+import '../components/editor/NovelEditor.css';
 import './DramaEditorPage.css';
 
 type LeftTab = 'work-info' | 'episodes' | 'subjects' | 'production';
@@ -60,6 +65,102 @@ function screenplayTextToHtml(text: string): string {
   return html || '<p></p>';
 }
 
+function extractTextFromDocNode(node: unknown): string {
+  if (!node || typeof node !== 'object') return '';
+  const docNode = node as { type?: unknown; text?: unknown; content?: unknown[] };
+  const nodeType = typeof docNode.type === 'string' ? docNode.type : '';
+  if (nodeType === 'hardBreak') return '\n';
+
+  if (typeof docNode.text === 'string') {
+    return docNode.text;
+  }
+
+  const children = Array.isArray(docNode.content)
+    ? docNode.content.map(child => extractTextFromDocNode(child)).join('')
+    : '';
+
+  if (!children) return '';
+
+  if (['paragraph', 'heading', 'blockquote', 'codeBlock', 'listItem'].includes(nodeType)) {
+    return `${children}\n\n`;
+  }
+  if (['bulletList', 'orderedList', 'doc'].includes(nodeType)) {
+    return children;
+  }
+  return children;
+}
+
+function normalizeNovelSourceText(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && !trimmed.startsWith('<')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const extracted = extractTextFromDocNode(parsed).replace(/\n{3,}/g, '\n\n').trim();
+      if (extracted) return extracted;
+    } catch {
+      void 0;
+    }
+  }
+
+  if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+    const div = document.createElement('div');
+    div.innerHTML = trimmed
+      .replace(/<hardBreak\s*\/?>\s*<\/hardBreak>/gi, '\n')
+      .replace(/<hardBreak\s*\/?>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<\/li>/gi, '\n');
+    return (div.textContent || div.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  return trimmed.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function plainTextToHtml(text: string): string {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map(part => part.split('\n').map(line => escapeHtml(line)).join('<br/>'))
+    .filter(Boolean);
+  return paragraphs.length > 0 ? paragraphs.map(part => `<p>${part}</p>`).join('') : '<p></p>';
+}
+
+function buildNovelSourceEditorContent(raw: string): JSONContent | string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '<p></p>';
+  if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && !trimmed.startsWith('<')) {
+    try {
+      const parsed = JSON.parse(trimmed) as JSONContent;
+      if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') {
+        const extracted = extractTextFromDocNode(parsed).replace(/\n{3,}/g, '\n\n').trim();
+        if (extracted) {
+          return plainTextToHtml(extracted);
+        }
+        return parsed;
+      }
+    } catch {
+      void 0;
+    }
+  }
+  if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+    return trimmed
+      .replace(/<hardBreak\s*\/?>\s*<\/hardBreak>/gi, '<br/>')
+      .replace(/<hardBreak\s*\/?>/gi, '<br/>');
+  }
+  return plainTextToHtml(normalizeNovelSourceText(trimmed));
+}
+
 const DRAMA_EXTRA_COMMANDS = [
   {
     id: 'drama-gen-script',
@@ -83,7 +184,7 @@ function parseMeta(work: Work): DramaMeta {
   const episodes = (m.episodes as unknown as DramaEpisode[]) || [];
 
   // 将旧的按集存储场景迁移到全局场景库
-  let globalScenes: DramaScene[] = (m.scenes as unknown as DramaScene[]) || [];
+  const globalScenes: DramaScene[] = (m.scenes as unknown as DramaScene[]) || [];
   if (globalScenes.length === 0) {
     for (const ep of episodes) {
       for (const scene of (ep.scenes || [])) {
@@ -125,13 +226,9 @@ function DramaSideNav({
   onAddEpisode,
   onAddEpisodeFromNovel,
   onDeleteEpisode,
-  onGenerateCharacterImage,
   generatingCharacterImage,
   onSelectCharacter,
   scenes,
-  onAddScene,
-  onDeleteScene,
-  onGenerateSceneImage,
   generatingSceneImage,
   onSelectScene,
   onGenerateStoryboard,
@@ -145,13 +242,9 @@ function DramaSideNav({
   onAddEpisode: () => void;
   onAddEpisodeFromNovel?: () => void;
   onDeleteEpisode: (id: string) => void;
-  onGenerateCharacterImage?: (id: string) => void;
   generatingCharacterImage?: string | null;
   onSelectCharacter?: (c: DramaCharacter) => void;
   scenes?: DramaScene[];
-  onAddScene?: () => void;
-  onDeleteScene?: (id: string) => void;
-  onGenerateSceneImage?: (sceneId: string) => void;
   generatingSceneImage?: string | null;
   onSelectScene?: (scene: DramaScene) => void;
   onGenerateStoryboard?: (episodeId: string) => void;
@@ -519,8 +612,80 @@ function EpisodeEditor({
   selectedImageSize?: string;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showSourceContent, setShowSourceContent] = useState(false);
+  const [sourceRawContent, setSourceRawContent] = useState('');
+  const [sourceContent, setSourceContent] = useState('');
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceError, setSourceError] = useState('');
+  const [sourceHeadingMenuOpen, setSourceHeadingMenuOpen] = useState(false);
+  const sourceCacheRef = useRef<Map<number, { raw: string; normalized: string }>>(new Map());
   const prodStatus = getEpisodeProductionStatus(episode);
   const isStoryboard = viewMode === 'storyboard';
+  const isSourceView = !!episode.sourceChapterTitle && showSourceContent && !isStoryboard;
+  const sourceEditor = useEditor({
+    extensions: [StarterKit, UnderlineExtension],
+    editable: false,
+    immediatelyRender: false,
+    content: '<p></p>',
+    editorProps: {
+      attributes: {
+        class: 'novel-editor-content',
+      },
+    },
+  });
+
+  useEffect(() => {
+    if (!episode.sourceChapterId || !isSourceView) return;
+    const sourceChapterId = episode.sourceChapterId;
+    const cached = sourceCacheRef.current.get(sourceChapterId);
+    if (cached) {
+      setSourceRawContent(cached.raw);
+      setSourceContent(cached.normalized);
+      setSourceError('');
+      setSourceLoading(false);
+      return;
+    }
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setSourceLoading(true);
+        setSourceError('');
+      }
+    });
+    Promise.allSettled([
+      chaptersApi.getChapterDocument(sourceChapterId),
+      chaptersApi.getChapter(sourceChapterId),
+    ]).then(([doc, chapterInfo]) => {
+      if (cancelled) return;
+      const mergedContent = [
+        doc.status === 'fulfilled' ? doc.value.content : '',
+        chapterInfo.status === 'fulfilled' ? (chapterInfo.value.content || '') : '',
+        chapterInfo.status === 'fulfilled' ? ((chapterInfo.value.metadata?.outline as string) || '') : '',
+      ].find(Boolean) || '';
+      setSourceRawContent(mergedContent);
+      const normalizedContent = normalizeNovelSourceText(mergedContent);
+      sourceCacheRef.current.set(sourceChapterId, { raw: mergedContent, normalized: normalizedContent });
+      setSourceContent(normalizedContent);
+      if (!normalizedContent) {
+        setSourceError('未找到小说原文内容');
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setSourceError('加载小说原文失败');
+      }
+    }).finally(() => {
+      if (!cancelled) {
+        setSourceLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [episode.sourceChapterId, isSourceView]);
+
+  useEffect(() => {
+    sourceEditor?.commands.setContent(buildNovelSourceEditorContent(sourceRawContent));
+  }, [sourceEditor, sourceRawContent]);
 
   return (
     <div className="drama-ep-editor">
@@ -559,11 +724,43 @@ function EpisodeEditor({
 
       {/* 生产流水线进度条 */}
       <div className="drama-production-pipeline">
+        {episode.sourceChapterTitle && (
+          <>
+            <div
+              className={`drama-pipeline-node done stage-script ${isSourceView ? 'current-view' : ''}`}
+              onClick={() => setShowSourceContent(prev => !prev)}
+              style={{ cursor: 'pointer' }}
+              title={showSourceContent ? '收起小说原文' : '展开小说原文'}
+            >
+              <div className="drama-pipeline-dot">
+                <Check size={8} />
+              </div>
+              <span className="drama-pipeline-label">小说</span>
+              <button
+                className="drama-pipeline-action-btn storyboard"
+                onClick={e => {
+                  e.stopPropagation();
+                  setShowSourceContent(prev => !prev);
+                }}
+                title={showSourceContent ? '收起小说原文' : '查看小说原文'}
+              >
+                {showSourceContent ? '收起' : '查看'}
+              </button>
+            </div>
+            <div className="drama-pipeline-connector active" />
+          </>
+        )}
+
         {/* 剧本阶段 */}
         <div
-          className={`drama-pipeline-node ${prodStatus.script === 'done' ? 'done stage-script' : 'stage-script-empty'} ${!isStoryboard ? 'current-view' : ''}`}
-          onClick={!isStoryboard ? undefined : onSwitchToScript}
-          style={isStoryboard && prodStatus.script === 'done' ? { cursor: 'pointer' } : undefined}
+          className={`drama-pipeline-node ${prodStatus.script === 'done' ? 'done stage-script' : 'stage-script-empty'} ${!isStoryboard && !isSourceView ? 'current-view' : ''}`}
+          onClick={() => {
+            if (isStoryboard) {
+              onSwitchToScript?.();
+            }
+            setShowSourceContent(false);
+          }}
+          style={isStoryboard || isSourceView ? { cursor: 'pointer' } : undefined}
           title={isStoryboard ? '返回剧本编辑' : undefined}
         >
           <div className="drama-pipeline-dot">
@@ -645,7 +842,48 @@ function EpisodeEditor({
       {/* 剧本正文区（仅 script 模式显示） */}
       {!isStoryboard && (
         <div className="drama-script-area">
-          {editor ? (
+          {episode.sourceChapterTitle && isSourceView && (
+            <div className="novel-editor">
+              <div className="novel-editor-wrapper">
+                <div className="chapter-content-wrapper" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                  <div className="editor-with-header">
+                    <div className="embedded-toolbar">
+                      <ChapterEditorToolbar
+                        editor={sourceEditor ?? null}
+                        onManualSave={() => {}}
+                        headingMenuOpen={sourceHeadingMenuOpen}
+                        setHeadingMenuOpen={setSourceHeadingMenuOpen}
+                        readOnly
+                      />
+                    </div>
+                    <div className="editor-scroll-container">
+                      <div
+                        style={{
+                          padding: '24px 80px 0',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>小说原文</div>
+                        <h2 style={{ margin: 0, fontSize: 28, lineHeight: 1.3, color: 'var(--text-primary)' }}>
+                          {episode.sourceChapterTitle}
+                        </h2>
+                      </div>
+                      <div className="editor-content-area">
+                        {sourceLoading
+                          ? <div style={{ padding: '32px 80px', color: 'var(--text-secondary)' }}>正在加载小说原文...</div>
+                          : sourceContent
+                            ? <EditorContent editor={sourceEditor} />
+                            : <div style={{ padding: '32px 80px', color: 'var(--text-secondary)' }}>{sourceError || '暂无可用小说原文'}</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {!isSourceView && (editor ? (
             <DramaScriptEditor editor={editor} />
           ) : (
             <textarea
@@ -654,7 +892,7 @@ function EpisodeEditor({
               value={episode.script}
               onChange={e => onChange({ script: e.target.value })}
             />
-          )}
+          ))}
         </div>
       )}
 
@@ -718,7 +956,6 @@ export default function DramaEditorPage() {
   const [selectedImageSize, setSelectedImageSize] = useState<string>('1024x1024');
   const [localTasks, setLocalTasks] = useState<LocalDramaTask[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<DramaCharacter | null>(null);
-  const [isEditingCharacter, setIsEditingCharacter] = useState(false);
   const [editingCharacterData, setEditingCharacterData] = useState<DramaCharacter | null>(null);
   const [selectedScene, setSelectedScene] = useState<DramaScene | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -830,7 +1067,7 @@ export default function DramaEditorPage() {
         }
       }finally { setSaving(false); }
     }, 1500);
-  }, [workId]);
+  }, [showMessage, workId]);
 
   const handleMetaChange = (patch: Partial<DramaMeta>) => {
     const updated = { ...meta, ...patch };
@@ -900,16 +1137,6 @@ export default function DramaEditorPage() {
     scheduleSave(updated);
   };
 
-  const handleAddScene = () => {
-    const scene: DramaScene = {
-      id: genId(), location: '新场景', time: '白天', description: '',
-      episodeId: activeEpisodeId || undefined,
-    };
-    const updated = { ...meta, scenes: [...(meta.scenes || []), scene] };
-    setMeta(updated);
-    scheduleSave(updated);
-  };
-
   const handleUpdateScene = (id: string, patch: Partial<DramaScene>) => {
     const updated = { ...meta, scenes: (meta.scenes || []).map(s => s.id === id ? { ...s, ...patch } : s) };
     setMeta(updated);
@@ -918,12 +1145,6 @@ export default function DramaEditorPage() {
 
   const handleDeleteScene = (id: string) => {
     const updated = { ...meta, scenes: (meta.scenes || []).filter(s => s.id !== id) };
-    setMeta(updated);
-    scheduleSave(updated);
-  };
-
-  const handleUpdateCharacter = (id: string, patch: Partial<DramaCharacter>) => {
-    const updated = { ...meta, characters: meta.characters.map(c => c.id === id ? { ...c, ...patch } : c) };
     setMeta(updated);
     scheduleSave(updated);
   };
@@ -1104,61 +1325,98 @@ export default function DramaEditorPage() {
 
     if (commandId === 'drama-gen-script') {
       if (!ep) { showMessage('请先选择要生成剧本的集数', 'warning', undefined, undefined, { toast: true, autoCloseMs: 3000 }); return; }
-      if (!ep.synopsis.trim()) { showMessage('请先填写剧情简介再生成剧本', 'warning', undefined, undefined, { toast: true, autoCloseMs: 3000 }); return; }
-
-      const characters = meta.characters.map(c => `${c.name}（${c.role}）`).join('、');
-      const prompt = [
-        `请根据以下信息，为第${ep.number}集「${ep.title}」生成专业的剧本正文。`,
-        `\n剧情简介：${ep.synopsis}`,
-        characters ? `\n主要角色：${characters}` : '',
-        meta.outline ? `\n故事背景：${meta.outline}` : '',
-        '\n\n输出格式要求：每行必须以下列前缀之一开头，每行只含一种内容，不得有多余说明：\n' +
-        '【场】场次标题（如：【场】INT. 地点 - 时间）\n' +
-        '【动】动作/环境描述\n' +
-        '【名】角色名（单独一行，后跟对白或舞台提示）\n' +
-        '【提】括弧内的舞台提示（如：【提】低声，握紧拳头）\n' +
-        '【白】角色对白（紧接在【名】或【提】之后）\n' +
-        '直接输出剧本，不要额外解释。',
-      ].filter(Boolean).join('');
-
+      const currentEpisode = ep;
       const abortController = new AbortController();
       const task: LocalDramaTask = {
         local_id: localId, type: 'gen-script',
-        query: fullQuery, episode_id: ep.id, episode_title: ep.title,
+        query: fullQuery, episode_id: currentEpisode.id, episode_title: currentEpisode.title,
         status: 'running', streamContent: '', created_at: now, abortController,
       };
       setLocalTasks(prev => [task, ...prev]);
-      editor?.commands.setContent('<p></p>');
-
-      let accumulated = '';
-      dramaChatStream(
-        prompt,
-        (chunk: string) => {
-          accumulated += chunk;
-          editor?.commands.setContent(screenplayTextToHtml(accumulated));
-          setLocalTasks(prev => prev.map(t =>
-            t.local_id === localId ? { ...t, streamContent: accumulated } : t
-          ));
-        },
-        workId,
-        { signal: abortController.signal },
-      ).then(() => {
-        // 完成时同步 episode.script 供后续提取使用
-        handleEpisodeChange(ep.id, { script: accumulated });
-        setLocalTasks(prev => prev.map(t =>
-          t.local_id === localId ? { ...t, status: 'done' } : t
-        ));
-      }).catch(err => {
-        if ((err as Error)?.name === 'AbortError') {
-          setLocalTasks(prev => prev.map(t =>
-            t.local_id === localId ? { ...t, status: 'cancelled' } : t
-          ));
-        } else {
-          setLocalTasks(prev => prev.map(t =>
-            t.local_id === localId ? { ...t, status: 'error', error: String(err) } : t
-          ));
+      void (async () => {
+        let episodeSynopsis = currentEpisode.synopsis.trim();
+        let sourceChapterContent = '';
+        if (currentEpisode.sourceChapterId) {
+          try {
+            const [doc, chapterInfo] = await Promise.allSettled([
+              chaptersApi.getChapterDocument(currentEpisode.sourceChapterId),
+              chaptersApi.getChapter(currentEpisode.sourceChapterId),
+            ]);
+            const rawSourceContent = [
+              doc.status === 'fulfilled' ? doc.value.content : '',
+              chapterInfo.status === 'fulfilled' ? (chapterInfo.value.content || '') : '',
+              chapterInfo.status === 'fulfilled' ? ((chapterInfo.value.metadata?.outline as string) || '') : '',
+            ].find(Boolean) || '';
+            sourceChapterContent = normalizeNovelSourceText(rawSourceContent);
+            const fallbackSynopsis = sourceChapterContent.replace(/\s+/g, ' ').trim();
+            if (!episodeSynopsis && fallbackSynopsis) {
+              episodeSynopsis = fallbackSynopsis.length > 220 ? `${fallbackSynopsis.slice(0, 220)}...` : fallbackSynopsis;
+              handleEpisodeChange(currentEpisode.id, { synopsis: episodeSynopsis });
+            }
+          } catch {
+            void 0;
+          }
         }
-      });
+
+        if (!episodeSynopsis) {
+          setLocalTasks(prev => prev.filter(t => t.local_id !== localId));
+          showMessage('请先填写剧情简介再生成剧本', 'warning', undefined, undefined, { toast: true, autoCloseMs: 3000 });
+          return;
+        }
+
+        const characters = meta.characters.map(c => `${c.name}（${c.role}）`).join('、');
+        const prompt = [
+          `请根据以下信息，为第${currentEpisode.number}集「${currentEpisode.title}」生成专业的剧本正文。`,
+          currentEpisode.sourceChapterTitle ? `\n改编来源章节：${currentEpisode.sourceChapterTitle}` : '',
+          `\n剧情简介：${episodeSynopsis}`,
+          sourceChapterContent
+            ? `\n小说原文（必须以此为主要依据改编，保留关键情节、人物关系、冲突和结局，不要偏离本章内容）：\n${sourceChapterContent.slice(0, 6000)}`
+            : '',
+          characters ? `\n主要角色：${characters}` : '',
+          meta.outline ? `\n故事背景：${meta.outline}` : '',
+          '\n改编要求：\n' +
+          '1. 剧情必须严格围绕本章原文，不要混入其他章节情节。\n' +
+          '2. 如果原文信息不足，可适度补充场景衔接，但不能改写核心事件。\n' +
+          '3. 角色对白、动作和场次推进要与原文情节顺序一致。\n',
+          '\n\n输出格式要求：每行必须以下列前缀之一开头，每行只含一种内容，不得有多余说明：\n' +
+          '【场】场次标题（如：【场】INT. 地点 - 时间）\n' +
+          '【动】动作/环境描述\n' +
+          '【名】角色名（单独一行，后跟对白或舞台提示）\n' +
+          '【提】括弧内的舞台提示（如：【提】低声，握紧拳头）\n' +
+          '【白】角色对白（紧接在【名】或【提】之后）\n' +
+          '直接输出剧本，不要额外解释。',
+        ].filter(Boolean).join('');
+
+        editor?.commands.setContent('<p></p>');
+        let accumulated = '';
+        dramaChatStream(
+          prompt,
+          (chunk: string) => {
+            accumulated += chunk;
+            editor?.commands.setContent(screenplayTextToHtml(accumulated));
+            setLocalTasks(prev => prev.map(t =>
+              t.local_id === localId ? { ...t, streamContent: accumulated } : t
+            ));
+          },
+          workId,
+          { signal: abortController.signal },
+        ).then(() => {
+          handleEpisodeChange(currentEpisode.id, { script: accumulated });
+          setLocalTasks(prev => prev.map(t =>
+            t.local_id === localId ? { ...t, status: 'done' } : t
+          ));
+        }).catch(err => {
+          if ((err as Error)?.name === 'AbortError') {
+            setLocalTasks(prev => prev.map(t =>
+              t.local_id === localId ? { ...t, status: 'cancelled' } : t
+            ));
+          } else {
+            setLocalTasks(prev => prev.map(t =>
+              t.local_id === localId ? { ...t, status: 'error', error: String(err) } : t
+            ));
+          }
+        });
+      })();
       return;
     }
   }, [workId, activeEpisodeId, meta, editor, sceneExtractModels, sceneExtractStyles, selectedModel, handleMetaChange, handleEpisodeChange]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1479,13 +1737,9 @@ export default function DramaEditorPage() {
               onAddEpisode={handleAddEpisode}
               onAddEpisodeFromNovel={() => setEpisodeImportModalOpen(true)}
               onDeleteEpisode={handleDeleteEpisode}
-              onGenerateCharacterImage={openCharacterImageModal}
               generatingCharacterImage={generatingCharacterImage}
-              onSelectCharacter={c => { setSelectedCharacter(c); setEditingCharacterData(c); setIsEditingCharacter(true); }}
+              onSelectCharacter={c => { setSelectedCharacter(c); setEditingCharacterData(c); }}
               scenes={meta.scenes || []}
-              onAddScene={handleAddScene}
-              onDeleteScene={handleDeleteScene}
-              onGenerateSceneImage={openSceneImageModal}
               generatingSceneImage={generatingSceneImage}
               onSelectScene={setSelectedScene}
               onGenerateStoryboard={handleGenerateStoryboard}
@@ -1506,6 +1760,7 @@ export default function DramaEditorPage() {
           ) : activeEpisode ? (
             <>
               <EpisodeEditor
+                key={activeEpisode.id}
                 episode={activeEpisode}
                 onChange={patch => handleEpisodeChange(activeEpisode.id, patch)}
                 onGenerateVideo={handleGenerateVideo}
@@ -1573,6 +1828,7 @@ export default function DramaEditorPage() {
               currentUserId={currentUserId}
               selectedModel={selectedModel}
               onSelectedModelChange={setSelectedModel}
+              showBuiltInCommands={false}
               localTasks={localTasks}
               extraCommands={[...DRAMA_EXTRA_COMMANDS]}
               onExtraCommand={handleDramaCommand}
@@ -1615,7 +1871,7 @@ export default function DramaEditorPage() {
         const subjectId = isCreating ? subjectCreateForm.id : (isChar ? liveChar?.id ?? '' : liveScene?.id ?? '');
 
         const closeModal = () => {
-          setSelectedCharacter(null); setIsEditingCharacter(false); setEditingCharacterData(null);
+          setSelectedCharacter(null); setEditingCharacterData(null);
           setSelectedScene(null); setSubjectCreateOpen(false);
         };
 
@@ -1668,11 +1924,26 @@ export default function DramaEditorPage() {
                       ? <img src={primaryImg} alt="" />
                       : <div className="subject-primary-empty"><ImageIcon size={28} /><span>主图</span></div>}
                     <div className="subject-primary-overlay">
-                      <button onClick={e => { e.stopPropagation(); isCreating ? handleUploadNewSubjectImage('primary') : handleUploadImage(isChar ? 'character' : 'scene', subjectId); }}>
+                      <button onClick={e => {
+                        e.stopPropagation();
+                        if (isCreating) {
+                          handleUploadNewSubjectImage('primary');
+                        } else {
+                          handleUploadImage(isChar ? 'character' : 'scene', subjectId);
+                        }
+                      }}>
                         <Upload size={11} /> 上传
                       </button>
                       {!isCreating && (
-                        <button onClick={e => { e.stopPropagation(); isChar ? openCharacterImageModal(subjectId, 'portrait') : openSceneImageModal(subjectId); closeModal(); }}>
+                        <button onClick={e => {
+                          e.stopPropagation();
+                          if (isChar) {
+                            openCharacterImageModal(subjectId, 'portrait');
+                          } else {
+                            openSceneImageModal(subjectId);
+                          }
+                          closeModal();
+                        }}>
                           <Sparkles size={11} /> 生成
                         </button>
                       )}
@@ -2052,4 +2323,3 @@ export default function DramaEditorPage() {
     </div>
   );
 }
-

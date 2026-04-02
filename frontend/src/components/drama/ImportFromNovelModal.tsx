@@ -10,6 +10,15 @@ import { dramaChatComplete } from '../../utils/dramaApi';
 import type { DramaCharacter, DramaEpisode, DramaMeta } from './dramaTypes';
 import './ImportFromNovelModal.css';
 
+function buildSynopsisFallback(rawContent: string, title: string): string {
+  const plain = rawContent
+    .replace(/\s+/g, ' ')
+    .replace(/[【】[\]<>]/g, ' ')
+    .trim();
+  if (!plain) return `${title}：请根据原章节内容补充剧情简介。`;
+  return plain.length > 220 ? `${plain.slice(0, 220)}...` : plain;
+}
+
 interface ImportFromNovelModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -141,8 +150,8 @@ export default function ImportFromNovelModal({ isOpen, onClose, onImport, workId
       const ch = selectedChapters[i];
       setImportProgress({ current: i + 1, total: selectedChapters.length, title: ch.title });
 
-      const chapterContent = contentMap.get(ch.id) || (ch.metadata?.outline as string) || '';
-      let synopsis = chapterContent; // 默认用原文
+      const chapterContent = contentMap.get(ch.id) || ch.content || (ch.metadata?.outline as string) || '';
+      let synopsis = buildSynopsisFallback(chapterContent, ch.title || `第${i + 1}集`);
 
       if (chapterContent && workId) {
         const prompt = [
@@ -158,7 +167,7 @@ export default function ImportFromNovelModal({ isOpen, onClose, onImport, workId
           const result = await dramaChatComplete(prompt, workId);
           if (result.trim()) synopsis = result.trim();
         } catch {
-          // AI 失败时保留原文内容
+          void 0;
         }
       }
 

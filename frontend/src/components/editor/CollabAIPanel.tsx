@@ -49,6 +49,7 @@ interface CollabAIPanelProps {
   onWriteToEditor?: (content: string, isDone: boolean) => void;
   selectedModel?: string;
   onSelectedModelChange?: (modelId: string) => void;
+  showBuiltInCommands?: boolean;
   /** Drama 本地任务列表（前端执行，非 WebSocket） */
   localTasks?: LocalDramaTask[];
   /** 追加到 SLASH_COMMANDS 之后的额外命令（drama 专用） */
@@ -447,6 +448,7 @@ export default function CollabAIPanel({
   onWriteToEditor,
   selectedModel: selectedModelProp,
   onSelectedModelChange,
+  showBuiltInCommands = true,
   localTasks,
   extraCommands,
   onExtraCommand,
@@ -472,14 +474,18 @@ export default function CollabAIPanel({
 
   // slash 命令菜单
   const [cmdMenuOpen, setCmdMenuOpen] = useState(false);
-  const [cmdMenuItems, setCmdMenuItems] = useState<Array<{ id: string; name: string; subtitle: string }>>([...SLASH_COMMANDS]);
+  const [cmdMenuItems, setCmdMenuItems] = useState<Array<{ id: string; name: string; subtitle: string }>>([]);
   const [cmdMenuIndex, setCmdMenuIndex] = useState(0);
 
   // 合并内置命令 + extraCommands（drama 场景）
   const allCommands = useMemo(
-    () => [...SLASH_COMMANDS, ...(extraCommands ?? [])],
-    [extraCommands],
+    () => [...(showBuiltInCommands ? SLASH_COMMANDS : []), ...(extraCommands ?? [])],
+    [extraCommands, showBuiltInCommands],
   );
+
+  useEffect(() => {
+    setCmdMenuItems(allCommands);
+  }, [allCommands]);
 
   const clientRef = useRef<CollabAIClient | null>(null);
   const tasksEndRef = useRef<HTMLDivElement>(null);
@@ -505,7 +511,6 @@ export default function CollabAIPanel({
   // 当 currentChapterId 变化时同步选中章节
   useEffect(() => {
     if (currentChapterId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedChapterId(currentChapterId);
     }
   }, [currentChapterId]);

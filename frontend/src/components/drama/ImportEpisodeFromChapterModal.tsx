@@ -20,6 +20,15 @@ interface ImportEpisodeFromChapterModalProps {
 
 type Step = 'select' | 'preview' | 'importing';
 
+function buildSynopsisFallback(rawContent: string, title: string): string {
+  const plain = rawContent
+    .replace(/\s+/g, ' ')
+    .replace(/[【】[\]<>]/g, ' ')
+    .trim();
+  if (!plain) return `${title}：请根据原章节内容补充剧情简介。`;
+  return plain.length > 220 ? `${plain.slice(0, 220)}...` : plain;
+}
+
 export default function ImportEpisodeFromChapterModal({
   isOpen,
   onClose,
@@ -100,8 +109,8 @@ export default function ImportEpisodeFromChapterModal({
       if (doc.content) chapterContent = doc.content;
     } catch { /* 忽略内容拉取失败，回退到 outline */ }
 
-    const rawContent = chapterContent || (ch.metadata?.outline as string) || '';
-    let synopsis = rawContent;
+    const rawContent = chapterContent || ch.content || (ch.metadata?.outline as string) || '';
+    let synopsis = buildSynopsisFallback(rawContent, ch.title || `第${episodeNumber}集`);
 
     if (rawContent && workId) {
       const prompt = [
