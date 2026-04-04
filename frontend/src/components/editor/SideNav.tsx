@@ -160,7 +160,7 @@ export default function SideNav({
 
   return (
     <aside
-      className="w-full flex flex-col py-3 overflow-y-auto rounded-[12px] shadow-[var(--shadow-md)] max-md:rounded-none max-md:shadow-none max-md:h-full"
+      className="h-full w-full flex flex-col py-3 overflow-y-auto rounded-none shadow-none max-md:rounded-none max-md:shadow-none max-md:h-full"
       style={{ background: 'var(--bg-primary)' }}
     >
       {/* 作品信息 */}

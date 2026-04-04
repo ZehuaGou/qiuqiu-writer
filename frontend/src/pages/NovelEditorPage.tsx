@@ -1072,12 +1072,12 @@ export default function NovelEditorPage() {
         {!isMobile && (
           <div
             className={cn(
-              'pointer-events-none absolute inset-y-4 left-4 z-40 transition-all duration-300',
+              'pointer-events-none absolute left-4 top-4 z-40 h-[calc(100vh-108px)] transition-all duration-300',
               leftSidebarCollapsed ? 'w-0 opacity-0' : 'w-[clamp(220px,22vw,320px)] opacity-100'
             )}
           >
             <div
-              className="pointer-events-auto h-full overflow-hidden rounded-[28px] border border-[#ede4ff] bg-[#f8f1ff]/95 shadow-[0px_20px_40px_rgba(31,4,90,0.08)] backdrop-blur"
+              className="pointer-events-auto h-full overflow-hidden rounded-[28px] border border-[#ede4ff] bg-white shadow-[0px_20px_40px_rgba(31,4,90,0.08)] backdrop-blur"
               onMouseEnter={clearLeftSidebarAutoCollapseTimer}
               onMouseLeave={scheduleLeftSidebarAutoCollapse}
               onFocusCapture={clearLeftSidebarAutoCollapseTimer}
@@ -1418,7 +1418,7 @@ export default function NovelEditorPage() {
         {!isMobile && (
           <div
             className={cn(
-              'pointer-events-none absolute inset-y-4 right-4 z-40 transition-all duration-300',
+              'pointer-events-none absolute right-4 top-4 z-40 h-[calc(100vh-108px)] transition-all duration-300',
               rightSidebarCollapsed ? 'w-0 opacity-0' : 'w-[clamp(260px,26vw,360px)] opacity-100'
             )}
           >
@@ -1537,13 +1537,16 @@ export default function NovelEditorPage() {
       />
 
       {/* 问题反馈按钮（右下角固定） */}
-      <button
-        className="fixed bottom-6 right-6 z-[2100] inline-flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:-translate-y-0.5 hover:bg-primary/90"
-        onClick={() => setFeedbackOpen(true)}
-        title="问题反馈"
-      >
-        <MessageCircleQuestion size={18} />
-      </button>
+      <div className="group fixed bottom-6 right-0 z-[2100] flex h-14 w-16 items-center justify-end">
+        <div className="absolute inset-y-0 right-0 w-4" />
+        <button
+          className="pointer-events-none mr-3 inline-flex size-12 translate-x-3 items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary/90 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100"
+          onClick={() => setFeedbackOpen(true)}
+          title="问题反馈"
+        >
+          <MessageCircleQuestion size={18} />
+        </button>
+      </div>
 
       {/* 问题反馈弹窗 */}
       <ExportModal
