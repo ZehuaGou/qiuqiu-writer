@@ -144,7 +144,14 @@ const MainLayout: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider trigger={null} collapsible collapsed={collapsed}>
-        <div className="demo-logo-vertical" style={{ height: 32, margin: 16, background: 'rgba(255, 255, 255, 0.2)', borderRadius: 6 }} />
+        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '0 16px', overflow: 'hidden' }}>
+          <img src="/logo.svg" alt="logo" style={{ width: 28, height: 28, flexShrink: 0 }} />
+          {!collapsed && (
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              球球写作
+            </span>
+          )}
+        </div>
         <Menu
           theme="dark"
           mode="inline"
