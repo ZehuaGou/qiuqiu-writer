@@ -45,6 +45,32 @@ class PlanConfig(BaseModel):
 class PlanConfigUpdateRequest(BaseModel):
     plans: List[PlanConfig]
 
+# ── 媒体 Credits 配置 Schema ───────────────────────────────────────────────────
+
+class MediaModelConfig(BaseModel):
+    model_id: str
+    label: str
+    description: str = ""
+    credits_per_generation: int = 1
+    enabled: bool = True
+
+class MediaModelConfigUpdateRequest(BaseModel):
+    models: List[MediaModelConfig]
+
+class MediaCreditPack(BaseModel):
+    pack_key: str
+    label: str
+    credits: int
+    price: float
+    badge: str | None = None
+    highlight: bool = False
+
+class MediaCreditPackUpdateRequest(BaseModel):
+    packs: List[MediaCreditPack]
+
+# 统一媒体充值包（图像/视频共享）
+MediaPackUpdateRequest = MediaCreditPackUpdateRequest
+
 class SystemMonitorResponse(BaseModel):
     cpu_percent: float
     cpu_cores: int

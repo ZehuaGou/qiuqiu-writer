@@ -84,6 +84,7 @@ async def save_plan_configs(configs: list[dict[str, Any]]) -> None:
     from memos.api.core.database import AsyncSessionLocal
     from memos.api.models.system import SystemSetting
     from sqlalchemy import select
+    from sqlalchemy.orm.attributes import flag_modified
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -91,7 +92,8 @@ async def save_plan_configs(configs: list[dict[str, Any]]) -> None:
         )
         setting = result.scalar_one_or_none()
         if setting:
-            setting.value = configs
+            setting.value = list(configs)
+            flag_modified(setting, "value")
         else:
             setting = SystemSetting(
                 key=_SETTING_KEY,

@@ -2,18 +2,224 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Card, Row, Col, Tag, Typography, Space, Button,
   Form, Select, InputNumber, message, Progress,
-  DatePicker
+  DatePicker, Tabs,
 } from 'antd';
 import {
-  EditOutlined, SaveOutlined,
-  ThunderboltOutlined, SearchOutlined
+  EditOutlined, SaveOutlined, CloseOutlined,
+  ThunderboltOutlined, SearchOutlined,
 } from '@ant-design/icons';
-import { ProTable, EditableProTable, ProColumns, ActionType } from '@ant-design/pro-components';
+import { ProTable, EditableProTable, ProColumns, ActionType, EditableFormInstance } from '@ant-design/pro-components';
 import request from '@/utils/request';
 import ResizableModal from '@/components/ResizableModal';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+
+// ── 充值包配置 ────────────────────────────────────────────────────────────────
+
+interface MediaCreditPack {
+  pack_key: string;
+  label: string;
+  credits: number;
+  price: number;
+  badge: string | null;
+  highlight: boolean;
+}
+
+const DEFAULT_PACK: Partial<MediaCreditPack> = {
+  pack_key: '',
+  label: '',
+  credits: 100,
+  price: 19,
+  badge: null,
+  highlight: false,
+};
+
+const PACK_COLUMNS: ProColumns<MediaCreditPack>[] = [
+  {
+    title: 'Pack Key',
+    dataIndex: 'pack_key',
+    width: 160,
+    formItemProps: { rules: [{ required: true, message: '必填' }] },
+    tooltip: '唯一标识符，如 image_pack_medium',
+  },
+  {
+    title: '名称',
+    dataIndex: 'label',
+    width: 110,
+    formItemProps: { rules: [{ required: true }] },
+  },
+  {
+    title: 'Credits 数',
+    dataIndex: 'credits',
+    valueType: 'digit',
+    width: 110,
+    fieldProps: { precision: 0, min: 1 },
+    formItemProps: { rules: [{ required: true }] },
+    render: (_, record) => <Text strong>{record.credits}</Text>,
+  },
+  {
+    title: '售价 (¥)',
+    dataIndex: 'price',
+    valueType: 'money',
+    width: 110,
+    formItemProps: { rules: [{ required: true }] },
+    render: (_, record) => <Text strong style={{ color: '#d97706' }}>¥{record.price}</Text>,
+  },
+  {
+    title: 'Badge',
+    dataIndex: 'badge',
+    width: 90,
+    tooltip: '留空则不显示角标',
+  },
+  {
+    title: '推荐',
+    dataIndex: 'highlight',
+    valueType: 'switch',
+    width: 70,
+    render: (_, record) => (
+      <Tag color={record.highlight ? 'gold' : 'default'}>
+        {record.highlight ? '推荐' : '-'}
+      </Tag>
+    ),
+  },
+  {
+    title: '操作',
+    valueType: 'option',
+    width: 70,
+    render: () => null,
+  },
+];
+
+function CreditPackSection() {
+  const [data, setData] = useState<MediaCreditPack[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableKeys, setEditableKeys] = useState<React.Key[]>([]);
+  const [draft, setDraft] = useState<MediaCreditPack[]>([]);
+  const [saving, setSaving] = useState(false);
+  const editableFormRef = useRef<EditableFormInstance<MediaCreditPack>>();
+
+  const endpoint = `/admin/media/packs`;
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await request.get<MediaCreditPack[]>(endpoint);
+      setData(res as unknown as MediaCreditPack[]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const handleEdit = () => {
+    const copy = JSON.parse(JSON.stringify(data));
+    setDraft(copy);
+    setEditableKeys(copy.map((p: MediaCreditPack) => p.pack_key));
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setDraft([]);
+    setEditableKeys([]);
+  };
+
+  const handleSave = async () => {
+    // Read latest in-cell edits from the form (onChange doesn't fire for field changes)
+    const latestDraft = draft.map((p) => {
+      const rowData = editableFormRef.current?.getRowData?.(p.pack_key);
+      return rowData ? { ...p, ...rowData } : p;
+    });
+    const keys = latestDraft.map((p) => String(p.pack_key).trim()).filter(Boolean);
+    if (new Set(keys).size !== keys.length || keys.some((k) => !k)) {
+      message.error('Pack Key 不能为空或重复');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = { packs: latestDraft.map((p) => ({ ...p, pack_key: String(p.pack_key).trim() })) };
+      await request.put(endpoint, body);
+      await fetchData();
+      setIsEditing(false);
+      setEditableKeys([]);
+      message.success('保存成功');
+    } catch {
+      /* handled */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const columns = PACK_COLUMNS.map((col) => {
+    if (col.title === '操作') {
+      return {
+        ...col,
+        render: (_: any, record: MediaCreditPack) =>
+          isEditing ? (
+            <a
+              style={{ color: '#ff4d4f' }}
+              onClick={() => setDraft(draft.filter((p) => p.pack_key !== record.pack_key))}
+            >
+              删除
+            </a>
+          ) : null,
+      };
+    }
+    return col;
+  });
+
+  return (
+    <Card
+      title="媒体 Credits 充值包"
+      loading={loading}
+      style={{ marginBottom: 16 }}
+      extra={
+        isEditing ? (
+          <Space>
+            <Button icon={<CloseOutlined />} onClick={handleCancel}>取消</Button>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>保存</Button>
+          </Space>
+        ) : (
+          <Button icon={<EditOutlined />} onClick={handleEdit}>编辑</Button>
+        )
+      }
+    >
+      {isEditing ? (
+        <EditableProTable<MediaCreditPack>
+          rowKey="pack_key"
+          editableFormRef={editableFormRef}
+          maxLength={10}
+          scroll={{ x: 750 }}
+          recordCreatorProps={{
+            position: 'bottom',
+            record: () => ({ ...DEFAULT_PACK, pack_key: `media_pack_${Date.now()}` } as MediaCreditPack),
+          }}
+          columns={columns}
+          value={draft}
+          onChange={(val) => setDraft([...val])}
+          editable={{
+            type: 'multiple',
+            editableKeys,
+            onChange: setEditableKeys,
+            actionRender: (_, __, dom) => [dom.delete],
+          }}
+        />
+      ) : (
+        <EditableProTable<MediaCreditPack>
+          rowKey="pack_key"
+          columns={columns}
+          value={data}
+          editable={{ editableKeys: [] }}
+          recordCreatorProps={false}
+          scroll={{ x: 750 }}
+        />
+      )}
+    </Card>
+  );
+}
 
 interface PlanPricePoint {
   original: number;
@@ -68,6 +274,8 @@ const Plans: React.FC = () => {
   const [dataSource, setDataSource] = useState<PlanConfig[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
 
+  const planEditableFormRef = useRef<EditableFormInstance<PlanConfig>>();
+
   // ── User List State ──────────────────────────────────────────────────
   const actionRef = useRef<ActionType>();
   const [isPlanModalVisible, setIsPlanModalVisible] = useState(false);
@@ -106,14 +314,18 @@ const Plans: React.FC = () => {
   };
 
   const handleSaveConfig = async () => {
-    const keys = dataSource.map((p) => p.key?.trim()).filter(Boolean);
+    const latestSource = dataSource.map((p) => {
+      const rowData = planEditableFormRef.current?.getRowData?.(p.key);
+      return rowData ? { ...p, ...rowData } : p;
+    });
+    const keys = latestSource.map((p) => p.key?.trim()).filter(Boolean);
     if (new Set(keys).size !== keys.length || keys.some((k) => !k)) {
       message.error('Plan key cannot be empty or duplicate');
       return;
     }
     setSavingConfig(true);
     try {
-      const body = { plans: dataSource.map((p) => ({ ...p, key: p.key.trim() })) };
+      const body = { plans: latestSource.map((p) => ({ ...p, key: p.key.trim() })) };
       const res = await request.put<PlanConfig[]>('/admin/plans/config', body);
       setPlanConfigs(res as unknown as PlanConfig[]);
       setIsEditing(false);
@@ -340,10 +552,8 @@ const Plans: React.FC = () => {
     );
   }
 
-  return (
-    <div>
-      <Title level={4} style={{ marginTop: 0 }}>Plan Management</Title>
-
+  const textPlansContent = (
+    <>
       {/* ── Plan config editor ── */}
       <Card
         title="Plan Configuration"
@@ -363,6 +573,7 @@ const Plans: React.FC = () => {
         {isEditing ? (
           <EditableProTable<PlanConfig>
             rowKey="key"
+            editableFormRef={planEditableFormRef}
             headerTitle="Edit Plans"
             maxLength={10}
             scroll={{ x: 1200 }}
@@ -471,6 +682,28 @@ const Plans: React.FC = () => {
           </Form.Item>
         </Form>
       </ResizableModal>
+    </>
+  );
+
+  return (
+    <div>
+      <Title level={4} style={{ marginTop: 0 }}>Plan Management</Title>
+      <Tabs
+        items={[
+          {
+            key: 'text',
+            label: '📝 文字套餐',
+            children: textPlansContent,
+          },
+          {
+            key: 'packs',
+            label: '🎨 充值包管理',
+            children: (
+              <CreditPackSection />
+            ),
+          },
+        ]}
+      />
     </div>
   );
 };

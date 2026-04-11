@@ -16,6 +16,7 @@ from memos.api.models.yjs_document import YjsDocument
 from memos.api.models.invitation_code import InvitationCode
 from memos.api.models.token_usage_log import TokenUsageLog
 from memos.api.models.payment_order import PaymentOrder
+from memos.api.models.media_credit_order import MediaCreditOrder
 
 __all__ = [
     "User", "UserProfile",
@@ -32,4 +33,5 @@ __all__ = [
     "InvitationCode",
     "TokenUsageLog",
     "PaymentOrder",
+    "MediaCreditOrder",
 ]

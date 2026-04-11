@@ -19,7 +19,9 @@ from memos.api.core.config import get_settings
 from memos.api.core.database import AsyncSessionLocal
 from memos.api.core.security import get_current_user_id
 from memos.api.core.token_plans import get_plan_configs
+from memos.api.core.media_credit_plans import get_pack_by_key  # noqa: F401
 from memos.api.models.payment_order import PaymentOrder
+from memos.api.models.media_credit_order import MediaCreditOrder
 from memos.api.services.payment_service import (
     create_alipay_order,
     create_wechat_order,
@@ -29,11 +31,13 @@ from memos.api.services.payment_service import (
     verify_wechat_callback,
 )
 from memos.api.services.token_service import TokenService
+from memos.api.services.media_credit_service import MediaCreditService
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/api/v1/payment", tags=["Payment"])
 token_service = TokenService()
+media_credit_service = MediaCreditService()
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -227,3 +231,140 @@ async def mock_pay(order_id: str, background: BackgroundTasks):
         raise HTTPException(404, "Not found")
     background.add_task(_activate_plan, order_id)
     return {"message": "模拟支付成功，套餐将在几秒内激活"}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 媒体 Credits 充值
+# ════════════════════════════════════════════════════════════════════════════
+
+class CreateMediaOrderRequest(BaseModel):
+    pack_key: str   # media_pack_small / media_pack_medium 等
+    method: str     # wechat / alipay
+
+
+async def _activate_media_credits(order_id: str) -> None:
+    """将媒体充值订单标记为已支付，并向用户账户充入 credits"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(MediaCreditOrder).where(MediaCreditOrder.id == order_id)
+        )
+        order = result.scalar_one_or_none()
+        if not order or order.status == "paid":
+            return
+
+        order.status = "paid"
+        order.paid_at = datetime.now(timezone.utc)
+        await session.commit()
+
+    try:
+        await media_credit_service.add_credits(order.user_id, order.credits)
+        logger.info(
+            f"媒体 Credits 已充值: user={order.user_id}, "
+            f"credits={order.credits}, order={order_id}"
+        )
+    except Exception as e:
+        logger.error(f"充值 Credits 失败 order={order_id}: {e}")
+
+
+@router.post("/create-media-order", response_model=CreateOrderResponse)
+async def create_media_order(
+    body: CreateMediaOrderRequest,
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """创建媒体 Credits 充值订单"""
+    pack = await get_pack_by_key(body.pack_key)
+    if not pack:
+        raise HTTPException(404, f"充值包不存在: {body.pack_key}")
+    if body.method not in ("wechat", "alipay"):
+        raise HTTPException(400, "无效的支付方式")
+
+    amount = float(pack["price"])
+    order = MediaCreditOrder(
+        user_id=current_user_id,
+        order_type="media",
+        pack_key=body.pack_key,
+        pack_label=pack["label"],
+        credits=int(pack["credits"]),
+        method=body.method,
+        amount=amount,
+    )
+    async with AsyncSessionLocal() as session:
+        session.add(order)
+        await session.commit()
+        await session.refresh(order)
+
+    order_id = order.id
+
+    if settings.PAYMENT_MOCK_MODE:
+        qr_url = f"mock://media-payment/{order_id}"
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                update(MediaCreditOrder)
+                .where(MediaCreditOrder.id == order_id)
+                .values(qr_url=qr_url)
+            )
+            await session.commit()
+        return CreateOrderResponse(order_id=order_id, qr_url=qr_url, is_mock=True)
+
+    try:
+        if body.method == "wechat":
+            qr_url = await create_wechat_order(order_id, pack["label"], amount)
+        else:
+            qr_url = await create_alipay_order(order_id, pack["label"], amount)
+    except Exception as e:
+        logger.error(f"创建媒体充值订单失败: {repr(e)}", exc_info=True)
+        raise HTTPException(502, f"支付下单失败，请稍后重试: {repr(e)}")
+
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(MediaCreditOrder)
+            .where(MediaCreditOrder.id == order_id)
+            .values(qr_url=qr_url)
+        )
+        await session.commit()
+
+    return CreateOrderResponse(order_id=order_id, qr_url=qr_url)
+
+
+@router.get("/media-order-status/{order_id}", response_model=OrderStatusResponse)
+async def get_media_order_status(
+    order_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """查询媒体充值订单状态（前端轮询）"""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(MediaCreditOrder).where(
+                MediaCreditOrder.id == order_id,
+                MediaCreditOrder.user_id == current_user_id,
+            )
+        )
+        order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "订单不存在")
+
+    if order.status != "pending":
+        return OrderStatusResponse(status=order.status)
+
+    if settings.PAYMENT_MOCK_MODE:
+        return OrderStatusResponse(status=order.status)
+
+    if order.method == "wechat":
+        remote_status = await query_wechat_order(order_id)
+    else:
+        remote_status = await query_alipay_order(order_id)
+
+    if remote_status == "paid":
+        await _activate_media_credits(order_id)
+        return OrderStatusResponse(status="paid")
+
+    return OrderStatusResponse(status=order.status)
+
+
+@router.get("/mock-media-pay/{order_id}")
+async def mock_media_pay(order_id: str, background: BackgroundTasks):
+    """开发/测试专用：模拟媒体 Credits 充值支付"""
+    if not settings.PAYMENT_MOCK_MODE:
+        raise HTTPException(404, "Not found")
+    background.add_task(_activate_media_credits, order_id)
+    return {"message": "模拟充值成功，Credits 将在几秒内到账"}

@@ -18,6 +18,7 @@ import Plans from './pages/Plans';
 import LLMConfigs from './pages/LLMConfigs';
 import PromptExperiments from './pages/PromptExperiments';
 import PromptRatings from './pages/PromptRatings';
+import MediaModels from './pages/MediaModels';
 
 // Simple Auth Guard
 const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,6 +58,7 @@ const App: React.FC = () => {
           <Route path="llm-configs" element={<LLMConfigs />} />
           <Route path="prompt-experiments" element={<PromptExperiments />} />
           <Route path="prompt-ratings" element={<PromptRatings />} />
+          <Route path="media-models" element={<MediaModels />} />
           <Route path="settings" element={<div>Settings (Coming Soon)</div>} />
         </Route>
       </Routes>

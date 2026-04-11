@@ -33,6 +33,7 @@ class User(Base):
     token_remaining = Column(BigInteger, default=100000, nullable=False)
     token_reset_at = Column(DateTime(timezone=True), nullable=True)
     plan_expires_at = Column(DateTime(timezone=True), nullable=True)
+    media_credits = Column(Integer, default=0, nullable=False, server_default="0")
     last_login_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

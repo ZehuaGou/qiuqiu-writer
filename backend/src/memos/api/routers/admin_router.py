@@ -13,10 +13,17 @@ from memos.api.schemas.admin import (
     InvitationCodeListResponse, InvitationCodeResponse, GenerateInvitationCodesResponse,
     WorkTemplateAdminCreate, WorkTemplateAdminUpdate,
     PlanConfig, PlanConfigUpdateRequest,
+    MediaModelConfig, MediaModelConfigUpdateRequest,
+    MediaCreditPack, MediaCreditPackUpdateRequest,
 )
 from memos.api.services.admin_service import AdminService
 from memos.api.services.invitation_code_service import InvitationCodeService
 from memos.api.core.token_plans import get_plan_configs, save_plan_configs
+from memos.api.core.media_credit_plans import (
+    get_image_model_configs, save_image_model_configs,
+    get_video_model_configs, save_video_model_configs,
+    get_media_credit_packs, save_media_credit_packs,
+)
 from memos.mem_user.mysql_user_manager import MySQLUserManager
 from memos.mem_user.persistent_factory import PersistentUserManagerFactory
 from memos.configs.mem_user import UserManagerConfigFactory
@@ -509,7 +516,51 @@ async def update_plans_config(
     request: PlanConfigUpdateRequest,
     admin_id: str = Depends(get_current_admin)
 ):
-    # Convert Pydantic models to dicts
     configs = [p.model_dump() for p in request.plans]
     await save_plan_configs(configs)
     return await get_plan_configs()
+
+
+# ── 媒体模型定价 ────────────────────────────────────────────────────────────────
+
+@router.get("/media/image-models", response_model=list[MediaModelConfig])
+async def get_admin_image_models(admin_id: str = Depends(get_current_admin)):
+    return await get_image_model_configs()
+
+@router.put("/media/image-models", response_model=list[MediaModelConfig])
+async def update_admin_image_models(
+    request: MediaModelConfigUpdateRequest,
+    admin_id: str = Depends(get_current_admin),
+):
+    configs = [m.model_dump() for m in request.models]
+    await save_image_model_configs(configs)
+    return await get_image_model_configs()
+
+@router.get("/media/video-models", response_model=list[MediaModelConfig])
+async def get_admin_video_models(admin_id: str = Depends(get_current_admin)):
+    return await get_video_model_configs()
+
+@router.put("/media/video-models", response_model=list[MediaModelConfig])
+async def update_admin_video_models(
+    request: MediaModelConfigUpdateRequest,
+    admin_id: str = Depends(get_current_admin),
+):
+    configs = [m.model_dump() for m in request.models]
+    await save_video_model_configs(configs)
+    return await get_video_model_configs()
+
+
+# ── 统一媒体充值包定价 ─────────────────────────────────────────────────────────
+
+@router.get("/media/packs", response_model=list[MediaCreditPack])
+async def get_admin_media_packs(admin_id: str = Depends(get_current_admin)):
+    return await get_media_credit_packs()
+
+@router.put("/media/packs", response_model=list[MediaCreditPack])
+async def update_admin_media_packs(
+    request: MediaCreditPackUpdateRequest,
+    admin_id: str = Depends(get_current_admin),
+):
+    packs = [p.model_dump() for p in request.packs]
+    await save_media_credit_packs(packs)
+    return await get_media_credit_packs()

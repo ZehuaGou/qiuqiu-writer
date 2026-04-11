@@ -120,6 +120,11 @@ const MainLayout: React.FC = () => {
       label: 'AI 模型配置',
     },
     {
+      key: '/media-models',
+      icon: <ThunderboltOutlined />,
+      label: '媒体模型定价',
+    },
+    {
       key: '/prompt-experiments',
       icon: <ExperimentOutlined />,
       label: 'Prompt 灰度实验',
